@@ -1,12 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-})
-
 export async function POST(request: NextRequest) {
   try {
+    // Check API key
+    if (!process.env.ANTHROPIC_API_KEY) {
+      console.error('ANTHROPIC_API_KEY is not set')
+      return NextResponse.json(
+        { error: 'API configuratie ontbreekt. Contacteer de beheerder.' },
+        { status: 500 }
+      )
+    }
+
+    const anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+    })
+
     const body = await request.json()
     const { tool, prompt, options } = body
 
@@ -46,8 +55,25 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('AI Generation error:', error)
+
+    // Handle specific Anthropic errors
+    if (error instanceof Anthropic.APIError) {
+      if (error.status === 401) {
+        return NextResponse.json(
+          { error: 'Ongeldige API key. Controleer de configuratie.' },
+          { status: 401 }
+        )
+      }
+      if (error.status === 429) {
+        return NextResponse.json(
+          { error: 'Te veel verzoeken. Wacht even en probeer opnieuw.' },
+          { status: 429 }
+        )
+      }
+    }
+
     return NextResponse.json(
-      { error: 'Failed to generate content' },
+      { error: 'Er ging iets mis bij het genereren. Probeer het opnieuw.' },
       { status: 500 }
     )
   }

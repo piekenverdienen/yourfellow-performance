@@ -51,34 +51,63 @@ export default function GoogleAdsCopyPage() {
   })
   const [generatedAd, setGeneratedAd] = useState<GeneratedAd | null>(null)
   const [copiedIndex, setCopiedIndex] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const handleGenerate = async () => {
     setIsGenerating(true)
-    
-    // TODO: Call API endpoint that uses Claude
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    
-    // Mock generated content
-    setGeneratedAd({
-      headlines: [
-        `${formData.productName} - Beste Keuze`,
-        `Ontdek ${formData.productName} Nu`,
-        'Gratis Verzending Vandaag',
-        'Bespaar Tot 30% Korting',
-        `${formData.productName} | Officiële Shop`,
-        'Bestel Snel & Veilig Online',
-        'Top Kwaliteit Gegarandeerd',
-        'Direct Uit Voorraad Leverbaar',
-      ],
-      descriptions: [
-        `Ontdek de beste ${formData.productName} voor ${formData.targetAudience}. Hoogwaardige kwaliteit, scherpe prijzen en snelle levering.`,
-        `Op zoek naar ${formData.productName}? Bestel vandaag nog en profiteer van gratis verzending en 30 dagen retour.`,
-        `${formData.productName} specialist sinds 2010. Meer dan 10.000 tevreden klanten gingen je voor. Bekijk ons assortiment!`,
-        `De beste ${formData.productName} vind je hier. Uitgebreid assortiment, deskundig advies en razendsnelle levering.`,
-      ],
-    })
-    
-    setIsGenerating(false)
+    setError(null)
+
+    try {
+      // Build the prompt for the AI
+      const prompt = `Genereer Google Ads teksten voor het volgende:
+
+Product/Dienst: ${formData.productName}
+Beschrijving: ${formData.productDescription || 'Geen beschrijving opgegeven'}
+Doelgroep: ${formData.targetAudience || 'Algemeen publiek'}
+Keywords: ${formData.keywords || 'Geen specifieke keywords'}
+Tone of voice: ${formData.tone}
+Advertentietype: ${formData.adType}
+
+Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karakters) in het Nederlands.`
+
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          tool: 'google-ads-copy',
+          prompt,
+          options: {
+            tone: formData.tone,
+            adType: formData.adType,
+          },
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Er ging iets mis bij het genereren')
+      }
+
+      const data = await response.json()
+
+      if (!data.success) {
+        throw new Error(data.error || 'Generatie mislukt')
+      }
+
+      // Parse the JSON result from Claude
+      const parsedResult = JSON.parse(data.result)
+
+      setGeneratedAd({
+        headlines: parsedResult.headlines || [],
+        descriptions: parsedResult.descriptions || [],
+      })
+    } catch (err) {
+      console.error('Generation error:', err)
+      setError(err instanceof Error ? err.message : 'Er ging iets mis. Probeer het opnieuw.')
+    } finally {
+      setIsGenerating(false)
+    }
   }
 
   const handleCopy = async (text: string, index: string) => {
@@ -232,6 +261,12 @@ export default function GoogleAdsCopyPage() {
             )}
           </CardHeader>
           <CardContent>
+            {error && (
+              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+                <p className="font-medium">Fout bij genereren</p>
+                <p className="text-sm mt-1">{error}</p>
+              </div>
+            )}
             {isGenerating ? (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center mb-4 animate-pulse">
