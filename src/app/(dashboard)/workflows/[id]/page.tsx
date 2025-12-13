@@ -1,17 +1,14 @@
 'use client'
 
-import { useState, useEffect, use } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useRouter, useParams } from 'next/navigation'
 import { WorkflowEditor } from '@/components/workflow/WorkflowEditor'
 import { Loader2 } from 'lucide-react'
 import type { Workflow, WorkflowNode, WorkflowEdge } from '@/types/workflow'
 
-interface WorkflowEditorPageProps {
-  params: Promise<{ id: string }>
-}
-
-export default function WorkflowEditorPage({ params }: WorkflowEditorPageProps) {
-  const { id } = use(params)
+export default function WorkflowEditorPage() {
+  const params = useParams()
+  const id = params.id as string
   const router = useRouter()
   const [workflow, setWorkflow] = useState<Workflow | null>(null)
   const [loading, setLoading] = useState(true)
