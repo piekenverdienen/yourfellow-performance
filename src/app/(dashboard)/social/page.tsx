@@ -24,12 +24,12 @@ const tools = [
   },
   {
     name: 'Afbeeldingen',
-    description: 'Creëer visueel aantrekkelijke afbeeldingen voor je social media posts.',
+    description: 'Creëer visueel aantrekkelijke afbeeldingen voor je social media posts met DALL-E.',
     href: '/social/images',
     icon: Image,
     color: 'bg-purple-500',
-    badge: 'Binnenkort',
-    badgeVariant: 'secondary' as const,
+    badge: 'Nieuw',
+    badgeVariant: 'success' as const,
   },
 ]
 
