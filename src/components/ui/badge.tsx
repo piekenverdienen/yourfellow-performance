@@ -1,19 +1,20 @@
 import { cn } from '@/lib/utils'
 
 export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
-  variant?: 'default' | 'primary' | 'success' | 'warning' | 'error' | 'outline'
+  variant?: 'default' | 'primary' | 'secondary' | 'success' | 'warning' | 'error' | 'outline'
   size?: 'sm' | 'md'
 }
 
-export function Badge({ 
-  className, 
-  variant = 'default', 
+export function Badge({
+  className,
+  variant = 'default',
   size = 'sm',
-  ...props 
+  ...props
 }: BadgeProps) {
   const variants = {
     default: 'bg-surface-100 text-surface-700',
     primary: 'bg-primary/10 text-primary-700',
+    secondary: 'bg-surface-200 text-surface-600',
     success: 'bg-green-100 text-green-700',
     warning: 'bg-yellow-100 text-yellow-700',
     error: 'bg-red-100 text-red-700',

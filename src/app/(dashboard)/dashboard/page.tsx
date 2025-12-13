@@ -6,9 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Avatar } from '@/components/ui/avatar'
 import { Progress } from '@/components/ui/progress'
-import { 
-  Star, 
-  Sparkles, 
+import { useUser } from '@/hooks/use-user'
+import {
+  Star,
+  Sparkles,
   ChevronRight,
   ChevronLeft,
   ExternalLink,
@@ -23,18 +24,10 @@ import {
   TrendingUp,
   Zap,
   MessageSquare,
+  Loader2,
 } from 'lucide-react'
-import { getGreeting, calculateLevel, formatDate } from '@/lib/utils'
+import { getGreeting, calculateLevel, formatDate, getLevelRange } from '@/lib/utils'
 import { cn } from '@/lib/utils'
-
-// Mock data - will be replaced with real data from Supabase
-const mockUser = {
-  name: 'Diederik',
-  xp: 7,
-  totalXp: 100,
-  todayUsage: 0,
-  totalUsage: 7,
-}
 
 const recentTools = [
   { name: 'Website Analyseren', icon: BarChart3, href: '/cro/analyzer', color: 'text-purple-500' },
@@ -43,21 +36,21 @@ const recentTools = [
 ]
 
 const aiAssistants = [
-  { 
-    name: 'Antonio', 
-    role: 'Algemene assistent', 
+  {
+    name: 'Antonio',
+    role: 'Algemene assistent',
     avatar: null,
     available: true,
   },
-  { 
-    name: 'Elliot', 
-    role: 'Developer assistant', 
+  {
+    name: 'Elliot',
+    role: 'Developer assistant',
     avatar: null,
     available: true,
   },
-  { 
-    name: 'Lisa', 
-    role: 'Neuromarketing expert', 
+  {
+    name: 'Lisa',
+    role: 'Neuromarketing expert',
     avatar: null,
     available: true,
   },
@@ -70,31 +63,50 @@ const marketingEvents = [
 ]
 
 const latestNews = [
-  { 
-    title: 'Where to Invest in AI in 2026', 
+  {
+    title: 'Where to Invest in AI in 2026',
     date: 'vrijdag 12 december 2025',
     image: '/placeholder-news-1.jpg',
   },
-  { 
-    title: 'Amputees often feel disconnected from...', 
+  {
+    title: 'Amputees often feel disconnected from...',
     date: 'vrijdag 12 december 2025',
     image: '/placeholder-news-2.jpg',
   },
-  { 
-    title: 'Arizona city rejects data center after AI...', 
+  {
+    title: 'Arizona city rejects data center after AI...',
     date: 'vrijdag 12 december 2025',
     image: '/placeholder-news-3.jpg',
   },
 ]
 
 export default function DashboardPage() {
-  const levelInfo = calculateLevel(mockUser.xp)
+  const { user, stats, loading, refetch } = useUser()
+
   const greeting = getGreeting()
-  
+
   // Get current month calendar data
   const now = new Date()
   const currentMonth = now.toLocaleDateString('nl-NL', { month: 'long', year: 'numeric' })
   const weekNumber = getWeekNumber(now)
+
+  // Calculate level info from user XP
+  const xp = user?.xp || 0
+  const levelInfo = calculateLevel(xp)
+  const levelRange = getLevelRange(levelInfo.level)
+
+  // User display data
+  const userName = user?.full_name || user?.email?.split('@')[0] || 'Gebruiker'
+  const todayUsage = stats?.generations_today || 0
+  const totalUsage = stats?.total_generations || user?.total_generations || 0
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -109,44 +121,38 @@ export default function DashboardPage() {
                   {/* Level indicator */}
                   <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-100">
                     <Star className="h-4 w-4 text-primary fill-primary" />
-                    <span className="text-sm font-medium">Beginner</span>
+                    <span className="text-sm font-medium">{levelInfo.title}</span>
                     <span className="text-xs text-surface-500">Lvl.{levelInfo.level}</span>
                     <div className="w-20 h-1.5 bg-surface-200 rounded-full overflow-hidden">
-                      <div 
+                      <div
                         className="h-full bg-primary rounded-full transition-all"
                         style={{ width: `${levelInfo.progress}%` }}
                       />
                     </div>
-                    <span className="text-xs text-surface-500">{mockUser.xp} / {mockUser.totalXp} XP ({Math.round(levelInfo.progress)}%)</span>
+                    <span className="text-xs text-surface-500">{xp} / {levelRange.max} XP ({Math.round(levelInfo.progress)}%)</span>
                   </div>
                 </div>
-                <Button variant="ghost" size="sm">
+                <Button variant="ghost" size="sm" onClick={() => refetch()}>
                   <RefreshCw className="h-4 w-4" />
                 </Button>
               </div>
 
               <div className="mt-6 flex items-center gap-4">
-                <Avatar name={mockUser.name} size="xl" />
+                <Avatar name={userName} size="xl" />
                 <div>
                   <h1 className="text-2xl font-bold text-surface-900">
-                    {greeting} {mockUser.name}!
+                    {greeting} {userName}!
                   </h1>
                   <p className="text-surface-600 mt-1">
-                    Je zit op level <span className="text-primary font-medium">Beginner</span> met{' '}
-                    <span className="text-primary font-medium">{mockUser.xp}</span> van de{' '}
-                    <span className="text-primary font-medium">{mockUser.totalXp}</span> XP{' '}
+                    Je zit op level <span className="text-primary font-medium">{levelInfo.title}</span> met{' '}
+                    <span className="text-primary font-medium">{xp}</span> van de{' '}
+                    <span className="text-primary font-medium">{levelRange.max}</span> XP{' '}
                     <span className="text-primary font-medium">({Math.round(levelInfo.progress)}%)</span>.
                   </p>
                   <p className="text-surface-600">
-                    Vandaag heb je <span className="text-primary font-medium">{mockUser.todayUsage}</span> keer de AI gebruikt, in totaal al{' '}
-                    <span className="text-primary font-medium">{mockUser.totalUsage}</span> keer.
+                    Vandaag heb je <span className="text-primary font-medium">{todayUsage}</span> keer de AI gebruikt, in totaal al{' '}
+                    <span className="text-primary font-medium">{totalUsage}</span> keer.
                   </p>
-                  <p className="text-surface-500 mt-2">
-                    Je <span className="text-primary font-medium">proefperiode is afgelopen</span>. Upgrade je account om door te gaan met creëren.
-                  </p>
-                  <Button variant="outline" size="sm" className="mt-3">
-                    Upgrade nu
-                  </Button>
                 </div>
               </div>
             </CardContent>
@@ -162,7 +168,7 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent className="p-4 pt-2 space-y-3">
                 {aiAssistants.map((assistant) => (
-                  <Link 
+                  <Link
                     key={assistant.name}
                     href={`/chat/${assistant.name.toLowerCase()}`}
                     className="flex items-center gap-3 hover:bg-surface-50 -mx-2 px-2 py-1.5 rounded-lg transition-colors"
@@ -186,7 +192,7 @@ export default function DashboardPage() {
                 {recentTools.map((tool) => {
                   const Icon = tool.icon
                   return (
-                    <Link 
+                    <Link
                       key={tool.name}
                       href={tool.href}
                       className="flex items-center gap-3 hover:bg-surface-50 -mx-2 px-2 py-2 rounded-lg transition-colors"
@@ -209,27 +215,21 @@ export default function DashboardPage() {
               <CardContent className="p-4 pt-2">
                 <div className="flex items-baseline gap-4 mb-4">
                   <div>
-                    <p className="text-xs text-surface-500">Gemiddeld</p>
-                    <p className="text-2xl font-bold text-surface-900">0</p>
+                    <p className="text-xs text-surface-500">Vandaag</p>
+                    <p className="text-2xl font-bold text-surface-900">{todayUsage}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-surface-500">Piek deze week</p>
-                    <p className="text-2xl font-bold text-surface-900">
-                      Ma, 0 <span className="text-sm text-red-500">-100%</span>
-                    </p>
+                    <p className="text-xs text-surface-500">Totaal generaties</p>
+                    <p className="text-2xl font-bold text-surface-900">{totalUsage}</p>
                   </div>
                 </div>
-                {/* Mini chart placeholder */}
-                <div className="h-16 flex items-end gap-1">
-                  {['Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'].map((day, i) => (
-                    <div key={day} className="flex-1 flex flex-col items-center gap-1">
-                      <div 
-                        className="w-full bg-primary/20 rounded-t"
-                        style={{ height: `${Math.random() * 40 + 10}px` }}
-                      />
-                      <span className="text-xs text-surface-400">{day}</span>
-                    </div>
-                  ))}
+                {/* XP Progress */}
+                <div className="space-y-2">
+                  <div className="flex justify-between text-xs text-surface-500">
+                    <span>Level {levelInfo.level} voortgang</span>
+                    <span>{levelInfo.xpForNext} XP tot level {levelInfo.level + 1}</span>
+                  </div>
+                  <Progress value={levelInfo.progress} className="h-2" />
                 </div>
               </CardContent>
             </Card>
@@ -290,8 +290,8 @@ export default function DashboardPage() {
                   </div>
                 ))}
                 {generateCalendarDays().map((day, i) => (
-                  <div 
-                    key={i} 
+                  <div
+                    key={i}
                     className={cn(
                       'py-1 rounded-full text-sm',
                       day.isToday && 'bg-primary text-black font-bold',
@@ -333,9 +333,11 @@ export default function DashboardPage() {
                   <Image className="h-6 w-6 text-surface-400" />
                 </div>
                 <p className="text-sm text-surface-500 mb-3">Nog geen media gegenereerd</p>
-                <Button variant="outline" size="sm">
-                  Start met creëren
-                </Button>
+                <Link href="/social/images">
+                  <Button variant="outline" size="sm">
+                    Start met creëren
+                  </Button>
+                </Link>
               </div>
             </CardContent>
           </Card>
@@ -358,10 +360,10 @@ function generateCalendarDays() {
   const now = new Date()
   const year = now.getFullYear()
   const month = now.getMonth()
-  
+
   const firstDay = new Date(year, month, 1)
   const lastDay = new Date(year, month + 1, 0)
-  
+
   const startOffset = (firstDay.getDay() + 6) % 7 // Monday = 0
   const days = []
 

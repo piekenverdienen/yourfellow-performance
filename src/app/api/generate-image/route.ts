@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
+import { createClient } from '@/lib/supabase/server'
+
+// XP reward for image generation
+const IMAGE_XP_REWARD = 20
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,7 +20,7 @@ export async function POST(request: NextRequest) {
     })
 
     const body = await request.json()
-    const { prompt, size = '1024x1024', style = 'vivid', quality = 'standard' } = body
+    const { prompt, size = '1024x1024', style = 'vivid', quality = 'standard', tool = 'social-image' } = body
 
     if (!prompt) {
       return NextResponse.json(
@@ -38,12 +42,16 @@ export async function POST(request: NextRequest) {
       quality: quality as 'standard' | 'hd',
     })
 
-    const imageUrl = response.data[0]?.url
-    const revisedPrompt = response.data[0]?.revised_prompt
+    const imageData = response.data?.[0]
+    const imageUrl = imageData?.url
+    const revisedPrompt = imageData?.revised_prompt
 
     if (!imageUrl) {
       throw new Error('Geen afbeelding ontvangen van DALL-E')
     }
+
+    // Track usage and add XP (fire and forget)
+    trackImageUsageAndXP(tool)
 
     return NextResponse.json({
       success: true,
@@ -98,5 +106,53 @@ export async function POST(request: NextRequest) {
       { error: 'Er ging iets mis bij het genereren van de afbeelding.' },
       { status: 500 }
     )
+  }
+}
+
+// Track image usage and add XP to user
+async function trackImageUsageAndXP(tool: string) {
+  try {
+    const supabase = await createClient()
+
+    // Get current user
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      console.log('No authenticated user for image XP tracking')
+      return
+    }
+
+    // Insert usage record
+    await supabase.from('usage').insert({
+      user_id: user.id,
+      tool,
+      prompt_tokens: 0,
+      completion_tokens: 0,
+      total_tokens: 0,
+      metadata: { type: 'image' },
+    })
+
+    // Update user XP and total generations
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('xp, total_generations')
+      .eq('id', user.id)
+      .single()
+
+    if (profile) {
+      const newXp = (profile.xp || 0) + IMAGE_XP_REWARD
+      const newLevel = Math.floor(newXp / 100) + 1
+      const newGenerations = (profile.total_generations || 0) + 1
+
+      await supabase
+        .from('profiles')
+        .update({
+          xp: newXp,
+          level: newLevel,
+          total_generations: newGenerations,
+        })
+        .eq('id', user.id)
+    }
+  } catch (error) {
+    console.error('Error tracking image usage/XP:', error)
   }
 }

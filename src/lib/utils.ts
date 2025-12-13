@@ -30,19 +30,69 @@ export function formatRelativeTime(date: string | Date) {
   return formatDate(date, { day: 'numeric', month: 'short' })
 }
 
+// Level titles based on XP
+export const levelTitles: Record<number, string> = {
+  1: 'Beginner',
+  2: 'Starter',
+  3: 'Gevorderde',
+  4: 'Expert',
+  5: 'Meester',
+  6: 'Goeroe',
+  7: 'Legende',
+  8: 'Kampioen',
+  9: 'Elite',
+  10: 'AI Wizard',
+}
+
 // Calculate XP level
-export function calculateLevel(xp: number): { level: number; progress: number; xpForNext: number } {
+export function calculateLevel(xp: number): { level: number; progress: number; xpForNext: number; title: string } {
   const xpPerLevel = 100
   const level = Math.floor(xp / xpPerLevel) + 1
   const xpInCurrentLevel = xp % xpPerLevel
   const progress = (xpInCurrentLevel / xpPerLevel) * 100
+  const title = levelTitles[Math.min(level, 10)] || 'AI Wizard'
 
   return {
     level,
     progress,
     xpForNext: xpPerLevel - xpInCurrentLevel,
+    title,
   }
 }
+
+// Get XP range for current level
+export function getLevelRange(level: number): { min: number; max: number } {
+  const xpPerLevel = 100
+  return {
+    min: (level - 1) * xpPerLevel,
+    max: level * xpPerLevel,
+  }
+}
+
+// Industry options for profile
+export const industryOptions = [
+  { value: 'ecommerce', label: 'E-commerce' },
+  { value: 'saas', label: 'SaaS / Software' },
+  { value: 'agency', label: 'Marketing Bureau' },
+  { value: 'retail', label: 'Retail' },
+  { value: 'hospitality', label: 'Horeca' },
+  { value: 'healthcare', label: 'Gezondheidszorg' },
+  { value: 'finance', label: 'Financiën' },
+  { value: 'education', label: 'Onderwijs' },
+  { value: 'real-estate', label: 'Vastgoed' },
+  { value: 'automotive', label: 'Automotive' },
+  { value: 'travel', label: 'Reizen & Toerisme' },
+  { value: 'other', label: 'Anders' },
+]
+
+// Tone options for profile
+export const toneOptions = [
+  { value: 'professional', label: 'Professioneel' },
+  { value: 'casual', label: 'Casual' },
+  { value: 'friendly', label: 'Vriendelijk' },
+  { value: 'formal', label: 'Formeel' },
+  { value: 'creative', label: 'Creatief' },
+]
 
 // Get greeting based on time of day
 export function getGreeting(): string {

@@ -1,5 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { createClient } from '@/lib/supabase/server'
+
+// XP rewards per tool type
+const XP_REWARDS: Record<string, number> = {
+  'google-ads-copy': 10,
+  'google-ads-feed': 15,
+  'google-ads-image': 20,
+  'social-copy': 10,
+  'social-image': 20,
+  'seo-content': 15,
+  'seo-meta': 10,
+  'cro-analyzer': 25,
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -51,6 +64,9 @@ export async function POST(request: NextRequest) {
 
     // Calculate tokens used
     const tokensUsed = (message.usage?.input_tokens || 0) + (message.usage?.output_tokens || 0)
+
+    // Track usage and add XP (fire and forget - don't block response)
+    trackUsageAndXP(tool, tokensUsed, message.usage?.input_tokens || 0, message.usage?.output_tokens || 0)
 
     return NextResponse.json({
       success: true,
@@ -205,4 +221,60 @@ OUTPUT FORMAT:
   }
 
   return prompts[tool] || 'Je bent een behulpzame AI assistent.'
+}
+
+// Track usage and add XP to user
+async function trackUsageAndXP(
+  tool: string,
+  totalTokens: number,
+  promptTokens: number,
+  completionTokens: number
+) {
+  try {
+    const supabase = await createClient()
+
+    // Get current user
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      console.log('No authenticated user for XP tracking')
+      return
+    }
+
+    // Insert usage record
+    await supabase.from('usage').insert({
+      user_id: user.id,
+      tool,
+      prompt_tokens: promptTokens,
+      completion_tokens: completionTokens,
+      total_tokens: totalTokens,
+    })
+
+    // Get XP reward for this tool
+    const xpReward = XP_REWARDS[tool] || 10
+
+    // Update user XP and total generations
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('xp, total_generations')
+      .eq('id', user.id)
+      .single()
+
+    if (profile) {
+      const newXp = (profile.xp || 0) + xpReward
+      const newLevel = Math.floor(newXp / 100) + 1
+      const newGenerations = (profile.total_generations || 0) + 1
+
+      await supabase
+        .from('profiles')
+        .update({
+          xp: newXp,
+          level: newLevel,
+          total_generations: newGenerations,
+        })
+        .eq('id', user.id)
+    }
+  } catch (error) {
+    // Log but don't throw - XP tracking shouldn't break the main request
+    console.error('Error tracking usage/XP:', error)
+  }
 }

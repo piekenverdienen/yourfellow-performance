@@ -13,6 +13,15 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   role TEXT DEFAULT 'marketer' CHECK (role IN ('admin', 'marketer', 'client')),
   xp INTEGER DEFAULT 0,
   level INTEGER DEFAULT 1,
+  -- User preferences
+  company_name TEXT,
+  industry TEXT,
+  preferred_tone TEXT DEFAULT 'professional' CHECK (preferred_tone IN ('professional', 'casual', 'friendly', 'formal', 'creative')),
+  preferred_language TEXT DEFAULT 'nl',
+  target_audience TEXT,
+  brand_voice TEXT,
+  -- Stats
+  total_generations INTEGER DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -189,5 +198,52 @@ CREATE INDEX IF NOT EXISTS idx_generations_user_id ON public.generations(user_id
 CREATE INDEX IF NOT EXISTS idx_generations_tool ON public.generations(tool);
 CREATE INDEX IF NOT EXISTS idx_marketing_events_date ON public.marketing_events(event_date);
 
--- Done! 
--- Your database is now ready for YourFellow Performance 🎉
+-- 17. Migration for existing profiles table (run if updating existing database)
+-- ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS company_name TEXT;
+-- ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS industry TEXT;
+-- ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS preferred_tone TEXT DEFAULT 'professional';
+-- ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS preferred_language TEXT DEFAULT 'nl';
+-- ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS target_audience TEXT;
+-- ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS brand_voice TEXT;
+-- ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS total_generations INTEGER DEFAULT 0;
+
+-- 18. Function to add XP and track generation
+CREATE OR REPLACE FUNCTION public.record_generation(
+  user_uuid UUID,
+  tool_name TEXT,
+  xp_amount INTEGER DEFAULT 10
+)
+RETURNS void AS $$
+BEGIN
+  -- Add XP
+  PERFORM public.add_xp(user_uuid, xp_amount);
+
+  -- Increment total generations
+  UPDATE public.profiles
+  SET total_generations = total_generations + 1
+  WHERE id = user_uuid;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 19. Function to get user stats
+CREATE OR REPLACE FUNCTION public.get_user_stats(user_uuid UUID)
+RETURNS TABLE (
+  total_generations BIGINT,
+  generations_today BIGINT,
+  current_xp INTEGER,
+  current_level INTEGER
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    p.total_generations::BIGINT,
+    (SELECT COUNT(*) FROM public.usage WHERE user_id = user_uuid AND created_at >= CURRENT_DATE)::BIGINT,
+    p.xp,
+    p.level
+  FROM public.profiles p
+  WHERE p.id = user_uuid;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Done!
+-- Your database is now ready for YourFellow Performance

@@ -1,12 +1,14 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Input } from '@/components/ui/input'
 import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
-import { 
-  Search, 
-  Bell, 
+import { createClient } from '@/lib/supabase/client'
+import {
+  Search,
+  Bell,
   Settings,
   LogOut,
   User,
@@ -27,8 +29,15 @@ interface HeaderProps {
 export function Header({ user }: HeaderProps) {
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
+  const router = useRouter()
 
   const levelInfo = user ? calculateLevel(user.xp) : null
+
+  const handleSignOut = async () => {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
 
   return (
     <header className="sticky top-0 z-30 h-16 bg-white/80 backdrop-blur-xl border-b border-surface-200">
@@ -133,7 +142,8 @@ export function Header({ user }: HeaderProps) {
                     </a>
                   </div>
                   <div className="border-t border-surface-100 py-2">
-                    <button 
+                    <button
+                      onClick={handleSignOut}
                       className="flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50 w-full"
                     >
                       <LogOut className="h-4 w-4" />

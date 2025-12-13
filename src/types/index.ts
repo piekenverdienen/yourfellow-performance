@@ -7,8 +7,44 @@ export interface User {
   role: 'admin' | 'marketer' | 'client'
   xp: number
   level: number
+  // Preferences
+  company_name: string | null
+  industry: string | null
+  preferred_tone: 'professional' | 'casual' | 'friendly' | 'formal' | 'creative'
+  preferred_language: string
+  target_audience: string | null
+  brand_voice: string | null
+  // Stats
+  total_generations: number
   created_at: string
   updated_at: string
+}
+
+// User preferences for profile page
+export interface UserPreferences {
+  full_name: string | null
+  company_name: string | null
+  industry: string | null
+  preferred_tone: 'professional' | 'casual' | 'friendly' | 'formal' | 'creative'
+  target_audience: string | null
+  brand_voice: string | null
+}
+
+// User stats
+export interface UserStats {
+  total_generations: number
+  generations_today: number
+  current_xp: number
+  current_level: number
+}
+
+// Level info
+export interface LevelInfo {
+  level: number
+  title: string
+  minXp: number
+  maxXp: number
+  progress: number
 }
 
 // Usage tracking
