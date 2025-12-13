@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { Logo } from '@/components/logo'
 import {
   LayoutDashboard,
+  MessageSquare,
   Megaphone,
   Share2,
   Search,
@@ -31,12 +32,17 @@ interface NavItem {
 }
 
 const navigation: NavItem[] = [
-  { 
-    name: 'Dashboard', 
-    href: '/dashboard', 
-    icon: LayoutDashboard 
+  {
+    name: 'Dashboard',
+    href: '/dashboard',
+    icon: LayoutDashboard
   },
-  { 
+  {
+    name: 'AI Chat',
+    href: '/chat',
+    icon: MessageSquare
+  },
+  {
     name: 'Google Ads', 
     href: '/google-ads', 
     icon: Megaphone,

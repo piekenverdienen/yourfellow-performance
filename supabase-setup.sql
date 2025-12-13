@@ -70,13 +70,14 @@ ALTER TABLE public.generations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.marketing_events ENABLE ROW LEVEL SECURITY;
 
 -- 6. RLS Policies for profiles
-CREATE POLICY "Users can view own profile" 
-  ON public.profiles FOR SELECT 
+CREATE POLICY "Users can view own profile"
+  ON public.profiles FOR SELECT
   USING (auth.uid() = id);
 
-CREATE POLICY "Users can update own profile" 
-  ON public.profiles FOR UPDATE 
-  USING (auth.uid() = id);
+CREATE POLICY "Users can update own profile"
+  ON public.profiles FOR UPDATE
+  USING (auth.uid() = id)
+  WITH CHECK (auth.uid() = id);
 
 CREATE POLICY "Admins can view all profiles" 
   ON public.profiles FOR SELECT 
@@ -244,6 +245,218 @@ BEGIN
   WHERE p.id = user_uuid;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 20. Create prompt_templates table for scalable AI prompts
+CREATE TABLE IF NOT EXISTS public.prompt_templates (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  key TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT,
+  category TEXT NOT NULL,
+  system_prompt TEXT NOT NULL,
+  input_schema JSONB,
+  output_format TEXT DEFAULT 'json' CHECK (output_format IN ('json', 'markdown', 'text')),
+  model TEXT DEFAULT 'claude-sonnet-4-20250514',
+  max_tokens INTEGER DEFAULT 2048,
+  xp_reward INTEGER DEFAULT 10,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 21. Enable RLS for prompt_templates
+ALTER TABLE public.prompt_templates ENABLE ROW LEVEL SECURITY;
+
+-- 22. RLS Policies for prompt_templates
+CREATE POLICY "Everyone can read active templates"
+  ON public.prompt_templates FOR SELECT
+  USING (is_active = TRUE);
+
+CREATE POLICY "Admins can manage templates"
+  ON public.prompt_templates FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+-- 23. Trigger for updated_at on prompt_templates
+CREATE TRIGGER prompt_templates_updated_at
+  BEFORE UPDATE ON public.prompt_templates
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
+
+-- 24. Index for prompt_templates
+CREATE INDEX IF NOT EXISTS idx_prompt_templates_key ON public.prompt_templates(key);
+CREATE INDEX IF NOT EXISTS idx_prompt_templates_category ON public.prompt_templates(category);
+
+-- 25. Seed prompt templates
+INSERT INTO public.prompt_templates (key, name, description, category, system_prompt, output_format, xp_reward) VALUES
+(
+  'google-ads-copy',
+  'Google Ads Teksten',
+  'Genereer overtuigende headlines en descriptions voor Google Ads',
+  'google-ads',
+  'Je bent een expert Google Ads copywriter voor een Nederlands marketing bureau.
+Je taak is om overtuigende, korte en krachtige advertentieteksten te schrijven.
+
+REGELS:
+- Headlines: max 30 karakters per headline, genereer 8-15 variaties
+- Descriptions: max 90 karakters per description, genereer 4-6 variaties
+- Schrijf in het Nederlands tenzij anders aangegeven
+- Gebruik actieve taal en sterke call-to-actions
+- Vermijd superlatieven zoals "beste" of "grootste" (Google policy)
+- Maak teksten relevant voor de doelgroep
+- Gebruik keywords natuurlijk
+
+OUTPUT FORMAT:
+Geef je antwoord als JSON met deze structuur:
+{
+  "headlines": ["headline1", "headline2", ...],
+  "descriptions": ["description1", "description2", ...]
+}
+
+Geef ALLEEN de JSON terug, geen andere tekst.',
+  'json',
+  10
+),
+(
+  'google-ads-feed',
+  'Feed Optimalisatie',
+  'Optimaliseer product titels en beschrijvingen voor Google Shopping',
+  'google-ads',
+  'Je bent een expert in Google Shopping feed optimalisatie.
+Je taak is om product titels en beschrijvingen te optimaliseren voor betere zichtbaarheid en CTR.
+
+REGELS:
+- Titels: max 150 karakters, begin met belangrijkste keywords
+- Beschrijvingen: max 5000 karakters, informatief en keyword-rijk
+- Voeg relevante attributen toe (merk, kleur, maat, etc.)
+- Optimaliseer voor zoekintentie
+- Schrijf in het Nederlands
+
+OUTPUT FORMAT:
+{
+  "optimized_title": "...",
+  "optimized_description": "...",
+  "changes": ["verandering 1", "verandering 2"],
+  "score_improvement": "+X%"
+}',
+  'json',
+  15
+),
+(
+  'social-copy',
+  'Social Media Posts',
+  'Schrijf engaging social media posts voor verschillende platforms',
+  'social',
+  'Je bent een social media expert voor een Nederlands marketing bureau.
+Je schrijft engaging posts die mensen aanzetten tot actie.
+
+REGELS:
+- Pas tone of voice aan per platform
+- Gebruik emoji''s waar passend
+- Schrijf in het Nederlands
+- Maak het persoonlijk en authentiek
+- Voeg relevante hashtags toe indien gevraagd
+
+OUTPUT FORMAT:
+{
+  "primary_text": "...",
+  "headline": "...",
+  "hashtags": ["#tag1", "#tag2"],
+  "suggested_cta": "..."
+}',
+  'json',
+  10
+),
+(
+  'seo-content',
+  'SEO Content',
+  'Schrijf SEO-geoptimaliseerde content voor websites',
+  'seo',
+  'Je bent een SEO content specialist voor een Nederlands marketing bureau.
+Je schrijft informatieve, goed leesbare content die rankt in Google.
+
+REGELS:
+- Schrijf natuurlijk en voor mensen, niet voor zoekmachines
+- Verwerk keywords organisch
+- Gebruik duidelijke headers (H2, H3)
+- Schrijf in het Nederlands
+- Voeg interne en externe link suggesties toe
+- Maak content scanbaar met korte alinea''s
+
+OUTPUT FORMAT:
+Markdown formatted content met headers, lijsten en suggesties voor links.',
+  'markdown',
+  15
+),
+(
+  'seo-meta',
+  'Meta Tags Generator',
+  'Genereer geoptimaliseerde title tags en meta descriptions',
+  'seo',
+  'Je bent een SEO specialist gespecialiseerd in meta tags.
+Je schrijft geoptimaliseerde title tags en meta descriptions.
+
+REGELS:
+- Title tag: 50-60 karakters, keyword vooraan
+- Meta description: 150-160 karakters, met call-to-action
+- Maak het uniek en relevant
+- Schrijf in het Nederlands
+
+OUTPUT FORMAT:
+{
+  "title": "...",
+  "description": "...",
+  "og_title": "...",
+  "og_description": "..."
+}',
+  'json',
+  10
+),
+(
+  'cro-analyzer',
+  'CRO Analyzer',
+  'Analyseer landingspagina''s op basis van Cialdini''s overtuigingsprincipes',
+  'cro',
+  'Je bent een CRO (Conversion Rate Optimization) expert.
+Je analyseert landingspagina''s op basis van Cialdini''s 6 principes van overtuiging:
+1. Wederkerigheid (Reciprocity)
+2. Schaarste (Scarcity)
+3. Autoriteit (Authority)
+4. Consistentie (Commitment/Consistency)
+5. Sympathie (Liking)
+6. Sociale bewijskracht (Social Proof)
+
+REGELS:
+- Analyseer elk principe op een schaal van 0-10
+- Geef concrete voorbeelden van wat je vindt
+- Geef actionable verbeterpunten
+- Wees specifiek en praktisch
+
+OUTPUT FORMAT:
+{
+  "overall_score": X,
+  "principles": [
+    {
+      "name": "...",
+      "score": X,
+      "found_elements": ["...", "..."],
+      "suggestions": ["...", "..."]
+    }
+  ],
+  "top_improvements": ["...", "...", "..."]
+}',
+  'json',
+  25
+)
+ON CONFLICT (key) DO UPDATE SET
+  name = EXCLUDED.name,
+  description = EXCLUDED.description,
+  system_prompt = EXCLUDED.system_prompt,
+  xp_reward = EXCLUDED.xp_reward,
+  updated_at = NOW();
 
 -- Done!
 -- Your database is now ready for YourFellow Performance

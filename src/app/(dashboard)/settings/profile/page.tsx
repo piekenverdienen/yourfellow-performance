@@ -44,6 +44,7 @@ export default function ProfilePage() {
     target_audience: '',
     brand_voice: '',
   })
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   // Load user data into form when available
   useEffect(() => {
@@ -63,11 +64,17 @@ export default function ProfilePage() {
     e.preventDefault()
     setSaving(true)
     setSaved(false)
+    setSaveError(null)
 
+    console.log('Saving profile:', formData)
     const { error } = await updateProfile(formData)
+    console.log('Save result:', error)
 
     setSaving(false)
-    if (!error) {
+    if (error) {
+      setSaveError(error.message)
+      console.error('Profile save error:', error)
+    } else {
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
     }
@@ -308,6 +315,11 @@ export default function ProfilePage() {
                     <span className="text-sm text-green-600 flex items-center gap-1">
                       <Check className="h-4 w-4" />
                       Opgeslagen
+                    </span>
+                  )}
+                  {saveError && (
+                    <span className="text-sm text-red-600">
+                      Fout: {saveError}
                     </span>
                   )}
                   <Button type="submit" disabled={saving}>

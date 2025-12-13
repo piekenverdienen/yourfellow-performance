@@ -2,16 +2,24 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
 
-// XP rewards per tool type
-const XP_REWARDS: Record<string, number> = {
-  'google-ads-copy': 10,
-  'google-ads-feed': 15,
-  'google-ads-image': 20,
-  'social-copy': 10,
-  'social-image': 20,
-  'seo-content': 15,
-  'seo-meta': 10,
-  'cro-analyzer': 25,
+// Fallback prompts in case database is unavailable
+const FALLBACK_PROMPTS: Record<string, { system_prompt: string; xp_reward: number; model: string; max_tokens: number }> = {
+  'google-ads-copy': {
+    system_prompt: 'Je bent een expert Google Ads copywriter. Genereer headlines (max 30 chars) en descriptions (max 90 chars) in JSON format.',
+    xp_reward: 10,
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 2048,
+  },
+}
+
+interface PromptTemplate {
+  key: string
+  name: string
+  system_prompt: string
+  model: string
+  max_tokens: number
+  xp_reward: number
+  output_format: string
 }
 
 export async function POST(request: NextRequest) {
@@ -40,13 +48,38 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get system prompt based on tool type
-    const systemPrompt = getSystemPrompt(tool, options)
+    // Get template from database
+    const template = await getPromptTemplate(tool)
+
+    if (!template) {
+      return NextResponse.json(
+        { error: `Template '${tool}' niet gevonden.` },
+        { status: 404 }
+      )
+    }
+
+    // Build system prompt with user context if available
+    let systemPrompt = template.system_prompt
+
+    // Add user preferences to context if provided
+    if (options?.userContext) {
+      const ctx = options.userContext as Record<string, string>
+      const contextParts = []
+      if (ctx.company_name) contextParts.push(`Bedrijf: ${ctx.company_name}`)
+      if (ctx.industry) contextParts.push(`Branche: ${ctx.industry}`)
+      if (ctx.target_audience) contextParts.push(`Doelgroep: ${ctx.target_audience}`)
+      if (ctx.brand_voice) contextParts.push(`Merkstem: ${ctx.brand_voice}`)
+      if (ctx.preferred_tone) contextParts.push(`Toon: ${ctx.preferred_tone}`)
+
+      if (contextParts.length > 0) {
+        systemPrompt = `${systemPrompt}\n\nCONTEXT GEBRUIKER:\n${contextParts.join('\n')}`
+      }
+    }
 
     // Call Claude API
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 2048,
+      model: template.model,
+      max_tokens: template.max_tokens,
       system: systemPrompt,
       messages: [
         { role: 'user', content: prompt }
@@ -57,7 +90,7 @@ export async function POST(request: NextRequest) {
     const textContent = message.content.find(block => block.type === 'text')
     let result = textContent ? textContent.text : ''
 
-    // Strip markdown code blocks if present (Claude sometimes wraps JSON in ```json blocks)
+    // Strip markdown code blocks if present
     if (result.startsWith('```')) {
       result = result.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
     }
@@ -65,13 +98,14 @@ export async function POST(request: NextRequest) {
     // Calculate tokens used
     const tokensUsed = (message.usage?.input_tokens || 0) + (message.usage?.output_tokens || 0)
 
-    // Track usage and add XP (fire and forget - don't block response)
-    trackUsageAndXP(tool, tokensUsed, message.usage?.input_tokens || 0, message.usage?.output_tokens || 0)
+    // Track usage and add XP (fire and forget)
+    trackUsageAndXP(tool, template.xp_reward, tokensUsed, message.usage?.input_tokens || 0, message.usage?.output_tokens || 0)
 
     return NextResponse.json({
       success: true,
       result,
       tokens_used: tokensUsed,
+      template_name: template.name,
     })
 
   } catch (error) {
@@ -100,132 +134,54 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function getSystemPrompt(tool: string, options?: Record<string, unknown>): string {
-  const prompts: Record<string, string> = {
-    'google-ads-copy': `Je bent een expert Google Ads copywriter voor een Nederlands marketing bureau.
-Je taak is om overtuigende, korte en krachtige advertentieteksten te schrijven.
+// Get prompt template from database
+async function getPromptTemplate(toolKey: string): Promise<PromptTemplate | null> {
+  try {
+    const supabase = await createClient()
 
-REGELS:
-- Headlines: max 30 karakters per headline, genereer 8-15 variaties
-- Descriptions: max 90 karakters per description, genereer 4-6 variaties
-- Schrijf in het Nederlands tenzij anders aangegeven
-- Gebruik actieve taal en sterke call-to-actions
-- Vermijd superlatieven zoals "beste" of "grootste" (Google policy)
-- Maak teksten relevant voor de doelgroep
-- Gebruik keywords natuurlijk
+    const { data: template, error } = await supabase
+      .from('prompt_templates')
+      .select('key, name, system_prompt, model, max_tokens, xp_reward, output_format')
+      .eq('key', toolKey)
+      .eq('is_active', true)
+      .single()
 
-OUTPUT FORMAT:
-Geef je antwoord als JSON met deze structuur:
-{
-  "headlines": ["headline1", "headline2", ...],
-  "descriptions": ["description1", "description2", ...]
-}
-
-Geef ALLEEN de JSON terug, geen andere tekst.`,
-
-    'google-ads-feed': `Je bent een expert in Google Shopping feed optimalisatie.
-Je taak is om product titels en beschrijvingen te optimaliseren voor betere zichtbaarheid en CTR.
-
-REGELS:
-- Titels: max 150 karakters, begin met belangrijkste keywords
-- Beschrijvingen: max 5000 karakters, informatief en keyword-rijk
-- Voeg relevante attributen toe (merk, kleur, maat, etc.)
-- Optimaliseer voor zoekintentie
-- Schrijf in het Nederlands
-
-OUTPUT FORMAT:
-{
-  "optimized_title": "...",
-  "optimized_description": "...",
-  "changes": ["verandering 1", "verandering 2"],
-  "score_improvement": "+X%"
-}`,
-
-    'social-copy': `Je bent een social media expert voor een Nederlands marketing bureau.
-Je schrijft engaging posts die mensen aanzetten tot actie.
-
-REGELS:
-- Pas tone of voice aan per platform
-- Gebruik emoji's waar passend
-- Schrijf in het Nederlands
-- Maak het persoonlijk en authentiek
-- Voeg relevante hashtags toe indien gevraagd
-
-OUTPUT FORMAT:
-{
-  "primary_text": "...",
-  "headline": "...",
-  "hashtags": ["#tag1", "#tag2"],
-  "suggested_cta": "..."
-}`,
-
-    'seo-content': `Je bent een SEO content specialist voor een Nederlands marketing bureau.
-Je schrijft informatieve, goed leesbare content die rankt in Google.
-
-REGELS:
-- Schrijf natuurlijk en voor mensen, niet voor zoekmachines
-- Verwerk keywords organisch
-- Gebruik duidelijke headers (H2, H3)
-- Schrijf in het Nederlands
-- Voeg interne en externe link suggesties toe
-- Maak content scanbaar met korte alinea's
-
-OUTPUT FORMAT:
-Markdown formatted content met headers, lijsten en suggesties voor links.`,
-
-    'seo-meta': `Je bent een SEO specialist gespecialiseerd in meta tags.
-Je schrijft geoptimaliseerde title tags en meta descriptions.
-
-REGELS:
-- Title tag: 50-60 karakters, keyword vooraan
-- Meta description: 150-160 karakters, met call-to-action
-- Maak het uniek en relevant
-- Schrijf in het Nederlands
-
-OUTPUT FORMAT:
-{
-  "title": "...",
-  "description": "...",
-  "og_title": "...",
-  "og_description": "..."
-}`,
-
-    'cro-analyzer': `Je bent een CRO (Conversion Rate Optimization) expert.
-Je analyseert landingspagina's op basis van Cialdini's 6 principes van overtuiging:
-1. Wederkerigheid (Reciprocity)
-2. Schaarste (Scarcity)
-3. Autoriteit (Authority)
-4. Consistentie (Commitment/Consistency)
-5. Sympathie (Liking)
-6. Sociale bewijskracht (Social Proof)
-
-REGELS:
-- Analyseer elk principe op een schaal van 0-10
-- Geef concrete voorbeelden van wat je vindt
-- Geef actionable verbeterpunten
-- Wees specifiek en praktisch
-
-OUTPUT FORMAT:
-{
-  "overall_score": X,
-  "principles": [
-    {
-      "name": "...",
-      "score": X,
-      "found_elements": ["...", "..."],
-      "suggestions": ["...", "..."]
+    if (error || !template) {
+      console.log(`Template '${toolKey}' not found in database, using fallback`)
+      // Return fallback if available
+      const fallback = FALLBACK_PROMPTS[toolKey]
+      if (fallback) {
+        return {
+          key: toolKey,
+          name: toolKey,
+          ...fallback,
+          output_format: 'json',
+        }
+      }
+      return null
     }
-  ],
-  "top_improvements": ["...", "...", "..."]
-}`,
-  }
 
-  return prompts[tool] || 'Je bent een behulpzame AI assistent.'
+    return template
+  } catch (error) {
+    console.error('Error fetching template:', error)
+    // Return fallback on error
+    const fallback = FALLBACK_PROMPTS[toolKey]
+    if (fallback) {
+      return {
+        key: toolKey,
+        name: toolKey,
+        ...fallback,
+        output_format: 'json',
+      }
+    }
+    return null
+  }
 }
 
 // Track usage and add XP to user
 async function trackUsageAndXP(
   tool: string,
+  xpReward: number,
   totalTokens: number,
   promptTokens: number,
   completionTokens: number
@@ -249,9 +205,6 @@ async function trackUsageAndXP(
       total_tokens: totalTokens,
     })
 
-    // Get XP reward for this tool
-    const xpReward = XP_REWARDS[tool] || 10
-
     // Update user XP and total generations
     const { data: profile } = await supabase
       .from('profiles')
@@ -274,7 +227,6 @@ async function trackUsageAndXP(
         .eq('id', user.id)
     }
   } catch (error) {
-    // Log but don't throw - XP tracking shouldn't break the main request
     console.error('Error tracking usage/XP:', error)
   }
 }

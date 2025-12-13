@@ -200,3 +200,41 @@ export interface MarketingEvent {
   type: 'holiday' | 'sale' | 'campaign' | 'deadline'
   color: string
 }
+
+// Chat types
+export interface Assistant {
+  id: string
+  slug: string
+  name: string
+  description: string | null
+  avatar_letter: string
+  avatar_color: string
+  system_prompt: string
+  model: string
+  max_tokens: number
+  temperature: number
+  is_active: boolean
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface Conversation {
+  id: string
+  user_id: string
+  assistant_id: string
+  title: string
+  is_archived: boolean
+  created_at: string
+  updated_at: string
+  assistant?: Assistant
+}
+
+export interface Message {
+  id: string
+  conversation_id: string
+  role: 'user' | 'assistant'
+  content: string
+  tokens_used: number
+  created_at: string
+}
