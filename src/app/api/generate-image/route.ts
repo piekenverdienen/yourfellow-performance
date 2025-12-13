@@ -25,10 +25,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Enhance prompt for better DALL-E results
+    const enhancedPrompt = `Create a professional marketing image: ${prompt}. High quality, suitable for business use, clean design.`
+
     // Generate image with DALL-E 3
     const response = await openai.images.generate({
       model: 'dall-e-3',
-      prompt: prompt,
+      prompt: enhancedPrompt,
       n: 1,
       size: size as '1024x1024' | '1792x1024' | '1024x1792',
       style: style as 'vivid' | 'natural',
@@ -51,6 +54,12 @@ export async function POST(request: NextRequest) {
     console.error('Image generation error:', error)
 
     if (error instanceof OpenAI.APIError) {
+      console.error('OpenAI API Error details:', {
+        status: error.status,
+        message: error.message,
+        code: error.code,
+      })
+
       if (error.status === 401) {
         return NextResponse.json(
           { error: 'Ongeldige OpenAI API key. Controleer je OPENAI_API_KEY.' },
@@ -59,13 +68,27 @@ export async function POST(request: NextRequest) {
       }
       if (error.status === 429) {
         return NextResponse.json(
-          { error: 'Te veel verzoeken. Wacht even en probeer opnieuw.' },
+          { error: 'Te veel verzoeken of krediet op. Check je OpenAI account.' },
           { status: 429 }
         )
       }
       if (error.status === 400) {
+        // More specific error message
+        const errorMessage = error.message || ''
+        if (errorMessage.includes('content_policy')) {
+          return NextResponse.json(
+            { error: 'Je prompt bevat content die niet is toegestaan. Probeer een andere beschrijving zonder merknamen of gevoelige content.' },
+            { status: 400 }
+          )
+        }
+        if (errorMessage.includes('billing') || errorMessage.includes('quota')) {
+          return NextResponse.json(
+            { error: 'Je OpenAI account heeft geen krediet meer. Voeg betaalgegevens toe op platform.openai.com.' },
+            { status: 400 }
+          )
+        }
         return NextResponse.json(
-          { error: 'Je prompt werd afgewezen. Probeer een andere beschrijving.' },
+          { error: `Prompt afgewezen: ${errorMessage || 'Probeer een andere beschrijving.'}` },
           { status: 400 }
         )
       }
