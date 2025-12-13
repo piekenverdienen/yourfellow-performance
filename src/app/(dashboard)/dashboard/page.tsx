@@ -1,32 +1,25 @@
 'use client'
 
 import Link from 'next/link'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Avatar } from '@/components/ui/avatar'
 import { Progress } from '@/components/ui/progress'
 import { useUser } from '@/hooks/use-user'
 import {
   Star,
-  Sparkles,
   ChevronRight,
   ChevronLeft,
   ExternalLink,
   Type,
-  Database,
-  Image,
-  FileText,
+  Image as ImageIcon,
   Tags,
   BarChart3,
   RefreshCw,
-  Calendar,
-  TrendingUp,
-  Zap,
-  MessageSquare,
   Loader2,
 } from 'lucide-react'
-import { getGreeting, calculateLevel, formatDate, getLevelRange } from '@/lib/utils'
+import { getGreeting, calculateLevel, getLevelRange } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 
 const recentTools = [
@@ -56,39 +49,165 @@ const aiAssistants = [
   },
 ]
 
-const marketingEvents = [
-  { title: 'Start Winter...', date: '1 december', color: 'text-primary' },
-  { title: 'Cyber Monday', date: '2 december', color: 'text-red-500' },
-  { title: 'Sinterklaasavond', date: '5 december', color: 'text-orange-500' },
-]
+interface NewsItem {
+  id: string
+  title: string
+  url: string
+  date: string
+  source: string
+}
 
-const latestNews = [
-  {
-    title: 'Where to Invest in AI in 2026',
-    date: 'vrijdag 12 december 2025',
-    image: '/placeholder-news-1.jpg',
-  },
-  {
-    title: 'Amputees often feel disconnected from...',
-    date: 'vrijdag 12 december 2025',
-    image: '/placeholder-news-2.jpg',
-  },
-  {
-    title: 'Arizona city rejects data center after AI...',
-    date: 'vrijdag 12 december 2025',
-    image: '/placeholder-news-3.jpg',
-  },
-]
+interface MarketingEvent {
+  id: string
+  title: string
+  description: string | null
+  event_date: string
+  event_type: string
+  color: string
+  is_global: boolean
+}
+
+interface Generation {
+  id: string
+  tool: string
+  input: { prompt?: string }
+  output: { imageUrl?: string; revisedPrompt?: string }
+  rating: number | null
+  is_favorite: boolean
+  created_at: string
+}
+
+// Month descriptions for the calendar
+const monthDescriptions: Record<number, string> = {
+  1: 'Het nieuwe jaar is begonnen! Perfect moment voor goede voornemens campagnes en verse start promoties.',
+  2: 'Februari staat in het teken van Valentijnsdag. Ideaal voor romantische en relatiemarketing.',
+  3: 'Lente breekt aan! Tijd voor voorjaarsschoonmaak en vernieuwing campagnes.',
+  4: 'April brengt Pasen en het begin van het terrasseizoen. Focus op familie en buitenactiviteiten.',
+  5: 'Moederdag in mei! Een belangrijke commerciële periode voor cadeaus en belevenissen.',
+  6: 'Zomer begint met Vaderdag en vakantievoorbereidingen. Denk aan reizen en outdoor.',
+  7: 'Volle zomer! Vakantie, zomeropruiming en festivalseizoen bieden veel kansen.',
+  8: 'Back-to-school periode start. Ouders en studenten bereiden zich voor op het nieuwe jaar.',
+  9: 'Nazomer en herfst beginnen. Nieuwe start voor veel consumenten na de vakantie.',
+  10: 'Halloween en herfstpromoties. Begin ook met Black Friday voorbereidingen.',
+  11: 'Singles Day (11/11) en Black Friday. De belangrijkste shopping maand van het jaar!',
+  12: 'We sluiten het jaar af met de feestmaand december. Hier valt veel winst te behalen vanuit een goede contentstrategie, in december wordt er onder andere Sinterklaas en Kerst gevierd.',
+}
 
 export default function DashboardPage() {
   const { user, stats, loading, refetch } = useUser()
 
+  // State for news
+  const [news, setNews] = useState<NewsItem[]>([])
+  const [newsLoading, setNewsLoading] = useState(true)
+
+  // State for calendar navigation
+  const now = new Date()
+  const [calendarYear, setCalendarYear] = useState(now.getFullYear())
+  const [calendarMonth, setCalendarMonth] = useState(now.getMonth())
+
+  // State for marketing events
+  const [events, setEvents] = useState<MarketingEvent[]>([])
+  const [eventsLoading, setEventsLoading] = useState(true)
+
+  // State for generated media
+  const [generations, setGenerations] = useState<Generation[]>([])
+  const [generationsLoading, setGenerationsLoading] = useState(true)
+
   const greeting = getGreeting()
 
-  // Get current month calendar data
-  const now = new Date()
-  const currentMonth = now.toLocaleDateString('nl-NL', { month: 'long', year: 'numeric' })
-  const weekNumber = getWeekNumber(now)
+  // Fetch news
+  const fetchNews = useCallback(async () => {
+    setNewsLoading(true)
+    try {
+      const res = await fetch('/api/news')
+      const data = await res.json()
+      setNews(data.news || [])
+    } catch (error) {
+      console.error('Error fetching news:', error)
+      setNews([])
+    } finally {
+      setNewsLoading(false)
+    }
+  }, [])
+
+  // Fetch calendar events
+  const fetchEvents = useCallback(async () => {
+    setEventsLoading(true)
+    try {
+      const res = await fetch(`/api/calendar/events?year=${calendarYear}&month=${calendarMonth + 1}`)
+      const data = await res.json()
+      setEvents(data.events || [])
+    } catch (error) {
+      console.error('Error fetching events:', error)
+      setEvents([])
+    } finally {
+      setEventsLoading(false)
+    }
+  }, [calendarYear, calendarMonth])
+
+  // Fetch generated media
+  const fetchGenerations = useCallback(async () => {
+    setGenerationsLoading(true)
+    try {
+      const res = await fetch('/api/generations?limit=4&tool=social-image')
+      const data = await res.json()
+      setGenerations(data.generations || [])
+    } catch (error) {
+      console.error('Error fetching generations:', error)
+      setGenerations([])
+    } finally {
+      setGenerationsLoading(false)
+    }
+  }, [])
+
+  // Initial data fetch
+  useEffect(() => {
+    fetchNews()
+    fetchGenerations()
+  }, [fetchNews, fetchGenerations])
+
+  // Fetch events when calendar month changes
+  useEffect(() => {
+    fetchEvents()
+  }, [fetchEvents])
+
+  // Calendar navigation handlers
+  const goToPreviousMonth = () => {
+    if (calendarMonth === 0) {
+      setCalendarMonth(11)
+      setCalendarYear(calendarYear - 1)
+    } else {
+      setCalendarMonth(calendarMonth - 1)
+    }
+  }
+
+  const goToNextMonth = () => {
+    if (calendarMonth === 11) {
+      setCalendarMonth(0)
+      setCalendarYear(calendarYear + 1)
+    } else {
+      setCalendarMonth(calendarMonth + 1)
+    }
+  }
+
+  const goToToday = () => {
+    setCalendarYear(now.getFullYear())
+    setCalendarMonth(now.getMonth())
+  }
+
+  // Generate calendar data
+  const calendarDays = generateCalendarDays(calendarYear, calendarMonth, events)
+  const displayMonth = new Date(calendarYear, calendarMonth).toLocaleDateString('nl-NL', { month: 'long', year: 'numeric' })
+  const weekNumber = getWeekNumber(new Date(calendarYear, calendarMonth, 15))
+  const monthDescription = monthDescriptions[calendarMonth + 1] || 'Een nieuwe maand vol mogelijkheden voor je marketing!'
+
+  // Get events for the displayed month
+  const displayedEvents = events
+    .filter(event => {
+      const eventDate = new Date(event.event_date)
+      return eventDate.getMonth() === calendarMonth && eventDate.getFullYear() === calendarYear
+    })
+    .slice(0, 3)
 
   // Calculate level info from user XP
   const xp = user?.xp || 0
@@ -242,20 +361,44 @@ export default function DashboardPage() {
           <Card padding="none" className="overflow-hidden">
             <CardHeader className="p-4 flex-row items-center justify-between">
               <CardTitle className="text-base">Laatste nieuws</CardTitle>
-              <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                <RefreshCw className="h-3 w-3" />
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0"
+                onClick={fetchNews}
+                disabled={newsLoading}
+              >
+                <RefreshCw className={cn('h-3 w-3', newsLoading && 'animate-spin')} />
               </Button>
             </CardHeader>
             <CardContent className="p-4 pt-0 space-y-3">
-              {latestNews.map((news, index) => (
-                <div key={index} className="flex gap-3">
-                  <div className="w-16 h-12 bg-surface-200 rounded-lg flex-shrink-0" />
-                  <div>
-                    <p className="text-sm font-medium text-surface-900 line-clamp-2">{news.title}</p>
-                    <p className="text-xs text-surface-500">{news.date}</p>
-                  </div>
+              {newsLoading ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-5 w-5 animate-spin text-surface-400" />
                 </div>
-              ))}
+              ) : news.length === 0 ? (
+                <p className="text-sm text-surface-500 text-center py-4">Geen nieuws beschikbaar</p>
+              ) : (
+                news.slice(0, 3).map((item) => (
+                  <a
+                    key={item.id}
+                    href={item.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex gap-3 group hover:bg-surface-50 -mx-2 px-2 py-1 rounded-lg transition-colors"
+                  >
+                    <div className="w-16 h-12 bg-surface-200 rounded-lg flex-shrink-0 flex items-center justify-center">
+                      <ExternalLink className="h-4 w-4 text-surface-400 group-hover:text-primary transition-colors" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-surface-900 line-clamp-2 group-hover:text-primary transition-colors">
+                        {item.title}
+                      </p>
+                      <p className="text-xs text-surface-500">{item.source}</p>
+                    </div>
+                  </a>
+                ))
+              )}
             </CardContent>
           </Card>
 
@@ -263,19 +406,37 @@ export default function DashboardPage() {
           <Card padding="none" className="overflow-hidden">
             <CardHeader className="p-4 pb-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0"
+                    onClick={goToPreviousMonth}
+                  >
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
-                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0"
+                    onClick={goToNextMonth}
+                  >
                     <ChevronRight className="h-4 w-4" />
                   </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs"
+                    onClick={goToToday}
+                  >
+                    Vandaag
+                  </Button>
                 </div>
-                <CardTitle className="text-base capitalize">{currentMonth}</CardTitle>
+                <CardTitle className="text-base capitalize">{displayMonth}</CardTitle>
                 <span className="text-sm text-surface-500">Week {weekNumber}</span>
               </div>
               <p className="text-xs text-surface-500 mt-2">
-                We sluiten het jaar af met de feestmaand december. Hier valt veel winst te behalen vanuit een goede contentstrategie, in december wordt er onder andere Sinterklaas en Kerst gevierd.
+                {monthDescription}
               </p>
             </CardHeader>
             <CardContent className="p-4 pt-2">
@@ -289,18 +450,25 @@ export default function DashboardPage() {
                     {day}
                   </div>
                 ))}
-                {generateCalendarDays().map((day, i) => (
+                {calendarDays.map((day, i) => (
                   <div
                     key={i}
                     className={cn(
-                      'py-1 rounded-full text-sm',
+                      'py-1 rounded-full text-sm relative',
                       day.isToday && 'bg-primary text-black font-bold',
-                      day.hasEvent && !day.isToday && 'text-red-500',
+                      day.hasEvent && !day.isToday && 'font-semibold',
                       !day.isCurrentMonth && 'text-surface-300',
-                      day.isWeekend && !day.isToday && 'text-red-400',
+                      day.isWeekend && !day.isToday && day.isCurrentMonth && 'text-red-400',
                     )}
+                    title={day.eventTitle}
                   >
                     {day.date}
+                    {day.hasEvent && (
+                      <span
+                        className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full"
+                        style={{ backgroundColor: day.eventColor || '#EF4444' }}
+                      />
+                    )}
                   </div>
                 ))}
               </div>
@@ -308,15 +476,30 @@ export default function DashboardPage() {
               {/* Marketing Events */}
               <div className="border-t border-surface-100 pt-3 space-y-2">
                 <h4 className="text-xs font-semibold text-surface-500 uppercase">Marketingevents</h4>
-                {marketingEvents.map((event, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <div className={cn('w-1 h-4 rounded-full', event.color.replace('text-', 'bg-'))} />
-                    <div>
-                      <p className={cn('text-sm font-medium', event.color)}>{event.title}</p>
-                      <p className="text-xs text-surface-500">{event.date}</p>
-                    </div>
+                {eventsLoading ? (
+                  <div className="flex items-center justify-center py-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-surface-400" />
                   </div>
-                ))}
+                ) : displayedEvents.length === 0 ? (
+                  <p className="text-xs text-surface-400 py-2">Geen events deze maand</p>
+                ) : (
+                  displayedEvents.map((event) => {
+                    const eventDate = new Date(event.event_date)
+                    const formattedDate = eventDate.toLocaleDateString('nl-NL', { day: 'numeric', month: 'long' })
+                    return (
+                      <div key={event.id} className="flex items-center gap-2">
+                        <div
+                          className="w-1 h-4 rounded-full"
+                          style={{ backgroundColor: event.color }}
+                        />
+                        <div>
+                          <p className="text-sm font-medium" style={{ color: event.color }}>{event.title}</p>
+                          <p className="text-xs text-surface-500">{formattedDate}</p>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
               </div>
             </CardContent>
           </Card>
@@ -325,20 +508,69 @@ export default function DashboardPage() {
           <Card padding="none" className="overflow-hidden">
             <CardHeader className="p-4 flex-row items-center justify-between">
               <CardTitle className="text-base">Gegenereerde media</CardTitle>
-              <ChevronRight className="h-4 w-4 text-surface-400" />
+              <Link href="/social/images">
+                <ChevronRight className="h-4 w-4 text-surface-400 hover:text-primary transition-colors" />
+              </Link>
             </CardHeader>
             <CardContent className="p-4 pt-0">
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <div className="w-12 h-12 rounded-xl bg-surface-100 flex items-center justify-center mb-3">
-                  <Image className="h-6 w-6 text-surface-400" />
+              {generationsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-5 w-5 animate-spin text-surface-400" />
                 </div>
-                <p className="text-sm text-surface-500 mb-3">Nog geen media gegenereerd</p>
-                <Link href="/social/images">
-                  <Button variant="outline" size="sm">
-                    Start met creëren
-                  </Button>
-                </Link>
-              </div>
+              ) : generations.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <div className="w-12 h-12 rounded-xl bg-surface-100 flex items-center justify-center mb-3">
+                    <ImageIcon className="h-6 w-6 text-surface-400" />
+                  </div>
+                  <p className="text-sm text-surface-500 mb-3">Nog geen media gegenereerd</p>
+                  <Link href="/social/images">
+                    <Button variant="outline" size="sm">
+                      Start met creëren
+                    </Button>
+                  </Link>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    {generations.slice(0, 4).map((gen) => (
+                      <div
+                        key={gen.id}
+                        className="aspect-square rounded-lg bg-surface-100 overflow-hidden relative group"
+                      >
+                        {gen.output.imageUrl ? (
+                          <img
+                            src={gen.output.imageUrl}
+                            alt={gen.input.prompt || 'Generated image'}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              // If image fails to load (expired URL), show placeholder
+                              const target = e.target as HTMLImageElement
+                              target.style.display = 'none'
+                              target.nextElementSibling?.classList.remove('hidden')
+                            }}
+                          />
+                        ) : null}
+                        <div className={cn(
+                          'absolute inset-0 flex items-center justify-center bg-surface-100',
+                          gen.output.imageUrl ? 'hidden' : ''
+                        )}>
+                          <ImageIcon className="h-6 w-6 text-surface-400" />
+                        </div>
+                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <p className="text-xs text-white text-center p-2 line-clamp-3">
+                            {gen.input.prompt || 'Gegenereerde afbeelding'}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <Link href="/social/images" className="block">
+                    <Button variant="outline" size="sm" className="w-full">
+                      Bekijk alle media
+                    </Button>
+                  </Link>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -356,38 +588,63 @@ function getWeekNumber(date: Date): number {
   return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
 }
 
-function generateCalendarDays() {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = now.getMonth()
+interface CalendarDay {
+  date: number
+  isCurrentMonth: boolean
+  isToday: boolean
+  isWeekend: boolean
+  hasEvent: boolean
+  eventColor?: string
+  eventTitle?: string
+}
 
+function generateCalendarDays(year: number, month: number, events: MarketingEvent[]): CalendarDay[] {
+  const now = new Date()
   const firstDay = new Date(year, month, 1)
   const lastDay = new Date(year, month + 1, 0)
 
   const startOffset = (firstDay.getDay() + 6) % 7 // Monday = 0
-  const days = []
+  const days: CalendarDay[] = []
+
+  // Create a map of events by date
+  const eventMap = new Map<string, MarketingEvent>()
+  events.forEach(event => {
+    const dateKey = event.event_date.split('T')[0]
+    eventMap.set(dateKey, event)
+  })
 
   // Previous month days
   for (let i = startOffset - 1; i >= 0; i--) {
     const d = new Date(year, month, -i)
+    const dateKey = d.toISOString().split('T')[0]
+    const event = eventMap.get(dateKey)
     days.push({
       date: d.getDate(),
       isCurrentMonth: false,
       isToday: false,
       isWeekend: d.getDay() === 0 || d.getDay() === 6,
-      hasEvent: false,
+      hasEvent: !!event,
+      eventColor: event?.color,
+      eventTitle: event?.title,
     })
   }
 
   // Current month days
   for (let i = 1; i <= lastDay.getDate(); i++) {
     const d = new Date(year, month, i)
+    const dateKey = d.toISOString().split('T')[0]
+    const event = eventMap.get(dateKey)
+    const isToday = d.getDate() === now.getDate() &&
+                    d.getMonth() === now.getMonth() &&
+                    d.getFullYear() === now.getFullYear()
     days.push({
       date: i,
       isCurrentMonth: true,
-      isToday: i === now.getDate(),
+      isToday,
       isWeekend: d.getDay() === 0 || d.getDay() === 6,
-      hasEvent: [1, 2, 5, 25, 26].includes(i), // Some example event days
+      hasEvent: !!event,
+      eventColor: event?.color,
+      eventTitle: event?.title,
     })
   }
 
@@ -395,12 +652,16 @@ function generateCalendarDays() {
   const remaining = 42 - days.length
   for (let i = 1; i <= remaining; i++) {
     const d = new Date(year, month + 1, i)
+    const dateKey = d.toISOString().split('T')[0]
+    const event = eventMap.get(dateKey)
     days.push({
       date: i,
       isCurrentMonth: false,
       isToday: false,
       isWeekend: d.getDay() === 0 || d.getDay() === 6,
-      hasEvent: false,
+      hasEvent: !!event,
+      eventColor: event?.color,
+      eventTitle: event?.title,
     })
   }
 
