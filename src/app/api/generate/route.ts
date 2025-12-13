@@ -42,7 +42,12 @@ export async function POST(request: NextRequest) {
 
     // Extract text content
     const textContent = message.content.find(block => block.type === 'text')
-    const result = textContent ? textContent.text : ''
+    let result = textContent ? textContent.text : ''
+
+    // Strip markdown code blocks if present (Claude sometimes wraps JSON in ```json blocks)
+    if (result.startsWith('```')) {
+      result = result.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
+    }
 
     // Calculate tokens used
     const tokensUsed = (message.usage?.input_tokens || 0) + (message.usage?.output_tokens || 0)
