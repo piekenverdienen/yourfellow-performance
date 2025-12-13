@@ -106,7 +106,13 @@ Schrijf een engaging post in het Nederlands die past bij het platform en de doel
         throw new Error(data.error || 'Generatie mislukt')
       }
 
-      const parsedResult = JSON.parse(data.result)
+      // Strip markdown code blocks if present
+      let resultText = data.result
+      if (resultText.startsWith('```')) {
+        resultText = resultText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
+      }
+
+      const parsedResult = JSON.parse(resultText)
 
       setGeneratedPost({
         primary_text: parsedResult.primary_text || '',

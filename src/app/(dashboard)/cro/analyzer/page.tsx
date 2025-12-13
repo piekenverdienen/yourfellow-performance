@@ -90,7 +90,13 @@ Geef een score van 0-10 voor elk principe en concrete verbeterpunten.`
         throw new Error(data.error || 'Analyse mislukt')
       }
 
-      const parsedResult = JSON.parse(data.result)
+      // Strip markdown code blocks if present
+      let resultText = data.result
+      if (resultText.startsWith('```')) {
+        resultText = resultText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
+      }
+
+      const parsedResult = JSON.parse(resultText)
       setAnalysisResult(parsedResult)
     } catch (err) {
       console.error('Analysis error:', err)

@@ -88,7 +88,13 @@ Genereer een title tag (50-60 karakters) en meta description (150-160 karakters)
         throw new Error(data.error || 'Generatie mislukt')
       }
 
-      const parsedResult = JSON.parse(data.result)
+      // Strip markdown code blocks if present
+      let resultText = data.result
+      if (resultText.startsWith('```')) {
+        resultText = resultText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
+      }
+
+      const parsedResult = JSON.parse(resultText)
 
       setGeneratedMeta({
         title: parsedResult.title || '',
