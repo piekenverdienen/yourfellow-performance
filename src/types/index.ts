@@ -303,3 +303,76 @@ export interface Message {
   tokens_used: number
   created_at: string
 }
+
+// Playbook types
+export type PlaybookCategory = 'content' | 'seo' | 'ads' | 'social' | 'email' | 'analysis' | 'other'
+export type PlaybookStatus = 'draft' | 'published' | 'archived'
+
+export interface PlaybookInputSchema {
+  type: 'object'
+  properties: Record<string, PlaybookInputProperty>
+  required?: string[]
+}
+
+export interface PlaybookInputProperty {
+  type: 'string' | 'number' | 'boolean' | 'array'
+  title?: string
+  description?: string
+  default?: string | number | boolean | string[]
+  enum?: string[]
+  minimum?: number
+  maximum?: number
+  items?: {
+    type: string
+    enum?: string[]
+  }
+}
+
+export interface PlaybookOutputSchema {
+  type: 'object'
+  properties?: Record<string, unknown>
+  required?: string[]
+}
+
+export interface Playbook {
+  id: string
+  org_id: string | null
+  slug: string
+  title: string
+  category: PlaybookCategory
+  description: string | null
+  input_schema: PlaybookInputSchema
+  prompt_template: string
+  output_schema: PlaybookOutputSchema
+  version: number
+  status: PlaybookStatus
+  icon: string
+  estimated_tokens: number
+  xp_reward: number
+  created_at: string
+  updated_at: string
+}
+
+export type PlaybookRunStatus = 'pending' | 'running' | 'completed' | 'failed'
+
+export interface PlaybookRun {
+  id: string
+  org_id: string | null
+  client_id: string | null
+  playbook_id: string
+  playbook_version: number
+  inputs: Record<string, unknown>
+  output: Record<string, unknown> | null
+  status: PlaybookRunStatus
+  error_message: string | null
+  prompt_tokens: number
+  completion_tokens: number
+  total_tokens: number
+  created_by: string
+  created_at: string
+  completed_at: string | null
+  // Joined fields
+  playbook?: Playbook
+  client?: Client
+  creator?: User
+}

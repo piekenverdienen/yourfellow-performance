@@ -23,6 +23,7 @@ import {
   BarChart3,
   GitBranch,
   Building2,
+  BookOpen,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -48,6 +49,11 @@ const navigation: NavItem[] = [
     name: 'AI Chat',
     href: '/chat',
     icon: MessageSquare
+  },
+  {
+    name: 'Playbooks',
+    href: '/playbooks',
+    icon: BookOpen
   },
   {
     name: 'Workflows',
