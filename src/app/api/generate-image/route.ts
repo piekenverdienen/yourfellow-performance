@@ -43,6 +43,7 @@ export async function POST(request: NextRequest) {
     const mappedSize = sizeMap[size] || '1024x1024'
 
     // Generate image with GPT Image (gpt-image-1)
+    // Note: gpt-image-1 requires organization verification on OpenAI
     const response = await openai.images.generate({
       model: 'gpt-image-1',
       prompt: enhancedPrompt,
@@ -51,17 +52,29 @@ export async function POST(request: NextRequest) {
       quality: quality as 'low' | 'medium' | 'high',
     })
 
+    console.log('OpenAI response:', JSON.stringify(response, null, 2))
+
     const imageData = response.data?.[0]
-    // gpt-image-1 returns base64 encoded images
+    // gpt-image-1 returns base64 encoded images by default
     const b64Image = imageData?.b64_json
+    const imageUrl_fromApi = imageData?.url
     const revisedPrompt = imageData?.revised_prompt
 
-    if (!b64Image) {
+    // Handle both base64 and URL responses
+    let imageUrl: string
+    if (b64Image) {
+      imageUrl = `data:image/png;base64,${b64Image}`
+    } else if (imageUrl_fromApi) {
+      // Fallback: if URL is returned, fetch and convert to base64
+      // This handles cases where the model returns URL instead of base64
+      const imageResponse = await fetch(imageUrl_fromApi)
+      const arrayBuffer = await imageResponse.arrayBuffer()
+      const base64 = Buffer.from(arrayBuffer).toString('base64')
+      imageUrl = `data:image/png;base64,${base64}`
+    } else {
+      console.error('No image data in response:', imageData)
       throw new Error('Geen afbeelding ontvangen van GPT Image')
     }
-
-    // Convert base64 to data URL for frontend display
-    const imageUrl = `data:image/png;base64,${b64Image}`
 
     // Track usage, add XP, and save generation (fire and forget)
     const generationId = await trackImageUsageAndXP(tool, prompt, imageUrl, revisedPrompt || enhancedPrompt)
@@ -109,15 +122,31 @@ export async function POST(request: NextRequest) {
             { status: 400 }
           )
         }
+        if (errorMessage.includes('model') || errorMessage.includes('gpt-image')) {
+          return NextResponse.json(
+            { error: 'gpt-image-1 model is niet beschikbaar. Mogelijk moet je eerst je organisatie verifiëren op platform.openai.com.' },
+            { status: 400 }
+          )
+        }
         return NextResponse.json(
           { error: `Prompt afgewezen: ${errorMessage || 'Probeer een andere beschrijving.'}` },
           { status: 400 }
         )
       }
+      if (error.status === 404) {
+        return NextResponse.json(
+          { error: 'gpt-image-1 model niet gevonden. Controleer of je OpenAI account toegang heeft tot dit model.' },
+          { status: 404 }
+        )
+      }
     }
 
+    // Log the full error for debugging
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    console.error('Full error:', errorMessage)
+
     return NextResponse.json(
-      { error: 'Er ging iets mis bij het genereren van de afbeelding.' },
+      { error: `Er ging iets mis: ${errorMessage}` },
       { status: 500 }
     )
   }
