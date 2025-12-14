@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState, useRef, use } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useEffect, useState, useRef } from 'react'
+import { useRouter, useSearchParams, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { useSelectedClientId } from '@/stores/client-store'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -22,14 +23,12 @@ import type { Assistant, Conversation, Message } from '@/types'
 import { cn } from '@/lib/utils'
 import ReactMarkdown from 'react-markdown'
 
-interface ChatPageProps {
-  params: Promise<{ assistantId: string }>
-}
-
-export default function ChatInterfacePage({ params }: ChatPageProps) {
-  const { assistantId } = use(params)
+export default function ChatInterfacePage() {
+  const params = useParams()
+  const assistantId = params.assistantId as string
   const router = useRouter()
   const searchParams = useSearchParams()
+  const selectedClientId = useSelectedClientId()
   const conversationParam = searchParams.get('conversation')
 
   const [assistant, setAssistant] = useState<Assistant | null>(null)
@@ -174,6 +173,7 @@ export default function ChatInterfacePage({ params }: ChatPageProps) {
           assistantId,
           conversationId,
           message: userMessage,
+          clientId: selectedClientId,
         }),
       })
 
