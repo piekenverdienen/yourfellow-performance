@@ -19,8 +19,10 @@ export async function POST(request: NextRequest) {
       apiKey: process.env.OPENAI_API_KEY,
     })
 
+    const supabase = await createClient()
+
     const body = await request.json()
-    const { prompt, size = '1024x1024', style = 'vivid', quality = 'standard', tool = 'social-image' } = body
+    const { prompt, size = '1024x1024', style = 'vivid', quality = 'standard', tool = 'social-image', clientId } = body
 
     if (!prompt) {
       return NextResponse.json(
@@ -29,8 +31,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Enhance prompt for better DALL-E results
-    const enhancedPrompt = `Create a professional marketing image: ${prompt}. High quality, suitable for business use, clean design.`
+    // Get client context if clientId provided
+    let clientContextPrompt = ''
+    if (clientId) {
+      const clientContext = await getClientContextForImage(supabase, clientId)
+      if (clientContext) {
+        clientContextPrompt = clientContext
+      }
+    }
+
+    // Enhance prompt for better DALL-E results, including client context
+    const enhancedPrompt = `Create a professional marketing image: ${prompt}. ${clientContextPrompt}High quality, suitable for business use, clean design.`
 
     // Generate image with DALL-E 3
     const response = await openai.images.generate({
@@ -51,7 +62,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Track usage, add XP, and save generation (fire and forget)
-    const generationId = await trackImageUsageAndXP(tool, prompt, imageUrl, revisedPrompt || enhancedPrompt)
+    const generationId = await trackImageUsageAndXP(tool, prompt, imageUrl, revisedPrompt || enhancedPrompt, clientId)
 
     return NextResponse.json({
       success: true,
@@ -110,12 +121,65 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// Get client context for image generation (simplified for visual content)
+async function getClientContextForImage(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  clientId: string
+): Promise<string | null> {
+  try {
+    // Verify client access
+    const { data: clientAccess } = await supabase
+      .rpc('has_client_access', { check_client_id: clientId, min_role: 'viewer' })
+
+    if (!clientAccess) {
+      return null
+    }
+
+    // Fetch client with context
+    const { data: client } = await supabase
+      .from('clients')
+      .select('name, settings')
+      .eq('id', clientId)
+      .single()
+
+    if (!client) {
+      return null
+    }
+
+    const clientContext = (client.settings as { context?: Record<string, unknown> })?.context
+    if (!clientContext) {
+      return null
+    }
+
+    const ctx = clientContext as {
+      toneOfVoice?: string
+      brandVoice?: string
+    }
+
+    // Build a concise context for image generation
+    const contextParts: string[] = []
+
+    if (ctx.brandVoice) {
+      contextParts.push(`Brand style: ${ctx.brandVoice}.`)
+    }
+    if (ctx.toneOfVoice) {
+      contextParts.push(`Visual tone: ${ctx.toneOfVoice}.`)
+    }
+
+    return contextParts.length > 0 ? contextParts.join(' ') + ' ' : null
+  } catch (error) {
+    console.error('Error fetching client context for image:', error)
+    return null
+  }
+}
+
 // Track image usage, add XP to user, and save generation
 async function trackImageUsageAndXP(
   tool: string,
   prompt: string,
   imageUrl: string,
-  revisedPrompt: string
+  revisedPrompt: string,
+  clientId?: string
 ): Promise<string | null> {
   try {
     const supabase = await createClient()
@@ -135,6 +199,7 @@ async function trackImageUsageAndXP(
       completion_tokens: 0,
       total_tokens: 0,
       metadata: { type: 'image' },
+      client_id: clientId || null,
     })
 
     // Save generation to database
@@ -145,6 +210,7 @@ async function trackImageUsageAndXP(
         tool,
         input: { prompt },
         output: { imageUrl, revisedPrompt },
+        client_id: clientId || null,
       })
       .select('id')
       .single()

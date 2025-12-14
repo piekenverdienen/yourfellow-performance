@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useSelectedClientId } from '@/stores/client-store'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -44,6 +45,7 @@ const templatePrompts = [
 ]
 
 export default function ImageGeneratorPage() {
+  const clientId = useSelectedClientId()
   const [isGenerating, setIsGenerating] = useState(false)
   const [formData, setFormData] = useState({
     prompt: '',
@@ -75,6 +77,7 @@ export default function ImageGeneratorPage() {
           size: formData.size,
           style: formData.style,
           quality: formData.quality,
+          clientId: clientId || undefined,
         }),
       })
 

@@ -37,8 +37,10 @@ export async function POST(request: NextRequest) {
       apiKey: process.env.ANTHROPIC_API_KEY,
     })
 
+    const supabase = await createClient()
+
     const body = await request.json()
-    const { tool, prompt, options } = body
+    const { tool, prompt, options, clientId } = body
 
     // Validate input
     if (!tool || !prompt) {
@@ -76,6 +78,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Fetch and add client context if clientId provided
+    if (clientId) {
+      const clientContext = await getClientContext(supabase, clientId)
+      if (clientContext) {
+        systemPrompt = `${systemPrompt}\n\n${clientContext}`
+      }
+    }
+
     // Call Claude API
     const message = await anthropic.messages.create({
       model: template.model,
@@ -99,7 +109,7 @@ export async function POST(request: NextRequest) {
     const tokensUsed = (message.usage?.input_tokens || 0) + (message.usage?.output_tokens || 0)
 
     // Track usage and add XP (fire and forget)
-    trackUsageAndXP(tool, template.xp_reward, tokensUsed, message.usage?.input_tokens || 0, message.usage?.output_tokens || 0)
+    trackUsageAndXP(tool, template.xp_reward, tokensUsed, message.usage?.input_tokens || 0, message.usage?.output_tokens || 0, clientId)
 
     return NextResponse.json({
       success: true,
@@ -178,13 +188,89 @@ async function getPromptTemplate(toolKey: string): Promise<PromptTemplate | null
   }
 }
 
+// Get client context from database
+async function getClientContext(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  clientId: string
+): Promise<string | null> {
+  try {
+    // Verify client access
+    const { data: clientAccess } = await supabase
+      .rpc('has_client_access', { check_client_id: clientId, min_role: 'viewer' })
+
+    if (!clientAccess) {
+      console.log('No access to client:', clientId)
+      return null
+    }
+
+    // Fetch client with context
+    const { data: client } = await supabase
+      .from('clients')
+      .select('name, settings')
+      .eq('id', clientId)
+      .single()
+
+    if (!client) {
+      return null
+    }
+
+    const clientName = client.name
+    const clientContext = (client.settings as { context?: Record<string, unknown> })?.context
+
+    if (!clientContext) {
+      return null
+    }
+
+    // Build context string (same format as chat route)
+    const ctx = clientContext as {
+      proposition?: string
+      targetAudience?: string
+      usps?: string[]
+      toneOfVoice?: string
+      brandVoice?: string
+      doNots?: string[]
+      mustHaves?: string[]
+      bestsellers?: string[]
+      seasonality?: string[]
+      margins?: { min?: number; target?: number }
+      activeChannels?: string[]
+    }
+
+    const contextParts = [`Je werkt nu voor client: ${clientName}`]
+
+    if (ctx.proposition) contextParts.push(`Propositie: ${ctx.proposition}`)
+    if (ctx.targetAudience) contextParts.push(`Doelgroep: ${ctx.targetAudience}`)
+    if (ctx.usps && ctx.usps.length > 0) contextParts.push(`USP's: ${ctx.usps.join(', ')}`)
+    if (ctx.toneOfVoice) contextParts.push(`Tone of Voice: ${ctx.toneOfVoice}`)
+    if (ctx.brandVoice) contextParts.push(`Brand Voice: ${ctx.brandVoice}`)
+    if (ctx.bestsellers && ctx.bestsellers.length > 0) contextParts.push(`Bestsellers: ${ctx.bestsellers.join(', ')}`)
+    if (ctx.seasonality && ctx.seasonality.length > 0) contextParts.push(`Seizoensgebonden: ${ctx.seasonality.join(', ')}`)
+    if (ctx.margins) contextParts.push(`Marges: min ${ctx.margins.min || 0}%, target ${ctx.margins.target || 0}%`)
+    if (ctx.activeChannels && ctx.activeChannels.length > 0) contextParts.push(`Actieve kanalen: ${ctx.activeChannels.join(', ')}`)
+
+    // Compliance rules are critical - add with emphasis
+    if (ctx.doNots && ctx.doNots.length > 0) {
+      contextParts.push(`\n⚠️ VERBODEN (gebruik deze woorden/claims NOOIT): ${ctx.doNots.join(', ')}`)
+    }
+    if (ctx.mustHaves && ctx.mustHaves.length > 0) {
+      contextParts.push(`✓ VERPLICHT (altijd toevoegen waar relevant): ${ctx.mustHaves.join(', ')}`)
+    }
+
+    return `CLIENT CONTEXT (${clientName}):\n${contextParts.join('\n')}`
+  } catch (error) {
+    console.error('Error fetching client context:', error)
+    return null
+  }
+}
+
 // Track usage and add XP to user
 async function trackUsageAndXP(
   tool: string,
   xpReward: number,
   totalTokens: number,
   promptTokens: number,
-  completionTokens: number
+  completionTokens: number,
+  clientId?: string
 ) {
   try {
     const supabase = await createClient()
@@ -203,6 +289,7 @@ async function trackUsageAndXP(
       prompt_tokens: promptTokens,
       completion_tokens: completionTokens,
       total_tokens: totalTokens,
+      client_id: clientId || null,
     })
 
     // Update user XP and total generations

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useSelectedClientId } from '@/stores/client-store'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -42,6 +43,7 @@ const toneOptions = [
 ]
 
 export default function SEOContentPage() {
+  const clientId = useSelectedClientId()
   const [isGenerating, setIsGenerating] = useState(false)
   const [formData, setFormData] = useState({
     topic: '',
@@ -82,6 +84,7 @@ Gebruik duidelijke headers (H2, H3), korte alineas en verwerk keywords natuurlij
         body: JSON.stringify({
           tool: 'seo-content',
           prompt,
+          clientId: clientId || undefined,
           options: {
             contentType: formData.contentType,
             length: formData.length,

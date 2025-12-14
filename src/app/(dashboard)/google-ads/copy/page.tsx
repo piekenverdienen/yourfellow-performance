@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useSelectedClientId } from '@/stores/client-store'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -40,6 +41,7 @@ interface GeneratedAd {
 }
 
 export default function GoogleAdsCopyPage() {
+  const clientId = useSelectedClientId()
   const [isGenerating, setIsGenerating] = useState(false)
   const [formData, setFormData] = useState({
     productName: '',
@@ -78,6 +80,7 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
         body: JSON.stringify({
           tool: 'google-ads-copy',
           prompt,
+          clientId: clientId || undefined,
           options: {
             tone: formData.tone,
             adType: formData.adType,

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useSelectedClientId } from '@/stores/client-store'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -44,6 +45,7 @@ const principleColors: Record<string, string> = {
 }
 
 export default function CROAnalyzerPage() {
+  const clientId = useSelectedClientId()
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [formData, setFormData] = useState({
     url: '',
@@ -76,6 +78,7 @@ Geef een score van 0-10 voor elk principe en concrete verbeterpunten.`
         body: JSON.stringify({
           tool: 'cro-analyzer',
           prompt,
+          clientId: clientId || undefined,
           options: {},
         }),
       })

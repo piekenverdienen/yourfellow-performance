@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useSelectedClientId } from '@/stores/client-store'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -52,6 +53,7 @@ interface GeneratedPost {
 }
 
 export default function SocialPostsPage() {
+  const clientId = useSelectedClientId()
   const [isGenerating, setIsGenerating] = useState(false)
   const [formData, setFormData] = useState({
     topic: '',
@@ -89,6 +91,7 @@ Schrijf een engaging post in het Nederlands die past bij het platform en de doel
         body: JSON.stringify({
           tool: 'social-copy',
           prompt,
+          clientId: clientId || undefined,
           options: {
             platform: formData.platform,
             tone: formData.tone,

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useSelectedClientId } from '@/stores/client-store'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -37,6 +38,7 @@ interface GeneratedMeta {
 }
 
 export default function SEOMetaPage() {
+  const clientId = useSelectedClientId()
   const [isGenerating, setIsGenerating] = useState(false)
   const [formData, setFormData] = useState({
     pageUrl: '',
@@ -72,6 +74,7 @@ Genereer een title tag (50-60 karakters) en meta description (150-160 karakters)
         body: JSON.stringify({
           tool: 'seo-meta',
           prompt,
+          clientId: clientId || undefined,
           options: {
             pageType: formData.pageType,
           },
