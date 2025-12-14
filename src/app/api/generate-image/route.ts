@@ -50,13 +50,14 @@ export async function POST(request: NextRequest) {
       throw new Error('Geen afbeelding ontvangen van DALL-E')
     }
 
-    // Track usage and add XP (fire and forget)
-    trackImageUsageAndXP(tool)
+    // Track usage, add XP, and save generation (fire and forget)
+    const generationId = await trackImageUsageAndXP(tool, prompt, imageUrl, revisedPrompt || enhancedPrompt)
 
     return NextResponse.json({
       success: true,
       imageUrl,
       revisedPrompt,
+      generationId,
     })
   } catch (error) {
     console.error('Image generation error:', error)
@@ -109,8 +110,13 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Track image usage and add XP to user
-async function trackImageUsageAndXP(tool: string) {
+// Track image usage, add XP to user, and save generation
+async function trackImageUsageAndXP(
+  tool: string,
+  prompt: string,
+  imageUrl: string,
+  revisedPrompt: string
+): Promise<string | null> {
   try {
     const supabase = await createClient()
 
@@ -118,7 +124,7 @@ async function trackImageUsageAndXP(tool: string) {
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
       console.log('No authenticated user for image XP tracking')
-      return
+      return null
     }
 
     // Insert usage record
@@ -130,6 +136,22 @@ async function trackImageUsageAndXP(tool: string) {
       total_tokens: 0,
       metadata: { type: 'image' },
     })
+
+    // Save generation to database
+    const { data: generation, error: genError } = await supabase
+      .from('generations')
+      .insert({
+        user_id: user.id,
+        tool,
+        input: { prompt },
+        output: { imageUrl, revisedPrompt },
+      })
+      .select('id')
+      .single()
+
+    if (genError) {
+      console.error('Error saving generation:', genError)
+    }
 
     // Update user XP and total generations
     const { data: profile } = await supabase
@@ -152,7 +174,10 @@ async function trackImageUsageAndXP(tool: string) {
         })
         .eq('id', user.id)
     }
+
+    return generation?.id || null
   } catch (error) {
     console.error('Error tracking image usage/XP:', error)
+    return null
   }
 }

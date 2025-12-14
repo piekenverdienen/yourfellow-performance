@@ -21,6 +21,7 @@ import {
   FileText,
   Tags,
   BarChart3,
+  GitBranch,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -41,6 +42,11 @@ const navigation: NavItem[] = [
     name: 'AI Chat',
     href: '/chat',
     icon: MessageSquare
+  },
+  {
+    name: 'Workflows',
+    href: '/workflows',
+    icon: GitBranch
   },
   {
     name: 'Google Ads', 
