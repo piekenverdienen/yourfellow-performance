@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
 import {
@@ -17,22 +16,18 @@ import {
   Palette,
   Maximize,
 } from 'lucide-react'
-import { cn, copyToClipboard } from '@/lib/utils'
+import { copyToClipboard } from '@/lib/utils'
 
 const sizeOptions = [
   { value: '1024x1024', label: 'Vierkant (1024x1024)' },
-  { value: '1792x1024', label: 'Landschap (1792x1024)' },
-  { value: '1024x1792', label: 'Portret (1024x1792)' },
-]
-
-const styleOptions = [
-  { value: 'vivid', label: 'Vivid - Levendig & dramatisch' },
-  { value: 'natural', label: 'Natural - Realistisch & subtiel' },
+  { value: '1536x1024', label: 'Landschap (1536x1024)' },
+  { value: '1024x1536', label: 'Portret (1024x1536)' },
 ]
 
 const qualityOptions = [
-  { value: 'standard', label: 'Standard - Sneller, goedkoper' },
-  { value: 'hd', label: 'HD - Meer detail, hogere kwaliteit' },
+  { value: 'low', label: 'Low - Snelste, goedkoopste' },
+  { value: 'medium', label: 'Medium - Goede balans' },
+  { value: 'high', label: 'High - Meeste detail' },
 ]
 
 const templatePrompts = [
@@ -48,8 +43,7 @@ export default function ImageGeneratorPage() {
   const [formData, setFormData] = useState({
     prompt: '',
     size: '1024x1024',
-    style: 'vivid',
-    quality: 'standard',
+    quality: 'medium',
   })
   const [generatedImage, setGeneratedImage] = useState<{
     url: string
@@ -73,7 +67,6 @@ export default function ImageGeneratorPage() {
         body: JSON.stringify({
           prompt: formData.prompt,
           size: formData.size,
-          style: formData.style,
           quality: formData.quality,
         }),
       })
@@ -141,7 +134,7 @@ export default function ImageGeneratorPage() {
           <h1 className="text-2xl font-bold font-display text-surface-900">AI Afbeelding Generator</h1>
         </div>
         <p className="text-surface-600">
-          Genereer unieke afbeeldingen met DALL-E 3 voor je social media en marketing.
+          Genereer unieke afbeeldingen met GPT Image voor je social media en marketing.
         </p>
       </div>
 
@@ -181,26 +174,14 @@ export default function ImageGeneratorPage() {
                 <div>
                   <label className="label flex items-center gap-2">
                     <Palette className="h-4 w-4" />
-                    Stijl
+                    Kwaliteit
                   </label>
                   <Select
-                    options={styleOptions}
-                    value={formData.style}
-                    onChange={(e) => setFormData({ ...formData, style: e.target.value })}
+                    options={qualityOptions}
+                    value={formData.quality}
+                    onChange={(e) => setFormData({ ...formData, quality: e.target.value })}
                   />
                 </div>
-              </div>
-
-              <div>
-                <label className="label">Kwaliteit</label>
-                <Select
-                  options={qualityOptions}
-                  value={formData.quality}
-                  onChange={(e) => setFormData({ ...formData, quality: e.target.value })}
-                />
-                <p className="text-xs text-surface-500 mt-1">
-                  HD kost meer credits maar geeft meer detail
-                </p>
               </div>
 
               <Button
@@ -286,7 +267,7 @@ export default function ImageGeneratorPage() {
                 <div className="w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center mb-4">
                   <Sparkles className="h-8 w-8 text-primary animate-pulse" />
                 </div>
-                <p className="text-surface-600 font-medium">DALL-E is aan het creeren...</p>
+                <p className="text-surface-600 font-medium">GPT Image is aan het creëren...</p>
                 <p className="text-sm text-surface-400 mt-1">Dit duurt meestal 10-20 seconden</p>
                 <div className="mt-4 w-48 h-1 bg-surface-200 rounded-full overflow-hidden">
                   <div className="h-full bg-primary animate-pulse" style={{ width: '60%' }} />
@@ -306,7 +287,7 @@ export default function ImageGeneratorPage() {
                 {/* Revised Prompt */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-medium text-surface-700">Gebruikte prompt (door DALL-E verfijnd)</h4>
+                    <h4 className="text-sm font-medium text-surface-700">Gebruikte prompt (door GPT Image verfijnd)</h4>
                     <Button
                       variant="ghost"
                       size="sm"

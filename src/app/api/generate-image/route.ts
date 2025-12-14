@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     })
 
     const body = await request.json()
-    const { prompt, size = '1024x1024', style = 'vivid', quality = 'standard', tool = 'social-image' } = body
+    const { prompt, size = '1024x1024', quality = 'medium', tool = 'social-image' } = body
 
     if (!prompt) {
       return NextResponse.json(
@@ -29,26 +29,39 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Enhance prompt for better DALL-E results
+    // Enhance prompt for better GPT Image results
     const enhancedPrompt = `Create a professional marketing image: ${prompt}. High quality, suitable for business use, clean design.`
 
-    // Generate image with DALL-E 3
+    // Map old sizes to new gpt-image-1 sizes
+    const sizeMap: Record<string, '1024x1024' | '1536x1024' | '1024x1536' | 'auto'> = {
+      '1024x1024': '1024x1024',
+      '1792x1024': '1536x1024',  // landscape
+      '1536x1024': '1536x1024',  // landscape (new)
+      '1024x1792': '1024x1536',  // portrait
+      '1024x1536': '1024x1536',  // portrait (new)
+    }
+    const mappedSize = sizeMap[size] || '1024x1024'
+
+    // Generate image with GPT Image (gpt-image-1)
     const response = await openai.images.generate({
-      model: 'dall-e-3',
+      model: 'gpt-image-1',
       prompt: enhancedPrompt,
       n: 1,
-      size: size as '1024x1024' | '1792x1024' | '1024x1792',
-      style: style as 'vivid' | 'natural',
-      quality: quality as 'standard' | 'hd',
+      size: mappedSize,
+      quality: quality as 'low' | 'medium' | 'high',
     })
 
     const imageData = response.data?.[0]
-    const imageUrl = imageData?.url
+    // gpt-image-1 returns base64 encoded images
+    const b64Image = imageData?.b64_json
     const revisedPrompt = imageData?.revised_prompt
 
-    if (!imageUrl) {
-      throw new Error('Geen afbeelding ontvangen van DALL-E')
+    if (!b64Image) {
+      throw new Error('Geen afbeelding ontvangen van GPT Image')
     }
+
+    // Convert base64 to data URL for frontend display
+    const imageUrl = `data:image/png;base64,${b64Image}`
 
     // Track usage, add XP, and save generation (fire and forget)
     const generationId = await trackImageUsageAndXP(tool, prompt, imageUrl, revisedPrompt || enhancedPrompt)
