@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, use } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -37,8 +37,9 @@ const CATEGORY_ICONS: Record<PlaybookCategory, React.ElementType> = {
   other: Folder,
 }
 
-export default function PlaybookRunPage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = use(params)
+export default function PlaybookRunPage() {
+  const params = useParams()
+  const slug = params.slug as string
   const router = useRouter()
   const selectedClientId = useSelectedClientId()
 
