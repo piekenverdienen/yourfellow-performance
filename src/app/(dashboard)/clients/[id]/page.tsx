@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, use } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams, useParams } from 'next/navigation'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -41,12 +41,9 @@ interface ClientWithRole extends Client {
   role: ClientMemberRole | 'admin'
 }
 
-export default function ClientDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>
-}) {
-  const { id } = use(params)
+export default function ClientDetailPage() {
+  const params = useParams()
+  const id = params.id as string
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user: currentUser } = useUser()
