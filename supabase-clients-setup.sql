@@ -388,7 +388,8 @@ RETURNS TABLE (
 ) AS $$
 BEGIN
   -- If org admin, return all active clients
-  IF EXISTS (SELECT 1 FROM public.profiles WHERE id = user_uuid AND role = 'admin') THEN
+  -- Note: Use table alias 'p' to avoid ambiguity with return column 'id'
+  IF EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = user_uuid AND p.role = 'admin') THEN
     RETURN QUERY
     SELECT c.id, c.name, c.slug, c.description, c.logo_url, 'admin'::TEXT as role, c.is_active, c.created_at
     FROM public.clients c
