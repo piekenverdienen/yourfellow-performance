@@ -21,10 +21,12 @@ import {
   Shield,
   Edit3,
   Eye,
+  Brain,
 } from 'lucide-react'
 import { useUser } from '@/hooks/use-user'
 import { useClientStore } from '@/stores/client-store'
-import type { Client, ClientMemberRole, User } from '@/types'
+import { ClientContextForm } from '@/components/client-context-form'
+import type { Client, ClientMemberRole, ClientContext, User } from '@/types'
 
 interface ClientMember {
   id: string
@@ -54,8 +56,8 @@ export default function ClientDetailPage({
   const [members, setMembers] = useState<ClientMember[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [activeTab, setActiveTab] = useState<'overview' | 'team' | 'settings'>(
-    (searchParams.get('tab') as 'overview' | 'team' | 'settings') || 'overview'
+  const [activeTab, setActiveTab] = useState<'overview' | 'context' | 'team' | 'settings'>(
+    (searchParams.get('tab') as 'overview' | 'context' | 'team' | 'settings') || 'overview'
   )
 
   // Edit state
@@ -290,10 +292,10 @@ export default function ClientDetailPage({
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-surface-200 pb-px">
+      <div className="flex gap-2 border-b border-surface-200 pb-px overflow-x-auto">
         <button
           onClick={() => setActiveTab('overview')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
             activeTab === 'overview'
               ? 'border-primary text-primary'
               : 'border-transparent text-surface-600 hover:text-surface-900'
@@ -303,8 +305,19 @@ export default function ClientDetailPage({
           Overzicht
         </button>
         <button
+          onClick={() => setActiveTab('context')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+            activeTab === 'context'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-surface-600 hover:text-surface-900'
+          }`}
+        >
+          <Brain className="h-4 w-4 inline-block mr-2" />
+          AI Context
+        </button>
+        <button
           onClick={() => setActiveTab('team')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
             activeTab === 'team'
               ? 'border-primary text-primary'
               : 'border-transparent text-surface-600 hover:text-surface-900'
@@ -316,7 +329,7 @@ export default function ClientDetailPage({
         {isAdmin && (
           <button
             onClick={() => setActiveTab('settings')}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
               activeTab === 'settings'
                 ? 'border-primary text-primary'
                 : 'border-transparent text-surface-600 hover:text-surface-900'
@@ -359,6 +372,24 @@ export default function ClientDetailPage({
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {activeTab === 'context' && (
+        <ClientContextForm
+          clientId={id}
+          initialContext={client.settings?.context}
+          canEdit={isAdmin || false}
+          onSave={(context) => {
+            setClient((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    settings: { ...prev.settings, context },
+                  }
+                : prev
+            )
+          }}
+        />
       )}
 
       {activeTab === 'team' && (

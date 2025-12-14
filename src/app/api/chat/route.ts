@@ -67,23 +67,39 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id)
       .single()
 
+    // Get client context if clientId provided
+    let clientContext: Record<string, unknown> | null = null
+    let clientName: string | null = null
+
+    if (clientId) {
+      // Verify client access
+      const { data: clientAccess } = await supabase
+        .rpc('has_client_access', { check_client_id: clientId, min_role: 'editor' })
+
+      if (!clientAccess) {
+        return new Response(
+          JSON.stringify({ error: 'Geen toegang tot deze client' }),
+          { status: 403, headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Fetch client with context
+      const { data: client } = await supabase
+        .from('clients')
+        .select('name, settings')
+        .eq('id', clientId)
+        .single()
+
+      if (client) {
+        clientName = client.name
+        clientContext = (client.settings as { context?: Record<string, unknown> })?.context || null
+      }
+    }
+
     // Get or create conversation
     let activeConversationId = conversationId
 
     if (!activeConversationId) {
-      // Verify client access if clientId provided
-      if (clientId) {
-        const { data: clientAccess } = await supabase
-          .rpc('has_client_access', { check_client_id: clientId, min_role: 'editor' })
-
-        if (!clientAccess) {
-          return new Response(
-            JSON.stringify({ error: 'Geen toegang tot deze client' }),
-            { status: 403, headers: { 'Content-Type': 'application/json' } }
-          )
-        }
-      }
-
       // Create new conversation
       const { data: newConversation, error: createError } = await supabase
         .from('conversations')
@@ -123,9 +139,10 @@ export async function POST(request: NextRequest) {
     // Add current message
     messageHistory.push({ role: 'user', content: message })
 
-    // Build system prompt with user context
+    // Build system prompt with user and client context
     let systemPrompt = assistant.system_prompt
 
+    // Add user context
     if (profile) {
       const contextParts = []
       if (profile.full_name) contextParts.push(`Naam gebruiker: ${profile.full_name}`)
@@ -138,6 +155,45 @@ export async function POST(request: NextRequest) {
       if (contextParts.length > 0) {
         systemPrompt = `${systemPrompt}\n\nCONTEXT GEBRUIKER:\n${contextParts.join('\n')}`
       }
+    }
+
+    // Add client context if available
+    if (clientContext && clientName) {
+      const clientContextParts = [`Je werkt nu voor client: ${clientName}`]
+
+      const ctx = clientContext as {
+        proposition?: string
+        targetAudience?: string
+        usps?: string[]
+        toneOfVoice?: string
+        brandVoice?: string
+        doNots?: string[]
+        mustHaves?: string[]
+        bestsellers?: string[]
+        seasonality?: string[]
+        margins?: { min?: number; target?: number }
+        activeChannels?: string[]
+      }
+
+      if (ctx.proposition) clientContextParts.push(`Propositie: ${ctx.proposition}`)
+      if (ctx.targetAudience) clientContextParts.push(`Doelgroep: ${ctx.targetAudience}`)
+      if (ctx.usps && ctx.usps.length > 0) clientContextParts.push(`USP's: ${ctx.usps.join(', ')}`)
+      if (ctx.toneOfVoice) clientContextParts.push(`Tone of Voice: ${ctx.toneOfVoice}`)
+      if (ctx.brandVoice) clientContextParts.push(`Brand Voice: ${ctx.brandVoice}`)
+      if (ctx.bestsellers && ctx.bestsellers.length > 0) clientContextParts.push(`Bestsellers: ${ctx.bestsellers.join(', ')}`)
+      if (ctx.seasonality && ctx.seasonality.length > 0) clientContextParts.push(`Seizoensgebonden: ${ctx.seasonality.join(', ')}`)
+      if (ctx.margins) clientContextParts.push(`Marges: min ${ctx.margins.min || 0}%, target ${ctx.margins.target || 0}%`)
+      if (ctx.activeChannels && ctx.activeChannels.length > 0) clientContextParts.push(`Actieve kanalen: ${ctx.activeChannels.join(', ')}`)
+
+      // Compliance rules are critical - add with emphasis
+      if (ctx.doNots && ctx.doNots.length > 0) {
+        clientContextParts.push(`\n⚠️ VERBODEN (gebruik deze woorden/claims NOOIT): ${ctx.doNots.join(', ')}`)
+      }
+      if (ctx.mustHaves && ctx.mustHaves.length > 0) {
+        clientContextParts.push(`✓ VERPLICHT (altijd toevoegen waar relevant): ${ctx.mustHaves.join(', ')}`)
+      }
+
+      systemPrompt = `${systemPrompt}\n\nCLIENT CONTEXT (${clientName}):\n${clientContextParts.join('\n')}`
     }
 
     // Save user message first

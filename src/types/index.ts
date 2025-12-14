@@ -204,17 +204,48 @@ export interface MarketingEvent {
 // Client types
 export type ClientMemberRole = 'owner' | 'admin' | 'editor' | 'viewer'
 
+export type ChannelType = 'google_ads' | 'meta' | 'seo' | 'klaviyo' | 'cro' | 'linkedin'
+
+export interface ClientContext {
+  // Business info
+  proposition: string
+  targetAudience: string
+  usps: string[]
+  margins?: {
+    min: number
+    target: number
+  }
+  seasonality?: string[]
+  bestsellers?: string[]
+
+  // Brand voice
+  toneOfVoice: string
+  brandVoice: string
+
+  // Compliance
+  doNots: string[]  // verboden claims/woorden
+  mustHaves: string[] // verplichte disclaimers
+
+  // Channels
+  activeChannels: ChannelType[]
+}
+
 export interface Client {
   id: string
   name: string
   slug: string
   description: string | null
   logo_url: string | null
-  settings: Record<string, unknown>
+  settings: ClientSettings
   is_active: boolean
   created_by: string | null
   created_at: string
   updated_at: string
+}
+
+export interface ClientSettings {
+  context?: ClientContext
+  [key: string]: unknown
 }
 
 export interface ClientMembership {

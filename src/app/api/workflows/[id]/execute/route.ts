@@ -29,13 +29,28 @@ export async function POST(
       return NextResponse.json({ error: 'Input is required' }, { status: 400 })
     }
 
-    // Verify client access if clientId provided
+    // Get client context if clientId provided
+    let clientContext: Record<string, unknown> | null = null
+    let clientName: string | null = null
+
     if (clientId) {
       const { data: clientAccess } = await supabase
         .rpc('has_client_access', { check_client_id: clientId, min_role: 'editor' })
 
       if (!clientAccess) {
         return NextResponse.json({ error: 'Geen toegang tot deze client' }, { status: 403 })
+      }
+
+      // Fetch client with context
+      const { data: client } = await supabase
+        .from('clients')
+        .select('name, settings')
+        .eq('id', clientId)
+        .single()
+
+      if (client) {
+        clientName = client.name
+        clientContext = (client.settings as { context?: Record<string, unknown> })?.context || null
       }
     }
 
@@ -75,7 +90,7 @@ export async function POST(
 
     // Execute the workflow
     try {
-      const results = await executeWorkflow(nodes, edges, input)
+      const results = await executeWorkflow(nodes, edges, input, clientName, clientContext)
 
       // Update the run with results
       await supabase
@@ -134,7 +149,9 @@ export async function POST(
 async function executeWorkflow(
   nodes: WorkflowNode[],
   edges: WorkflowEdge[],
-  input: string
+  input: string,
+  clientName: string | null,
+  clientContext: Record<string, unknown> | null
 ): Promise<Record<string, NodeResult>> {
   const results: Record<string, NodeResult> = {}
   const executed = new Set<string>()
@@ -184,7 +201,7 @@ async function executeWorkflow(
     const previousOutput = previousOutputs.join('\n\n')
 
     // Execute the node
-    const result = await executeNode(node, input, previousOutput, results)
+    const result = await executeNode(node, input, previousOutput, results, clientName, clientContext)
     results[node.id] = result
     executed.add(node.id)
 
@@ -203,7 +220,9 @@ async function executeNode(
   node: WorkflowNode,
   input: string,
   previousOutput: string,
-  allResults: Record<string, NodeResult>
+  allResults: Record<string, NodeResult>,
+  clientName: string | null,
+  clientContext: Record<string, unknown> | null
 ): Promise<NodeResult> {
   const startedAt = new Date().toISOString()
 
@@ -234,10 +253,48 @@ async function executeNode(
             : JSON.stringify(nodeResult?.output || '')
         })
 
+        // Build system prompt with client context
+        let systemPrompt = ''
+        if (clientContext && clientName) {
+          const ctx = clientContext as {
+            proposition?: string
+            targetAudience?: string
+            usps?: string[]
+            toneOfVoice?: string
+            brandVoice?: string
+            doNots?: string[]
+            mustHaves?: string[]
+            bestsellers?: string[]
+            seasonality?: string[]
+            margins?: { min?: number; target?: number }
+            activeChannels?: string[]
+          }
+
+          const contextParts = [`Je werkt voor client: ${clientName}`]
+          if (ctx.proposition) contextParts.push(`Propositie: ${ctx.proposition}`)
+          if (ctx.targetAudience) contextParts.push(`Doelgroep: ${ctx.targetAudience}`)
+          if (ctx.usps && ctx.usps.length > 0) contextParts.push(`USP's: ${ctx.usps.join(', ')}`)
+          if (ctx.toneOfVoice) contextParts.push(`Tone of Voice: ${ctx.toneOfVoice}`)
+          if (ctx.brandVoice) contextParts.push(`Brand Voice: ${ctx.brandVoice}`)
+          if (ctx.bestsellers && ctx.bestsellers.length > 0) contextParts.push(`Bestsellers: ${ctx.bestsellers.join(', ')}`)
+          if (ctx.seasonality && ctx.seasonality.length > 0) contextParts.push(`Seizoensgebonden: ${ctx.seasonality.join(', ')}`)
+
+          // Compliance rules are critical
+          if (ctx.doNots && ctx.doNots.length > 0) {
+            contextParts.push(`\n⚠️ VERBODEN (gebruik NOOIT): ${ctx.doNots.join(', ')}`)
+          }
+          if (ctx.mustHaves && ctx.mustHaves.length > 0) {
+            contextParts.push(`✓ VERPLICHT (altijd toevoegen): ${ctx.mustHaves.join(', ')}`)
+          }
+
+          systemPrompt = `CLIENT CONTEXT:\n${contextParts.join('\n')}`
+        }
+
         // Call Anthropic API
         const response = await anthropic.messages.create({
           model: config.model === 'claude-haiku' ? 'claude-3-haiku-20240307' : 'claude-sonnet-4-20250514',
           max_tokens: config.maxTokens || 2048,
+          ...(systemPrompt ? { system: systemPrompt } : {}),
           messages: [
             {
               role: 'user',
