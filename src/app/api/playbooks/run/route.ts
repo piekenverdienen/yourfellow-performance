@@ -131,9 +131,14 @@ export async function POST(request: NextRequest) {
     prompt = prompt.replace(/{{#if \w+}}[\s\S]*?{{\/if}}/g, '')
 
     // Build system prompt
-    const systemPrompt = `Je bent een AI assistent die gestructureerde output genereert.
-Je output MOET altijd valide JSON zijn die exact voldoet aan het gevraagde schema.
-Geef ALLEEN de JSON terug, geen uitleg of markdown code blocks.
+    const systemPrompt = `Je bent een AI assistent die gestructureerde output genereert in JSON formaat.
+
+KRITIEKE INSTRUCTIES:
+1. Je output MOET altijd valide JSON zijn
+2. Begin DIRECT met { of [ - geen tekst ervoor
+3. GEEN markdown code blocks (\`\`\`) gebruiken
+4. GEEN uitleg of commentaar toevoegen
+5. Volg het exacte JSON schema dat gevraagd wordt
 ${clientContext ? `\nJe werkt voor ${clientName}.` : ''}`
 
     // Call Claude API
@@ -148,11 +153,22 @@ ${clientContext ? `\nJe werkt voor ${clientName}.` : ''}`
     const textContent = message.content.find(block => block.type === 'text')
     let resultText = textContent ? textContent.text : ''
 
-    // Strip markdown code blocks if present
-    if (resultText.startsWith('```')) {
-      resultText = resultText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
-    }
+    // Strip markdown code blocks if present (handle various formats)
     resultText = resultText.trim()
+    // Match ```json ... ``` or ``` ... ```
+    const codeBlockMatch = resultText.match(/```(?:json)?\s*([\s\S]*?)```/)
+    if (codeBlockMatch) {
+      resultText = codeBlockMatch[1].trim()
+    }
+    // Also try to find JSON object/array if there's other text around it
+    if (!resultText.startsWith('{') && !resultText.startsWith('[')) {
+      const jsonMatch = resultText.match(/(\{[\s\S]*\}|\[[\s\S]*\])/)
+      if (jsonMatch) {
+        resultText = jsonMatch[1]
+      }
+    }
+
+    console.log('Parsed result text:', resultText.substring(0, 200))
 
     // Parse and validate JSON output
     let output: Record<string, unknown>
@@ -179,11 +195,20 @@ ${clientContext ? `\nJe werkt voor ${clientName}.` : ''}`
       const retryContent = retryMessage.content.find(block => block.type === 'text')
       let retryText = retryContent ? retryContent.text : ''
 
-      // Strip markdown code blocks if present
-      if (retryText.startsWith('```')) {
-        retryText = retryText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
-      }
+      // Strip markdown code blocks if present (handle various formats)
       retryText = retryText.trim()
+      const retryCodeBlockMatch = retryText.match(/```(?:json)?\s*([\s\S]*?)```/)
+      if (retryCodeBlockMatch) {
+        retryText = retryCodeBlockMatch[1].trim()
+      }
+      if (!retryText.startsWith('{') && !retryText.startsWith('[')) {
+        const retryJsonMatch = retryText.match(/(\{[\s\S]*\}|\[[\s\S]*\])/)
+        if (retryJsonMatch) {
+          retryText = retryJsonMatch[1]
+        }
+      }
+
+      console.log('Retry parsed result text:', retryText.substring(0, 200))
 
       try {
         output = JSON.parse(retryText)
