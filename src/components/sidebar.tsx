@@ -22,6 +22,7 @@ import {
   Tags,
   BarChart3,
   GitBranch,
+  Building2,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -37,6 +38,11 @@ const navigation: NavItem[] = [
     name: 'Dashboard',
     href: '/dashboard',
     icon: LayoutDashboard
+  },
+  {
+    name: 'Clients',
+    href: '/clients',
+    icon: Building2
   },
   {
     name: 'AI Chat',

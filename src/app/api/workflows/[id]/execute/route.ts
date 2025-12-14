@@ -23,10 +23,20 @@ export async function POST(
     }
 
     const body = await request.json()
-    const { input } = body
+    const { input, clientId } = body
 
     if (!input) {
       return NextResponse.json({ error: 'Input is required' }, { status: 400 })
+    }
+
+    // Verify client access if clientId provided
+    if (clientId) {
+      const { data: clientAccess } = await supabase
+        .rpc('has_client_access', { check_client_id: clientId, min_role: 'editor' })
+
+      if (!clientAccess) {
+        return NextResponse.json({ error: 'Geen toegang tot deze client' }, { status: 403 })
+      }
     }
 
     // Fetch the workflow
@@ -50,6 +60,7 @@ export async function POST(
       .insert({
         workflow_id: workflowId,
         user_id: user.id,
+        client_id: clientId || null,
         status: 'running',
         input_data: { input },
         node_results: {},

@@ -201,6 +201,38 @@ export interface MarketingEvent {
   color: string
 }
 
+// Client types
+export type ClientMemberRole = 'owner' | 'admin' | 'editor' | 'viewer'
+
+export interface Client {
+  id: string
+  name: string
+  slug: string
+  description: string | null
+  logo_url: string | null
+  settings: Record<string, unknown>
+  is_active: boolean
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ClientMembership {
+  id: string
+  client_id: string
+  user_id: string
+  role: ClientMemberRole
+  created_at: string
+  updated_at: string
+  // Joined fields
+  client?: Client
+  user?: User
+}
+
+export interface ClientWithRole extends Client {
+  role: ClientMemberRole | 'admin' // 'admin' for org admins
+}
+
 // Chat types
 export interface Assistant {
   id: string
@@ -223,11 +255,13 @@ export interface Conversation {
   id: string
   user_id: string
   assistant_id: string
+  client_id: string | null
   title: string
   is_archived: boolean
   created_at: string
   updated_at: string
   assistant?: Assistant
+  client?: Client
 }
 
 export interface Message {
