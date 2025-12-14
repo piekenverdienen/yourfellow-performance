@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useRouter, useSearchParams, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { useSelectedClientId } from '@/stores/client-store'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -27,6 +28,7 @@ export default function ChatInterfacePage() {
   const assistantId = params.assistantId as string
   const router = useRouter()
   const searchParams = useSearchParams()
+  const selectedClientId = useSelectedClientId()
   const conversationParam = searchParams.get('conversation')
 
   const [assistant, setAssistant] = useState<Assistant | null>(null)
@@ -171,6 +173,7 @@ export default function ChatInterfacePage() {
           assistantId,
           conversationId,
           message: userMessage,
+          clientId: selectedClientId,
         }),
       })
 
