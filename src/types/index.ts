@@ -238,3 +238,92 @@ export interface Message {
   tokens_used: number
   created_at: string
 }
+
+// Integration types
+export type IntegrationProvider = 'google_ads' | 'meta_ads' | 'google_analytics' | 'hubspot'
+
+export type ConnectionStatus = 'pending' | 'connected' | 'expired' | 'error'
+
+export type SyncFrequency = 'hourly' | 'daily' | 'weekly' | 'manual'
+
+export interface Integration {
+  id: string
+  user_id: string
+  provider: IntegrationProvider
+  access_token?: string
+  refresh_token?: string
+  token_expires_at?: string
+  account_id?: string
+  account_name?: string
+  scopes?: string[]
+  is_active: boolean
+  connection_status: ConnectionStatus
+  last_error?: string
+  last_synced_at?: string
+  sync_frequency: SyncFrequency
+  metadata?: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export interface IntegrationLog {
+  id: string
+  integration_id?: string
+  user_id: string
+  action: 'connect' | 'disconnect' | 'sync' | 'refresh_token' | 'error'
+  provider: IntegrationProvider
+  details?: Record<string, unknown>
+  created_at: string
+}
+
+// Google Ads API types
+export interface GoogleAdsCampaign {
+  id: string
+  name: string
+  status: 'ENABLED' | 'PAUSED' | 'REMOVED'
+  budget: number
+  impressions: number
+  clicks: number
+  cost: number
+  conversions: number
+  ctr: number
+  cpc: number
+}
+
+export interface GoogleAdsMetrics {
+  date_range: string
+  total_impressions: number
+  total_clicks: number
+  total_cost: number
+  total_conversions: number
+  avg_ctr: number
+  avg_cpc: number
+  campaigns: GoogleAdsCampaign[]
+}
+
+// Meta Ads API types
+export interface MetaAdsCampaign {
+  id: string
+  name: string
+  status: 'ACTIVE' | 'PAUSED' | 'ARCHIVED'
+  objective: string
+  reach: number
+  impressions: number
+  clicks: number
+  spend: number
+  conversions: number
+  cpm: number
+  cpc: number
+}
+
+export interface MetaAdsMetrics {
+  date_range: string
+  total_reach: number
+  total_impressions: number
+  total_clicks: number
+  total_spend: number
+  total_conversions: number
+  avg_cpm: number
+  avg_cpc: number
+  campaigns: MetaAdsCampaign[]
+}

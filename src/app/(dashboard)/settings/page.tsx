@@ -9,6 +9,7 @@ import {
   Palette,
   ChevronRight,
   Building2,
+  Link2,
 } from 'lucide-react'
 
 const settingsItems = [
@@ -23,6 +24,12 @@ const settingsItems = [
     description: 'Branche, doelgroep en merkstem instellingen',
     href: '/settings/profile',
     icon: Building2,
+  },
+  {
+    title: 'Koppelingen',
+    description: 'Verbind Google Ads, Meta en andere platforms',
+    href: '/settings/integrations',
+    icon: Link2,
   },
   {
     title: 'Notificaties',
