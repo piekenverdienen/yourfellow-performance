@@ -52,12 +52,23 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, description, nodes, edges, is_template } = body
+    const { name, description, nodes, edges, is_template, client_id } = body
+
+    // Verify client access if client_id provided
+    if (client_id) {
+      const { data: clientAccess } = await supabase
+        .rpc('has_client_access', { check_client_id: client_id, min_role: 'editor' })
+
+      if (!clientAccess) {
+        return NextResponse.json({ error: 'Geen toegang tot deze client' }, { status: 403 })
+      }
+    }
 
     const { data: workflow, error } = await supabase
       .from('workflows')
       .insert({
         user_id: user.id,
+        client_id: client_id || null,
         name: name || 'Nieuwe Workflow',
         description,
         nodes: nodes || [],

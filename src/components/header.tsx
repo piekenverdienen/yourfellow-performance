@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Input } from '@/components/ui/input'
 import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
+import { ClientSelector } from '@/components/client-selector'
 import { createClient } from '@/lib/supabase/client'
 import {
   Search,
@@ -23,6 +24,7 @@ interface HeaderProps {
     email: string
     avatar_url?: string | null
     xp: number
+    role?: string
   }
 }
 
@@ -42,13 +44,18 @@ export function Header({ user }: HeaderProps) {
   return (
     <header className="sticky top-0 z-30 h-16 bg-white/80 backdrop-blur-xl border-b border-surface-200">
       <div className="flex h-full items-center justify-between px-6">
-        {/* Search */}
-        <div className="w-96">
-          <Input
-            placeholder="Zoek tools, klanten, of acties..."
-            leftIcon={<Search className="h-4 w-4" />}
-            className="bg-surface-50"
-          />
+        {/* Left side: Search + Client Selector */}
+        <div className="flex items-center gap-4">
+          <div className="w-80">
+            <Input
+              placeholder="Zoek tools, klanten, of acties..."
+              leftIcon={<Search className="h-4 w-4" />}
+              className="bg-surface-50"
+            />
+          </div>
+
+          {/* Client Selector */}
+          <ClientSelector showCreateButton={user?.role === 'admin'} />
         </div>
 
         {/* Right side */}

@@ -8,6 +8,7 @@ interface ChatRequest {
   conversationId?: string
   assistantId: string
   message: string
+  clientId?: string // Optional client ID for client-scoped conversations
 }
 
 export async function POST(request: NextRequest) {
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest) {
     })
 
     const body: ChatRequest = await request.json()
-    const { conversationId, assistantId, message } = body
+    const { conversationId, assistantId, message, clientId } = body
 
     if (!assistantId || !message) {
       return new Response(
@@ -70,12 +71,26 @@ export async function POST(request: NextRequest) {
     let activeConversationId = conversationId
 
     if (!activeConversationId) {
+      // Verify client access if clientId provided
+      if (clientId) {
+        const { data: clientAccess } = await supabase
+          .rpc('has_client_access', { check_client_id: clientId, min_role: 'editor' })
+
+        if (!clientAccess) {
+          return new Response(
+            JSON.stringify({ error: 'Geen toegang tot deze client' }),
+            { status: 403, headers: { 'Content-Type': 'application/json' } }
+          )
+        }
+      }
+
       // Create new conversation
       const { data: newConversation, error: createError } = await supabase
         .from('conversations')
         .insert({
           user_id: user.id,
           assistant_id: assistantId,
+          client_id: clientId || null,
           title: message.slice(0, 50) + (message.length > 50 ? '...' : ''),
         })
         .select('id')
@@ -202,7 +217,7 @@ export async function POST(request: NextRequest) {
           }
 
           // Track usage and XP
-          await trackChatUsage(supabase, user.id, assistant.slug, totalTokens)
+          await trackChatUsage(supabase, user.id, assistant.slug, totalTokens, clientId)
 
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({ type: 'done', tokens: totalTokens })}\n\n`)
@@ -238,7 +253,8 @@ async function trackChatUsage(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
   assistantSlug: string,
-  tokens: number
+  tokens: number,
+  clientId?: string
 ) {
   try {
     // Insert usage record
@@ -247,6 +263,7 @@ async function trackChatUsage(
       tool: `chat-${assistantSlug}`,
       completion_tokens: tokens,
       total_tokens: tokens,
+      client_id: clientId || null,
     })
 
     // Add XP (5 XP per chat message)
