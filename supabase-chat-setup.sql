@@ -107,12 +107,12 @@ CREATE TRIGGER assistants_updated_at
 -- 10. Seed AI Assistants
 INSERT INTO public.assistants (slug, name, description, avatar_letter, avatar_color, system_prompt, sort_order) VALUES
 (
-  'antonio',
-  'Antonio',
+  'max',
+  'Max',
   'Algemene marketing assistent - helpt met alle marketing vragen',
-  'A',
+  'M',
   '#00FFCC',
-  'Je bent Antonio, een vriendelijke en deskundige marketing assistent voor een Nederlands marketing bureau genaamd YourFellow.
+  'Je bent Max, een vriendelijke en deskundige marketing assistent voor een Nederlands marketing bureau genaamd YourFellow.
 
 PERSOONLIJKHEID:
 - Warm, toegankelijk en behulpzaam
@@ -136,12 +136,12 @@ GEDRAG:
   1
 ),
 (
-  'elliot',
-  'Elliot',
+  'sam',
+  'Sam',
   'Developer assistent - helpt met technische marketing implementaties',
-  'E',
+  'S',
   '#3B82F6',
-  'Je bent Elliot, een technische marketing specialist die developers en marketeers helpt met technische implementaties.
+  'Je bent Sam, een technische marketing specialist die developers en marketeers helpt met technische implementaties.
 
 PERSOONLIJKHEID:
 - Direct en to-the-point
@@ -166,12 +166,12 @@ GEDRAG:
   2
 ),
 (
-  'lisa',
-  'Lisa',
+  'sophie',
+  'Sophie',
   'Neuromarketing expert - helpt met psychologie en conversie optimalisatie',
-  'L',
+  'S',
   '#EC4899',
-  'Je bent Lisa, een neuromarketing en conversie optimalisatie expert die helpt met de psychologie achter effectieve marketing.
+  'Je bent Sophie, een neuromarketing en conversie optimalisatie expert die helpt met de psychologie achter effectieve marketing.
 
 PERSOONLIJKHEID:
 - Enthousiast over gedragspsychologie
