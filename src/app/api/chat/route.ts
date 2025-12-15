@@ -11,6 +11,89 @@ interface ChatRequest {
   clientId?: string // Optional client ID for client-scoped conversations
 }
 
+// WebSearch tool definition for Claude
+const webSearchTool: Anthropic.Tool = {
+  name: 'web_search',
+  description: `Zoek op het internet naar actuele informatie. Gebruik deze tool wanneer:
+- De gebruiker vraagt naar recente nieuws, trends of events
+- Je actuele prijzen, statistieken of data nodig hebt
+- Je informatie nodig hebt over specifieke bedrijven, producten of personen
+- De vraag gaat over iets dat na je kennisgrens (januari 2025) is gebeurd
+- Je marktonderzoek of concurrentie-analyse moet doen
+- Je best practices of recente case studies nodig hebt`,
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      query: {
+        type: 'string',
+        description: 'De zoekopdracht in het Nederlands of Engels',
+      },
+    },
+    required: ['query'],
+  },
+}
+
+interface TavilyResult {
+  title: string
+  url: string
+  content: string
+  score: number
+}
+
+interface TavilyResponse {
+  results: TavilyResult[]
+  query: string
+}
+
+// Function to perform web search using Tavily
+async function performWebSearch(query: string): Promise<string> {
+  if (!process.env.TAVILY_API_KEY) {
+    return 'WebSearch is niet geconfigureerd. Vraag de beheerder om de TAVILY_API_KEY in te stellen.'
+  }
+
+  try {
+    const response = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        api_key: process.env.TAVILY_API_KEY,
+        query,
+        max_results: 5,
+        include_answer: false,
+        include_raw_content: false,
+        search_depth: 'basic',
+      }),
+    })
+
+    if (!response.ok) {
+      return `Zoeken mislukt: ${response.status}`
+    }
+
+    const data: TavilyResponse = await response.json()
+
+    if (!data.results || data.results.length === 0) {
+      return 'Geen resultaten gevonden voor deze zoekopdracht.'
+    }
+
+    // Format results for Claude
+    const formattedResults = data.results
+      .map((result, index) => {
+        return `[${index + 1}] ${result.title}
+URL: ${result.url}
+${result.content}
+`
+      })
+      .join('\n---\n')
+
+    return `Zoekresultaten voor "${query}":\n\n${formattedResults}`
+  } catch (error) {
+    console.error('WebSearch error:', error)
+    return 'Er ging iets mis bij het zoeken op internet.'
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     if (!process.env.ANTHROPIC_API_KEY) {
@@ -208,6 +291,7 @@ export async function POST(request: NextRequest) {
     const encoder = new TextEncoder()
     let fullResponse = ''
     let totalTokens = 0
+    let webSearchUsed = false
 
     const stream = new ReadableStream({
       async start(controller) {
@@ -217,28 +301,98 @@ export async function POST(request: NextRequest) {
             encoder.encode(`data: ${JSON.stringify({ type: 'conversation_id', id: activeConversationId })}\n\n`)
           )
 
-          const response = await anthropic.messages.create({
+          // Check if WebSearch is available
+          const hasWebSearch = !!process.env.TAVILY_API_KEY
+          const tools = hasWebSearch ? [webSearchTool] : undefined
+
+          // First, make a non-streaming call to check if tool use is needed
+          const initialResponse = await anthropic.messages.create({
             model: assistant.model || 'claude-sonnet-4-20250514',
             max_tokens: assistant.max_tokens || 4096,
             system: systemPrompt,
             messages: messageHistory,
-            stream: true,
+            tools,
           })
 
-          for await (const event of response) {
-            if (event.type === 'content_block_delta') {
-              const delta = event.delta
-              if ('text' in delta) {
-                fullResponse += delta.text
+          totalTokens += initialResponse.usage?.output_tokens || 0
+
+          // Check if there are tool use blocks
+          const toolUseBlocks = initialResponse.content.filter(
+            (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use'
+          )
+
+          if (toolUseBlocks.length > 0) {
+            webSearchUsed = true
+
+            // Execute each tool call
+            const toolResults: Anthropic.ToolResultBlockParam[] = []
+
+            for (const toolBlock of toolUseBlocks) {
+              if (toolBlock.name === 'web_search') {
+                const input = toolBlock.input as { query: string }
                 controller.enqueue(
-                  encoder.encode(`data: ${JSON.stringify({ type: 'text', content: delta.text })}\n\n`)
+                  encoder.encode(`data: ${JSON.stringify({ type: 'status', status: 'searching', message: `🔍 Zoeken: "${input.query}"` })}\n\n`)
                 )
+
+                const searchResult = await performWebSearch(input.query)
+
+                toolResults.push({
+                  type: 'tool_result',
+                  tool_use_id: toolBlock.id,
+                  content: searchResult,
+                })
               }
             }
-            if (event.type === 'message_delta') {
-              if (event.usage) {
-                totalTokens = event.usage.output_tokens
+
+            // Continue conversation with tool results
+            const messagesWithToolResults: Anthropic.MessageParam[] = [
+              ...messageHistory,
+              { role: 'assistant', content: initialResponse.content },
+              { role: 'user', content: toolResults },
+            ]
+
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ type: 'status', status: 'thinking', message: '💭 Verwerken van resultaten...' })}\n\n`)
+            )
+
+            // Stream the final response after tool use
+            const finalResponse = await anthropic.messages.create({
+              model: assistant.model || 'claude-sonnet-4-20250514',
+              max_tokens: assistant.max_tokens || 4096,
+              system: systemPrompt,
+              messages: messagesWithToolResults,
+              stream: true,
+            })
+
+            for await (const event of finalResponse) {
+              if (event.type === 'content_block_delta') {
+                const delta = event.delta
+                if ('text' in delta) {
+                  fullResponse += delta.text
+                  controller.enqueue(
+                    encoder.encode(`data: ${JSON.stringify({ type: 'text', content: delta.text })}\n\n`)
+                  )
+                }
               }
+              if (event.type === 'message_delta') {
+                if (event.usage) {
+                  totalTokens += event.usage.output_tokens
+                }
+              }
+            }
+          } else {
+            // No tool use needed - stream the response directly
+            // Extract any text that was in the initial response
+            const textBlocks = initialResponse.content.filter(
+              (block): block is Anthropic.TextBlock => block.type === 'text'
+            )
+
+            // Stream each text block
+            for (const block of textBlocks) {
+              fullResponse += block.text
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ type: 'text', content: block.text })}\n\n`)
+              )
             }
           }
 
@@ -274,7 +428,7 @@ export async function POST(request: NextRequest) {
           }
 
           // Track usage and XP
-          await trackChatUsage(supabase, user.id, assistant.slug, totalTokens, clientId)
+          await trackChatUsage(supabase, user.id, assistant.slug, totalTokens, clientId, webSearchUsed)
 
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({ type: 'done', tokens: totalTokens })}\n\n`)
@@ -311,10 +465,11 @@ async function trackChatUsage(
   userId: string,
   assistantSlug: string,
   tokens: number,
-  clientId?: string
+  clientId?: string,
+  webSearchUsed?: boolean
 ) {
   try {
-    // Insert usage record
+    // Insert usage record for chat
     await supabase.from('usage').insert({
       user_id: userId,
       tool: `chat-${assistantSlug}`,
@@ -323,7 +478,17 @@ async function trackChatUsage(
       client_id: clientId || null,
     })
 
-    // Add XP (5 XP per chat message)
+    // Track web search usage separately if used
+    if (webSearchUsed) {
+      await supabase.from('usage').insert({
+        user_id: userId,
+        tool: 'web-search',
+        total_tokens: 0,
+        client_id: clientId || null,
+      })
+    }
+
+    // Add XP (5 XP per chat message + 3 bonus for web search)
     const { data: profile } = await supabase
       .from('profiles')
       .select('xp, total_generations')
@@ -331,7 +496,8 @@ async function trackChatUsage(
       .single()
 
     if (profile) {
-      const newXp = (profile.xp || 0) + 5
+      const xpToAdd = webSearchUsed ? 8 : 5 // Bonus XP for using web search
+      const newXp = (profile.xp || 0) + xpToAdd
       const newLevel = Math.floor(newXp / 100) + 1
       const newGenerations = (profile.total_generations || 0) + 1
 
