@@ -26,7 +26,9 @@ import {
   Tags,
   Brain,
   Zap,
+  CheckSquare,
 } from 'lucide-react'
+import { ClickUpTasks } from '@/components/clickup-tasks'
 import { getGreeting } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import type { ClientWithRole } from '@/types'
@@ -257,6 +259,31 @@ export default function DashboardPage() {
               </div>
             )}
           </section>
+
+          {/* ClickUp Tasks for Selected Client */}
+          {selectedClient?.settings?.clickup?.listId && (
+            <section>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <CheckSquare className="h-5 w-5 text-surface-500" />
+                  <h2 className="text-lg font-semibold text-surface-900">
+                    Taken voor {selectedClient.name}
+                  </h2>
+                </div>
+                <Link href={`/clients/${selectedClient.id}?tab=tasks`}>
+                  <Button variant="ghost" size="sm">
+                    Alle taken
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </Link>
+              </div>
+              <ClickUpTasks
+                clientId={selectedClient.id}
+                listId={selectedClient.settings.clickup.listId}
+                canEdit={['editor', 'admin', 'owner'].includes(selectedClient.role)}
+              />
+            </section>
+          )}
 
           {/* AI Assistants & Quick Tools Row */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
