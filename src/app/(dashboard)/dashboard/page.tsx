@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { useUser } from '@/hooks/use-user'
 import { useClientStore } from '@/stores/client-store'
 import { WeekOverview, AddEventDialog } from '@/components/calendar'
+import { ClientLogoFallback } from '@/components/logo-upload'
 import {
   Building2,
   ChevronRight,
@@ -183,17 +184,15 @@ export default function DashboardPage() {
                   >
                     <CardContent className="p-5">
                       <div className="flex items-start gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <div className="flex-shrink-0">
                           {client.logo_url ? (
                             <img
                               src={client.logo_url}
                               alt={client.name}
-                              className="w-12 h-12 rounded-xl object-cover"
+                              className="w-12 h-12 rounded-xl object-cover border border-surface-200"
                             />
                           ) : (
-                            <span className="text-xl font-bold text-primary">
-                              {client.name.charAt(0).toUpperCase()}
-                            </span>
+                            <ClientLogoFallback name={client.name} size="md" />
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
