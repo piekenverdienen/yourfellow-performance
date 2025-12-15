@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useSelectedClientId } from '@/stores/client-store'
+import { usePersistedState } from '@/hooks/use-persisted-form'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -52,18 +53,20 @@ interface GeneratedPost {
   suggested_cta: string
 }
 
+const initialFormData = {
+  topic: '',
+  context: '',
+  targetAudience: '',
+  platform: 'linkedin',
+  tone: 'professional',
+  postType: 'announcement',
+}
+
 export default function SocialPostsPage() {
   const clientId = useSelectedClientId()
   const [isGenerating, setIsGenerating] = useState(false)
-  const [formData, setFormData] = useState({
-    topic: '',
-    context: '',
-    targetAudience: '',
-    platform: 'linkedin',
-    tone: 'professional',
-    postType: 'announcement',
-  })
-  const [generatedPost, setGeneratedPost] = useState<GeneratedPost | null>(null)
+  const [formData, setFormData] = usePersistedState('social-posts-form', initialFormData)
+  const [generatedPost, setGeneratedPost] = usePersistedState<GeneratedPost | null>('social-posts-result', null)
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 

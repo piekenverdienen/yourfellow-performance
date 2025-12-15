@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useMemo, useCallback } from 'react'
 import { SchemaType } from '@/types/schema-markup'
 import { getSchemaTemplate } from '@/lib/schema-templates'
 import { generateSchema } from '@/lib/schema-generator'
 import { validateSchema, hasMinimumData } from '@/lib/schema-validation'
+import { usePersistedState } from '@/hooks/use-persisted-form'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { SchemaTypeSelector } from '@/components/schema/schema-type-selector'
 import { SchemaForm } from '@/components/schema/schema-form'
@@ -12,7 +13,15 @@ import { JsonLdPreview } from '@/components/schema/json-ld-preview'
 import { ValidationDisplay, ValidationSummary } from '@/components/schema/validation-display'
 import { Code2 } from 'lucide-react'
 
-const STORAGE_KEY = 'schema-markup-form'
+interface SchemaState {
+  selectedType: SchemaType | null
+  formData: Record<string, unknown>
+}
+
+const initialState: SchemaState = {
+  selectedType: null,
+  formData: {},
+}
 
 function getInitialFormData(schemaType: SchemaType): Record<string, unknown> {
   const template = getSchemaTemplate(schemaType)
@@ -32,54 +41,29 @@ function getInitialFormData(schemaType: SchemaType): Record<string, unknown> {
 }
 
 export default function SchemaMarkupPage() {
-  const [selectedType, setSelectedType] = useState<SchemaType | null>(null)
-  const [formData, setFormData] = useState<Record<string, unknown>>({})
-  const [isLoaded, setIsLoaded] = useState(false)
-
-  // Load saved data from localStorage on mount
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY)
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (parsed.selectedType) {
-          setSelectedType(parsed.selectedType)
-          setFormData(parsed.formData || {})
-        }
-      }
-    } catch (e) {
-      console.error('Failed to load saved schema data:', e)
-    }
-    setIsLoaded(true)
-  }, [])
-
-  // Save to localStorage when data changes
-  useEffect(() => {
-    if (!isLoaded) return
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        selectedType,
-        formData,
-      }))
-    } catch (e) {
-      console.error('Failed to save schema data:', e)
-    }
-  }, [selectedType, formData, isLoaded])
+  const [state, setState] = usePersistedState<SchemaState>('schema-markup', initialState)
+  const { selectedType, formData } = state
 
   const handleTypeSelect = useCallback((type: SchemaType) => {
-    setSelectedType(type)
-    setFormData(getInitialFormData(type))
-  }, [])
+    setState({
+      selectedType: type,
+      formData: getInitialFormData(type),
+    })
+  }, [setState])
 
   const handleFormChange = useCallback((data: Record<string, unknown>) => {
-    setFormData(data)
-  }, [])
+    setState(prev => ({ ...prev, formData: data }))
+  }, [setState])
 
   const handleReset = useCallback(() => {
     if (selectedType) {
-      setFormData(getInitialFormData(selectedType))
+      setState(prev => ({ ...prev, formData: getInitialFormData(selectedType) }))
     }
-  }, [selectedType])
+  }, [selectedType, setState])
+
+  const handleChangeType = useCallback(() => {
+    setState(initialState)
+  }, [setState])
 
   // Generate schema and validation
   const { generatedSchema, validation, hasData } = useMemo(() => {
@@ -138,7 +122,7 @@ export default function SchemaMarkupPage() {
                   </span>
                 </div>
                 <button
-                  onClick={() => setSelectedType(null)}
+                  onClick={handleChangeType}
                   className="text-sm text-primary hover:text-primary/80 font-medium"
                 >
                   Ander type kiezen

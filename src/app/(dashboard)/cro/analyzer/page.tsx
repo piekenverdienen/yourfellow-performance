@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useSelectedClientId } from '@/stores/client-store'
+import { usePersistedState } from '@/hooks/use-persisted-form'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -44,15 +45,17 @@ const principleColors: Record<string, string> = {
   'Sociale bewijskracht': 'bg-yellow-500',
 }
 
+const initialFormData = {
+  url: '',
+  pageContent: '',
+  pageType: '',
+}
+
 export default function CROAnalyzerPage() {
   const clientId = useSelectedClientId()
   const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [formData, setFormData] = useState({
-    url: '',
-    pageContent: '',
-    pageType: '',
-  })
-  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null)
+  const [formData, setFormData] = usePersistedState('cro-analyzer-form', initialFormData)
+  const [analysisResult, setAnalysisResult] = usePersistedState<AnalysisResult | null>('cro-analyzer-result', null)
   const [error, setError] = useState<string | null>(null)
 
   const handleAnalyze = async () => {

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useSelectedClientId } from '@/stores/client-store'
+import { usePersistedState } from '@/hooks/use-persisted-form'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -42,19 +43,21 @@ const toneOptions = [
   { value: 'friendly', label: 'Vriendelijk' },
 ]
 
+const initialFormData = {
+  topic: '',
+  primaryKeyword: '',
+  secondaryKeywords: '',
+  targetAudience: '',
+  contentType: 'blog',
+  length: 'medium',
+  tone: 'professional',
+}
+
 export default function SEOContentPage() {
   const clientId = useSelectedClientId()
   const [isGenerating, setIsGenerating] = useState(false)
-  const [formData, setFormData] = useState({
-    topic: '',
-    primaryKeyword: '',
-    secondaryKeywords: '',
-    targetAudience: '',
-    contentType: 'blog',
-    length: 'medium',
-    tone: 'professional',
-  })
-  const [generatedContent, setGeneratedContent] = useState<string | null>(null)
+  const [formData, setFormData] = usePersistedState('seo-content-form', initialFormData)
+  const [generatedContent, setGeneratedContent] = usePersistedState<string | null>('seo-content-result', null)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
