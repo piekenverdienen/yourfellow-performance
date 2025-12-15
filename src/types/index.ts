@@ -253,9 +253,80 @@ export interface Client {
   updated_at: string
 }
 
+export interface ClickUpSettings {
+  apiKey?: string  // Stored at org level, not per client
+  listId?: string  // ClickUp List ID for this client
+  spaceId?: string // Optional: ClickUp Space ID
+  folderId?: string // Optional: ClickUp Folder ID
+}
+
 export interface ClientSettings {
   context?: ClientContext
+  clickup?: ClickUpSettings
   [key: string]: unknown
+}
+
+// ClickUp API Types
+export interface ClickUpTask {
+  id: string
+  name: string
+  description?: string
+  status: {
+    id: string
+    status: string
+    color: string
+    type: string
+    orderindex: number
+  }
+  priority?: {
+    id: string
+    priority: string
+    color: string
+    orderindex: string
+  } | null
+  assignees: ClickUpAssignee[]
+  due_date?: string | null
+  due_date_time?: boolean
+  start_date?: string | null
+  time_estimate?: number | null
+  url: string
+  list: {
+    id: string
+    name: string
+  }
+  folder: {
+    id: string
+    name: string
+  }
+  space: {
+    id: string
+  }
+  date_created: string
+  date_updated: string
+  date_closed?: string | null
+}
+
+export interface ClickUpAssignee {
+  id: number
+  username: string
+  email: string
+  color: string
+  profilePicture?: string | null
+  initials: string
+}
+
+export interface ClickUpStatus {
+  id: string
+  status: string
+  color: string
+  type: string
+  orderindex: number
+}
+
+export interface ClickUpList {
+  id: string
+  name: string
+  statuses: ClickUpStatus[]
 }
 
 export interface ClientMembership {

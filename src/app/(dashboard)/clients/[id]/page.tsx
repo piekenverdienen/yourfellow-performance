@@ -22,11 +22,14 @@ import {
   Edit3,
   Eye,
   Brain,
+  CheckSquare,
 } from 'lucide-react'
 import { useUser } from '@/hooks/use-user'
 import { useClientStore } from '@/stores/client-store'
 import { ClientContextForm } from '@/components/client-context-form'
 import { LogoUpload, ClientLogoFallback } from '@/components/logo-upload'
+import { ClickUpTasks } from '@/components/clickup-tasks'
+import { ClickUpSetup } from '@/components/clickup-setup'
 import type { Client, ClientMemberRole, ClientContext, User } from '@/types'
 
 interface ClientMember {
@@ -54,8 +57,8 @@ export default function ClientDetailPage() {
   const [members, setMembers] = useState<ClientMember[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [activeTab, setActiveTab] = useState<'overview' | 'context' | 'team' | 'settings'>(
-    (searchParams.get('tab') as 'overview' | 'context' | 'team' | 'settings') || 'overview'
+  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'context' | 'team' | 'settings'>(
+    (searchParams.get('tab') as 'overview' | 'tasks' | 'context' | 'team' | 'settings') || 'overview'
   )
 
   // Edit state
@@ -299,6 +302,17 @@ export default function ClientDetailPage() {
           Overzicht
         </button>
         <button
+          onClick={() => setActiveTab('tasks')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+            activeTab === 'tasks'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-surface-600 hover:text-surface-900'
+          }`}
+        >
+          <CheckSquare className="h-4 w-4 inline-block mr-2" />
+          Taken
+        </button>
+        <button
           onClick={() => setActiveTab('context')}
           className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
             activeTab === 'context'
@@ -366,6 +380,14 @@ export default function ClientDetailPage() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {activeTab === 'tasks' && (
+        <ClickUpTasks
+          clientId={id}
+          listId={client.settings?.clickup?.listId}
+          canEdit={isAdmin || client.role === 'editor'}
+        />
       )}
 
       {activeTab === 'context' && (
@@ -549,6 +571,38 @@ export default function ClientDetailPage() {
 
       {activeTab === 'settings' && isAdmin && (
         <div className="space-y-6">
+          {/* ClickUp Integration */}
+          <Card>
+            <CardHeader>
+              <CardTitle>ClickUp Koppeling</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ClickUpSetup
+                clientId={id}
+                currentListId={client.settings?.clickup?.listId}
+                onSave={async (listId) => {
+                  const newSettings = {
+                    ...client.settings,
+                    clickup: listId ? { listId } : undefined,
+                  }
+                  const res = await fetch(`/api/clients/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ settings: newSettings }),
+                  })
+                  if (res.ok) {
+                    const data = await res.json()
+                    setClient(data.client)
+                  } else {
+                    const error = await res.json()
+                    throw new Error(error.error || 'Fout bij opslaan')
+                  }
+                }}
+                disabled={saving}
+              />
+            </CardContent>
+          </Card>
+
           {/* Logo Section */}
           <Card>
             <CardHeader>
