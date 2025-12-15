@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils'
 
 interface LogoProps {
-  variant?: 'default' | 'white' | 'dark'
+  variant?: 'default' | 'white' | 'dark' | 'primary'
   size?: 'sm' | 'md' | 'lg'
   showText?: boolean
   className?: string
@@ -11,48 +11,47 @@ interface LogoProps {
 function LogoIcon({ className, fill = 'currentColor' }: { className?: string; fill?: string }) {
   return (
     <svg
-      viewBox="0 0 100 80"
+      viewBox="0 0 90 72"
       className={className}
       fill={fill}
     >
       {/* Left part - Y shape forming elephant head with curling trunk */}
       <path d="
-        M 8 0
-        C 3 0, 0 4, 0 10
-        L 0 50
-        C 0 68, 14 80, 32 80
-        C 50 80, 58 68, 58 50
-        L 58 44
-        C 58 36, 50 30, 42 34
-        C 36 38, 34 44, 34 50
-        C 34 58, 28 62, 22 58
-        C 16 54, 16 46, 16 40
-        L 16 10
-        C 16 4, 13 0, 8 0
+        M 6 0
+        C 2 0, 0 3, 0 8
+        L 0 44
+        C 0 60, 12 72, 28 72
+        C 44 72, 52 60, 52 44
+        L 52 40
+        C 52 32, 44 28, 38 32
+        C 32 36, 30 42, 30 48
+        C 30 54, 26 58, 20 56
+        C 14 54, 12 48, 12 40
+        L 12 8
+        C 12 3, 10 0, 6 0
         Z
       "/>
 
       {/* Dot - elephant's eye */}
-      <circle cx="50" cy="10" r="7" />
+      <circle cx="44" cy="8" r="6" />
 
-      {/* Right part - f shape with elegant curve */}
+      {/* Right part - f shape with curved hook at top */}
       <path d="
-        M 68 8
-        C 68 3, 72 0, 78 0
-        C 88 0, 94 8, 94 18
-        L 94 22
-        L 80 22
-        L 80 18
-        C 80 14, 78 12, 76 14
-        C 74 16, 74 20, 74 24
-        L 74 52
-        C 74 62, 80 68, 88 68
-        C 94 68, 98 64, 100 58
-        L 100 68
-        C 96 76, 88 80, 78 80
-        C 64 80, 56 68, 56 52
-        L 56 24
-        C 56 14, 60 8, 68 8
+        M 72 0
+        C 80 0, 86 6, 86 14
+        L 86 16
+        L 74 16
+        L 74 14
+        C 74 10, 72 8, 70 10
+        C 68 12, 68 16, 68 20
+        L 68 46
+        C 68 58, 76 66, 86 64
+        L 90 64
+        L 90 72
+        C 88 72, 84 72, 80 72
+        C 64 72, 56 60, 56 44
+        L 56 20
+        C 56 8, 62 0, 72 0
         Z
       "/>
     </svg>
@@ -75,6 +74,7 @@ export function Logo({
     default: { fill: '#000000', textColor: 'text-surface-900' },
     white: { fill: '#FFFFFF', textColor: 'text-white' },
     dark: { fill: '#000000', textColor: 'text-surface-900' },
+    primary: { fill: '#00FFCC', textColor: 'text-primary' },
   }
 
   return (
