@@ -89,6 +89,14 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Image generation error:', error)
 
+    // Check for Gemini region restriction
+    if (isGeminiRegionError(error)) {
+      return NextResponse.json(
+        { error: 'Gemini image generation is niet beschikbaar in jouw regio. Gebruik GPT Image als alternatief, of probeer een VPN naar de VS.' },
+        { status: 400 }
+      )
+    }
+
     if (error instanceof OpenAI.APIError) {
       console.error('OpenAI API Error details:', {
         status: error.status,
@@ -135,6 +143,16 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
+}
+
+// Check for Gemini-specific errors
+function isGeminiRegionError(error: unknown): boolean {
+  if (error && typeof error === 'object' && 'message' in error) {
+    const message = String((error as { message: string }).message)
+    return message.includes('not available in your country') ||
+           message.includes('FAILED_PRECONDITION')
+  }
+  return false
 }
 
 // Generate image with OpenAI GPT Image

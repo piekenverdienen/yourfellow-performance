@@ -252,7 +252,7 @@ export default function ImageGeneratorPage() {
                 <p className="text-xs text-surface-500 mt-1">
                   {formData.model === 'gpt-image'
                     ? 'Beste voor complexe instructies en tekst in afbeeldingen'
-                    : 'Sneller en goedkoper, goed voor fotorealisme'}
+                    : 'Sneller en goedkoper, goed voor fotorealisme (beperkte regio-beschikbaarheid)'}
                 </p>
               </div>
 
