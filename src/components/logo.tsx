@@ -11,48 +11,48 @@ interface LogoProps {
 function LogoIcon({ className, fill = 'currentColor' }: { className?: string; fill?: string }) {
   return (
     <svg
-      viewBox="0 0 120 100"
+      viewBox="0 0 100 80"
       className={className}
       fill={fill}
     >
-      {/* Left part - curved Y shape like elephant's head and trunk */}
+      {/* Left part - Y shape forming elephant head with curling trunk */}
       <path d="
-        M 12 2
-        C 4 2, 0 8, 0 16
-        L 0 60
-        C 0 80, 16 96, 36 96
-        C 56 96, 68 80, 68 60
-        L 68 50
-        C 68 42, 60 36, 52 36
-        C 44 36, 36 44, 36 52
-        C 36 64, 24 72, 16 60
-        C 10 50, 16 42, 16 34
-        L 16 16
-        C 16 8, 12 2, 12 2
+        M 8 0
+        C 3 0, 0 4, 0 10
+        L 0 50
+        C 0 68, 14 80, 32 80
+        C 50 80, 58 68, 58 50
+        L 58 44
+        C 58 36, 50 30, 42 34
+        C 36 38, 34 44, 34 50
+        C 34 58, 28 62, 22 58
+        C 16 54, 16 46, 16 40
+        L 16 10
+        C 16 4, 13 0, 8 0
         Z
       "/>
 
       {/* Dot - elephant's eye */}
-      <circle cx="52" cy="14" r="10" />
+      <circle cx="50" cy="10" r="7" />
 
-      {/* Right part - curved F shape flowing right */}
+      {/* Right part - f shape with elegant curve */}
       <path d="
-        M 76 2
-        L 76 60
-        C 76 72, 88 80, 100 72
-        C 106 68, 108 60, 108 52
-        L 108 40
-        C 108 32, 100 28, 94 34
-        C 90 38, 90 44, 90 48
-        C 90 52, 94 54, 98 50
-        L 98 48
-        L 92 48
-        L 92 24
-        C 92 16, 96 10, 102 6
-        L 102 2
-        L 92 2
-        L 92 8
-        C 88 4, 84 2, 76 2
+        M 68 8
+        C 68 3, 72 0, 78 0
+        C 88 0, 94 8, 94 18
+        L 94 22
+        L 80 22
+        L 80 18
+        C 80 14, 78 12, 76 14
+        C 74 16, 74 20, 74 24
+        L 74 52
+        C 74 62, 80 68, 88 68
+        C 94 68, 98 64, 100 58
+        L 100 68
+        C 96 76, 88 80, 78 80
+        C 64 80, 56 68, 56 52
+        L 56 24
+        C 56 14, 60 8, 68 8
         Z
       "/>
     </svg>
