@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Sparkles,
   Search,
+  Code2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -30,6 +31,15 @@ const tools = [
     color: 'bg-blue-500',
     badge: null,
     badgeVariant: null,
+  },
+  {
+    name: 'Schema Markup Generator',
+    description: 'Genereer structured data (JSON-LD) voor rich snippets in zoekresultaten.',
+    href: '/seo/schema',
+    icon: Code2,
+    color: 'bg-purple-500',
+    badge: 'Nieuw',
+    badgeVariant: 'secondary' as const,
   },
 ]
 

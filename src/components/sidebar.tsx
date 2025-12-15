@@ -23,6 +23,7 @@ import {
   BarChart3,
   GitBranch,
   Building2,
+  Code2,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -73,13 +74,14 @@ const navigation: NavItem[] = [
       { name: 'Afbeeldingen', href: '/social/images', icon: Image },
     ]
   },
-  { 
-    name: 'SEO', 
-    href: '/seo', 
+  {
+    name: 'SEO',
+    href: '/seo',
     icon: Search,
     children: [
       { name: 'Content Schrijven', href: '/seo/content', icon: FileText },
       { name: 'Meta Tags', href: '/seo/meta', icon: Tags },
+      { name: 'Schema Markup', href: '/seo/schema', icon: Code2 },
     ]
   },
   { 

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useSelectedClientId } from '@/stores/client-store'
+import { usePersistedState } from '@/hooks/use-persisted-form'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -37,17 +38,19 @@ interface GeneratedMeta {
   og_description: string
 }
 
+const initialFormData = {
+  pageUrl: '',
+  pageContent: '',
+  primaryKeyword: '',
+  brandName: '',
+  pageType: 'homepage',
+}
+
 export default function SEOMetaPage() {
   const clientId = useSelectedClientId()
   const [isGenerating, setIsGenerating] = useState(false)
-  const [formData, setFormData] = useState({
-    pageUrl: '',
-    pageContent: '',
-    primaryKeyword: '',
-    brandName: '',
-    pageType: 'homepage',
-  })
-  const [generatedMeta, setGeneratedMeta] = useState<GeneratedMeta | null>(null)
+  const [formData, setFormData] = usePersistedState('seo-meta-form', initialFormData)
+  const [generatedMeta, setGeneratedMeta] = usePersistedState<GeneratedMeta | null>('seo-meta-result', null)
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useSelectedClientId } from '@/stores/client-store'
+import { usePersistedState } from '@/hooks/use-persisted-form'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -40,18 +41,20 @@ interface GeneratedAd {
   descriptions: string[]
 }
 
+const initialFormData = {
+  productName: '',
+  productDescription: '',
+  targetAudience: '',
+  keywords: '',
+  tone: 'professional',
+  adType: 'responsive_search',
+}
+
 export default function GoogleAdsCopyPage() {
   const clientId = useSelectedClientId()
   const [isGenerating, setIsGenerating] = useState(false)
-  const [formData, setFormData] = useState({
-    productName: '',
-    productDescription: '',
-    targetAudience: '',
-    keywords: '',
-    tone: 'professional',
-    adType: 'responsive_search',
-  })
-  const [generatedAd, setGeneratedAd] = useState<GeneratedAd | null>(null)
+  const [formData, setFormData] = usePersistedState('google-ads-form', initialFormData)
+  const [generatedAd, setGeneratedAd] = usePersistedState<GeneratedAd | null>('google-ads-result', null)
   const [copiedIndex, setCopiedIndex] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
