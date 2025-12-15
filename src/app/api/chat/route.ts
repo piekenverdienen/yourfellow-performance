@@ -388,48 +388,31 @@ export async function POST(request: NextRequest) {
                 encoder.encode(`data: ${JSON.stringify({ type: 'status', status: 'thinking', message: '💭 Verwerken van resultaten...' })}\n\n`)
               )
 
-              // Stream the final response after tool use
+              // Get final response after tool use (non-streaming for stability)
               console.log('Making final API call with tool results...')
-              try {
-                const finalResponse = await anthropic.messages.create({
-                  model: assistant.model || 'claude-sonnet-4-20250514',
-                  max_tokens: assistant.max_tokens || 4096,
-                  system: systemPrompt,
-                  messages: messagesWithToolResults,
-                  stream: true,
-                })
+              const finalResponse = await anthropic.messages.create({
+                model: assistant.model || 'claude-sonnet-4-20250514',
+                max_tokens: assistant.max_tokens || 4096,
+                system: systemPrompt,
+                messages: messagesWithToolResults,
+              })
 
-                console.log('Final response stream started')
-                let eventCount = 0
+              console.log('Final response received, content blocks:', finalResponse.content.length)
+              totalTokens += finalResponse.usage?.output_tokens || 0
 
-                for await (const event of finalResponse) {
-                  eventCount++
-                  console.log('Stream event:', event.type)
+              // Extract text from response
+              const finalTextBlocks = finalResponse.content.filter(
+                (block): block is Anthropic.TextBlock => block.type === 'text'
+              )
 
-                  if (event.type === 'content_block_delta') {
-                    const delta = event.delta
-                    if ('text' in delta) {
-                      fullResponse += delta.text
-                      controller.enqueue(
-                        encoder.encode(`data: ${JSON.stringify({ type: 'text', content: delta.text })}\n\n`)
-                      )
-                    }
-                  }
-                  if (event.type === 'message_delta') {
-                    if (event.usage) {
-                      totalTokens += event.usage.output_tokens
-                    }
-                  }
-                  if (event.type === 'error') {
-                    console.error('Stream error event:', event)
-                  }
-                }
-
-                console.log('Stream finished. Events:', eventCount, 'Response length:', fullResponse.length)
-              } catch (streamError) {
-                console.error('Final response stream error:', streamError)
-                throw streamError
+              for (const block of finalTextBlocks) {
+                fullResponse += block.text
+                controller.enqueue(
+                  encoder.encode(`data: ${JSON.stringify({ type: 'text', content: block.text })}\n\n`)
+                )
               }
+
+              console.log('Final response sent, length:', fullResponse.length)
             } else {
               // No tool use needed - extract text from initial response
               const textBlocks = initialResponse.content.filter(
