@@ -8,6 +8,7 @@ import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { useUser } from '@/hooks/use-user'
 import { useClientStore } from '@/stores/client-store'
+import { WeekOverview, AddEventDialog } from '@/components/calendar'
 import {
   Building2,
   ChevronRight,
@@ -60,6 +61,8 @@ const aiAssistants = [
 export default function DashboardPage() {
   const { user, loading: userLoading } = useUser()
   const { clients, selectedClient, isLoading: clientsLoading, fetchClients, selectClient } = useClientStore()
+  const [showAddEvent, setShowAddEvent] = useState(false)
+  const [calendarKey, setCalendarKey] = useState(0) // Force refresh calendar
 
   const greeting = getGreeting()
   const userName = user?.full_name || user?.email?.split('@')[0] || 'Gebruiker'
@@ -68,6 +71,10 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchClients()
   }, [fetchClients])
+
+  const handleEventAdded = () => {
+    setCalendarKey(prev => prev + 1) // Refresh the week overview
+  }
 
   const getRoleBadge = (role: string) => {
     const roleConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' }> = {
@@ -226,6 +233,15 @@ export default function DashboardPage() {
         )}
       </section>
 
+      {/* Calendar Week Overview */}
+      <section>
+        <WeekOverview
+          key={calendarKey}
+          onAddEvent={() => setShowAddEvent(true)}
+          selectedClientId={selectedClient?.id}
+        />
+      </section>
+
       {/* AI Assistants & Quick Tools Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* AI Assistants */}
@@ -368,6 +384,16 @@ export default function DashboardPage() {
           </Card>
         </section>
       )}
+
+      {/* Add Event Dialog */}
+      <AddEventDialog
+        open={showAddEvent}
+        onOpenChange={setShowAddEvent}
+        onEventAdded={handleEventAdded}
+        clients={clients}
+        selectedClientId={selectedClient?.id}
+        isAdmin={isAdmin}
+      />
     </div>
   )
 }
