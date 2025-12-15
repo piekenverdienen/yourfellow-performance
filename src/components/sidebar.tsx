@@ -24,6 +24,7 @@ import {
   GitBranch,
   Building2,
   Code2,
+  CalendarDays,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -54,6 +55,11 @@ const navigation: NavItem[] = [
     name: 'Workflows',
     href: '/workflows',
     icon: GitBranch
+  },
+  {
+    name: 'Kalender',
+    href: '/kalender',
+    icon: CalendarDays
   },
   {
     name: 'Google Ads', 
