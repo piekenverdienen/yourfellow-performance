@@ -214,6 +214,7 @@ export default function ChatInterfacePage() {
                 )
               } else if (data.type === 'status') {
                 // Show status updates (searching, thinking, etc.)
+                console.log('Status update:', data.message)
                 setStatusMessage(data.message)
               } else if (data.type === 'text') {
                 setStatusMessage(null) // Clear status when text starts
