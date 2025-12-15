@@ -27,7 +27,7 @@ export async function PUT(
 
     // Check if user has editor access to this client (can modify tasks)
     const { data: hasAccess } = await supabase
-      .rpc('has_client_access', { check_client_id: clientId, required_role: 'editor' })
+      .rpc('has_client_access', { check_client_id: clientId, min_role: 'editor' })
 
     if (!hasAccess) {
       return NextResponse.json({ error: 'Geen toegang om taken te bewerken' }, { status: 403 })

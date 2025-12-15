@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
 
     // Check if user has access to this client
     const { data: hasAccess } = await supabase
-      .rpc('has_client_access', { check_client_id: clientId, required_role: 'viewer' })
+      .rpc('has_client_access', { check_client_id: clientId, min_role: 'viewer' })
 
     if (!hasAccess) {
       return NextResponse.json({ error: 'Geen toegang tot deze client' }, { status: 403 })
