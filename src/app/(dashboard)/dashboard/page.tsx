@@ -96,9 +96,9 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
+    <div className="max-w-7xl mx-auto">
       {/* Welcome Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-surface-900">
             {greeting} {userName}!
@@ -118,272 +118,280 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Clients Section */}
-      <section>
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Building2 className="h-5 w-5 text-surface-500" />
-            <h2 className="text-lg font-semibold text-surface-900">Mijn Clients</h2>
-            <Badge variant="secondary" className="ml-2">{clients.length}</Badge>
-          </div>
-          <div className="flex items-center gap-2">
-            {isAdmin && (
-              <Link href="/clients">
-                <Button variant="outline" size="sm">
-                  <Plus className="h-4 w-4 mr-1" />
-                  Nieuwe Client
-                </Button>
-              </Link>
-            )}
-            <Link href="/clients">
-              <Button variant="ghost" size="sm">
-                Alle clients
-                <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
-            </Link>
-          </div>
-        </div>
-
-        {clients.length === 0 ? (
-          <Card className="text-center py-12">
-            <CardContent>
-              <Building2 className="h-12 w-12 text-surface-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-surface-900 mb-2">
-                Nog geen clients
-              </h3>
-              <p className="text-surface-600 mb-4">
-                {isAdmin
-                  ? 'Voeg je eerste client toe om te beginnen met YourFellow.'
-                  : 'Je hebt nog geen toegang tot clients. Vraag een admin om je toe te voegen.'}
-              </p>
-              {isAdmin && (
+      {/* Main Grid: 2/3 content + 1/3 calendar */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column - Main Content (2/3) */}
+        <div className="lg:col-span-2 space-y-8">
+          {/* Clients Section */}
+          <section>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Building2 className="h-5 w-5 text-surface-500" />
+                <h2 className="text-lg font-semibold text-surface-900">Mijn Clients</h2>
+                <Badge variant="secondary" className="ml-2">{clients.length}</Badge>
+              </div>
+              <div className="flex items-center gap-2">
+                {isAdmin && (
+                  <Link href="/clients">
+                    <Button variant="outline" size="sm">
+                      <Plus className="h-4 w-4 mr-1" />
+                      Nieuwe Client
+                    </Button>
+                  </Link>
+                )}
                 <Link href="/clients">
-                  <Button>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Eerste Client Toevoegen
+                  <Button variant="ghost" size="sm">
+                    Alle clients
+                    <ChevronRight className="h-4 w-4 ml-1" />
                   </Button>
                 </Link>
-              )}
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {clients.slice(0, 6).map((client) => (
-              <Card
-                key={client.id}
-                className={cn(
-                  'cursor-pointer transition-all hover:shadow-lg',
-                  selectedClient?.id === client.id && 'ring-2 ring-primary'
-                )}
-                onClick={() => selectClient(client)}
-              >
-                <CardContent className="p-5">
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      {client.logo_url ? (
-                        <img
-                          src={client.logo_url}
-                          alt={client.name}
-                          className="w-12 h-12 rounded-xl object-cover"
-                        />
-                      ) : (
-                        <span className="text-xl font-bold text-primary">
-                          {client.name.charAt(0).toUpperCase()}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold text-surface-900 truncate">{client.name}</h3>
-                        {selectedClient?.id === client.id && (
-                          <Badge variant="default" className="text-xs">Actief</Badge>
+              </div>
+            </div>
+
+            {clients.length === 0 ? (
+              <Card className="text-center py-12">
+                <CardContent>
+                  <Building2 className="h-12 w-12 text-surface-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-surface-900 mb-2">
+                    Nog geen clients
+                  </h3>
+                  <p className="text-surface-600 mb-4">
+                    {isAdmin
+                      ? 'Voeg je eerste client toe om te beginnen met YourFellow.'
+                      : 'Je hebt nog geen toegang tot clients. Vraag een admin om je toe te voegen.'}
+                  </p>
+                  {isAdmin && (
+                    <Link href="/clients">
+                      <Button>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Eerste Client Toevoegen
+                      </Button>
+                    </Link>
+                  )}
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {clients.slice(0, 6).map((client) => (
+                  <Card
+                    key={client.id}
+                    className={cn(
+                      'cursor-pointer transition-all hover:shadow-lg',
+                      selectedClient?.id === client.id && 'ring-2 ring-primary'
+                    )}
+                    onClick={() => selectClient(client)}
+                  >
+                    <CardContent className="p-5">
+                      <div className="flex items-start gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                          {client.logo_url ? (
+                            <img
+                              src={client.logo_url}
+                              alt={client.name}
+                              className="w-12 h-12 rounded-xl object-cover"
+                            />
+                          ) : (
+                            <span className="text-xl font-bold text-primary">
+                              {client.name.charAt(0).toUpperCase()}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="font-semibold text-surface-900 truncate">{client.name}</h3>
+                            {selectedClient?.id === client.id && (
+                              <Badge variant="default" className="text-xs">Actief</Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-surface-600 line-clamp-1 mb-2">
+                            {client.description || 'Geen beschrijving'}
+                          </p>
+                          {getRoleBadge(client.role)}
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2 mt-4">
+                        <Link href={`/clients/${client.id}`} className="flex-1" onClick={(e) => e.stopPropagation()}>
+                          <Button variant="outline" size="sm" className="w-full">
+                            <Settings className="h-4 w-4 mr-1" />
+                            Beheer
+                          </Button>
+                        </Link>
+                        <Link href={`/clients/${client.id}?tab=context`} onClick={(e) => e.stopPropagation()}>
+                          <Button variant="ghost" size="sm" title="AI Context bewerken">
+                            <Brain className="h-4 w-4" />
+                          </Button>
+                        </Link>
+                        {['owner', 'admin'].includes(client.role) && (
+                          <Link href={`/clients/${client.id}?tab=team`} onClick={(e) => e.stopPropagation()}>
+                            <Button variant="ghost" size="sm" title="Team beheren">
+                              <Users className="h-4 w-4" />
+                            </Button>
+                          </Link>
                         )}
                       </div>
-                      <p className="text-sm text-surface-600 line-clamp-1 mb-2">
-                        {client.description || 'Geen beschrijving'}
-                      </p>
-                      {getRoleBadge(client.role)}
-                    </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* AI Assistants & Quick Tools Row */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* AI Assistants */}
+            <section>
+              <div className="flex items-center gap-2 mb-4">
+                <Sparkles className="h-5 w-5 text-surface-500" />
+                <h2 className="text-lg font-semibold text-surface-900">AI Assistenten</h2>
+              </div>
+              <Card>
+                <CardContent className="p-4 space-y-3">
+                  <p className="text-sm text-surface-600 mb-2">
+                    {selectedClient
+                      ? `Chat met onze AI assistenten over ${selectedClient.name}`
+                      : 'Selecteer eerst een client om context-aware hulp te krijgen'}
+                  </p>
+                  {aiAssistants.map((assistant) => (
+                    <Link
+                      key={assistant.slug}
+                      href={`/chat/${assistant.slug}`}
+                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-surface-50 transition-colors border border-transparent hover:border-surface-200"
+                    >
+                      <div
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold"
+                        style={{ backgroundColor: assistant.color }}
+                      >
+                        {assistant.name.charAt(0)}
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium text-surface-900">{assistant.name}</p>
+                        <p className="text-xs text-surface-500">{assistant.description}</p>
+                      </div>
+                      <MessageSquare className="h-4 w-4 text-surface-400" />
+                    </Link>
+                  ))}
+                  <Link href="/chat" className="block">
+                    <Button variant="outline" className="w-full mt-2">
+                      Alle gesprekken bekijken
+                      <ArrowRight className="h-4 w-4 ml-2" />
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            </section>
+
+            {/* Quick Tools */}
+            <section>
+              <div className="flex items-center gap-2 mb-4">
+                <BarChart3 className="h-5 w-5 text-surface-500" />
+                <h2 className="text-lg font-semibold text-surface-900">Snelle Tools</h2>
+              </div>
+              <Card>
+                <CardContent className="p-4">
+                  <p className="text-sm text-surface-600 mb-4">
+                    {selectedClient
+                      ? `Genereer content voor ${selectedClient.name}`
+                      : 'Gebruik onze AI tools voor marketing taken'}
+                  </p>
+                  <div className="space-y-2">
+                    {quickTools.map((tool) => {
+                      const Icon = tool.icon
+                      return (
+                        <Link
+                          key={tool.name}
+                          href={tool.href}
+                          className="flex items-center gap-3 p-3 rounded-xl hover:bg-surface-50 transition-colors border border-transparent hover:border-surface-200"
+                        >
+                          <div className={cn('p-2.5 rounded-xl', tool.color)}>
+                            <Icon className="h-5 w-5" />
+                          </div>
+                          <span className="font-medium text-surface-700">{tool.name}</span>
+                          <ChevronRight className="h-4 w-4 text-surface-400 ml-auto" />
+                        </Link>
+                      )
+                    })}
                   </div>
 
-                  <div className="flex gap-2 mt-4">
-                    <Link href={`/clients/${client.id}`} className="flex-1" onClick={(e) => e.stopPropagation()}>
-                      <Button variant="outline" size="sm" className="w-full">
-                        <Settings className="h-4 w-4 mr-1" />
-                        Beheer
-                      </Button>
-                    </Link>
-                    <Link href={`/clients/${client.id}?tab=context`} onClick={(e) => e.stopPropagation()}>
-                      <Button variant="ghost" size="sm" title="AI Context bewerken">
-                        <Brain className="h-4 w-4" />
-                      </Button>
-                    </Link>
-                    {['owner', 'admin'].includes(client.role) && (
-                      <Link href={`/clients/${client.id}?tab=team`} onClick={(e) => e.stopPropagation()}>
-                        <Button variant="ghost" size="sm" title="Team beheren">
-                          <Users className="h-4 w-4" />
-                        </Button>
-                      </Link>
-                    )}
+                  {/* Client context reminder */}
+                  {selectedClient && (
+                    <div className="mt-4 p-3 bg-primary/5 rounded-xl border border-primary/10">
+                      <div className="flex items-center gap-2 text-sm">
+                        <Brain className="h-4 w-4 text-primary" />
+                        <span className="text-surface-700">
+                          AI output wordt aangepast aan de context van <strong>{selectedClient.name}</strong>
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {!selectedClient && clients.length > 0 && (
+                    <div className="mt-4 p-3 bg-amber-50 rounded-xl border border-amber-100">
+                      <div className="flex items-center gap-2 text-sm text-amber-800">
+                        <Building2 className="h-4 w-4" />
+                        <span>Selecteer een client hierboven voor gepersonaliseerde AI output</span>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </section>
+          </div>
+
+          {/* Getting Started Guide - only show if no clients */}
+          {clients.length === 0 && isAdmin && (
+            <section>
+              <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
+                <CardContent className="p-6">
+                  <h3 className="text-lg font-semibold text-surface-900 mb-4">
+                    Aan de slag met YourFellow Performance
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-full bg-primary text-black flex items-center justify-center font-bold text-sm">
+                        1
+                      </div>
+                      <div>
+                        <p className="font-medium text-surface-900">Client toevoegen</p>
+                        <p className="text-sm text-surface-600">Maak je eerste client aan</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-full bg-surface-200 text-surface-600 flex items-center justify-center font-bold text-sm">
+                        2
+                      </div>
+                      <div>
+                        <p className="font-medium text-surface-900">AI Context instellen</p>
+                        <p className="text-sm text-surface-600">Vul de client gegevens in</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-full bg-surface-200 text-surface-600 flex items-center justify-center font-bold text-sm">
+                        3
+                      </div>
+                      <div>
+                        <p className="font-medium text-surface-900">Start met genereren</p>
+                        <p className="text-sm text-surface-600">Gebruik de AI tools</p>
+                      </div>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
-            ))}
+            </section>
+          )}
+        </div>
+
+        {/* Right Column - Calendar (1/3) */}
+        <div className="lg:col-span-1">
+          <div className="sticky top-6">
+            <WeekOverview
+              key={calendarKey}
+              onAddEvent={() => setShowAddEvent(true)}
+              selectedClientId={selectedClient?.id}
+            />
           </div>
-        )}
-      </section>
-
-      {/* Calendar Week Overview */}
-      <section>
-        <WeekOverview
-          key={calendarKey}
-          onAddEvent={() => setShowAddEvent(true)}
-          selectedClientId={selectedClient?.id}
-        />
-      </section>
-
-      {/* AI Assistants & Quick Tools Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* AI Assistants */}
-        <section>
-          <div className="flex items-center gap-2 mb-4">
-            <Sparkles className="h-5 w-5 text-surface-500" />
-            <h2 className="text-lg font-semibold text-surface-900">AI Assistenten</h2>
-          </div>
-          <Card>
-            <CardContent className="p-4 space-y-3">
-              <p className="text-sm text-surface-600 mb-2">
-                {selectedClient
-                  ? `Chat met onze AI assistenten over ${selectedClient.name}`
-                  : 'Selecteer eerst een client om context-aware hulp te krijgen'}
-              </p>
-              {aiAssistants.map((assistant) => (
-                <Link
-                  key={assistant.slug}
-                  href={`/chat/${assistant.slug}`}
-                  className="flex items-center gap-3 p-3 rounded-xl hover:bg-surface-50 transition-colors border border-transparent hover:border-surface-200"
-                >
-                  <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold"
-                    style={{ backgroundColor: assistant.color }}
-                  >
-                    {assistant.name.charAt(0)}
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-surface-900">{assistant.name}</p>
-                    <p className="text-xs text-surface-500">{assistant.description}</p>
-                  </div>
-                  <MessageSquare className="h-4 w-4 text-surface-400" />
-                </Link>
-              ))}
-              <Link href="/chat" className="block">
-                <Button variant="outline" className="w-full mt-2">
-                  Alle gesprekken bekijken
-                  <ArrowRight className="h-4 w-4 ml-2" />
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-        </section>
-
-        {/* Quick Tools */}
-        <section>
-          <div className="flex items-center gap-2 mb-4">
-            <BarChart3 className="h-5 w-5 text-surface-500" />
-            <h2 className="text-lg font-semibold text-surface-900">Snelle Tools</h2>
-          </div>
-          <Card>
-            <CardContent className="p-4">
-              <p className="text-sm text-surface-600 mb-4">
-                {selectedClient
-                  ? `Genereer content voor ${selectedClient.name}`
-                  : 'Gebruik onze AI tools voor marketing taken'}
-              </p>
-              <div className="space-y-2">
-                {quickTools.map((tool) => {
-                  const Icon = tool.icon
-                  return (
-                    <Link
-                      key={tool.name}
-                      href={tool.href}
-                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-surface-50 transition-colors border border-transparent hover:border-surface-200"
-                    >
-                      <div className={cn('p-2.5 rounded-xl', tool.color)}>
-                        <Icon className="h-5 w-5" />
-                      </div>
-                      <span className="font-medium text-surface-700">{tool.name}</span>
-                      <ChevronRight className="h-4 w-4 text-surface-400 ml-auto" />
-                    </Link>
-                  )
-                })}
-              </div>
-
-              {/* Client context reminder */}
-              {selectedClient && (
-                <div className="mt-4 p-3 bg-primary/5 rounded-xl border border-primary/10">
-                  <div className="flex items-center gap-2 text-sm">
-                    <Brain className="h-4 w-4 text-primary" />
-                    <span className="text-surface-700">
-                      AI output wordt aangepast aan de context van <strong>{selectedClient.name}</strong>
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {!selectedClient && clients.length > 0 && (
-                <div className="mt-4 p-3 bg-amber-50 rounded-xl border border-amber-100">
-                  <div className="flex items-center gap-2 text-sm text-amber-800">
-                    <Building2 className="h-4 w-4" />
-                    <span>Selecteer een client hierboven voor gepersonaliseerde AI output</span>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </section>
+        </div>
       </div>
-
-      {/* Getting Started Guide - only show if no clients */}
-      {clients.length === 0 && isAdmin && (
-        <section>
-          <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
-            <CardContent className="p-6">
-              <h3 className="text-lg font-semibold text-surface-900 mb-4">
-                Aan de slag met YourFellow Performance
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-primary text-black flex items-center justify-center font-bold text-sm">
-                    1
-                  </div>
-                  <div>
-                    <p className="font-medium text-surface-900">Client toevoegen</p>
-                    <p className="text-sm text-surface-600">Maak je eerste client aan</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-surface-200 text-surface-600 flex items-center justify-center font-bold text-sm">
-                    2
-                  </div>
-                  <div>
-                    <p className="font-medium text-surface-900">AI Context instellen</p>
-                    <p className="text-sm text-surface-600">Vul de client gegevens in</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-surface-200 text-surface-600 flex items-center justify-center font-bold text-sm">
-                    3
-                  </div>
-                  <div>
-                    <p className="font-medium text-surface-900">Start met genereren</p>
-                    <p className="text-sm text-surface-600">Gebruik de AI tools</p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </section>
-      )}
 
       {/* Add Event Dialog */}
       <AddEventDialog

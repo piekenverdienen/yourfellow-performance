@@ -206,118 +206,115 @@ export function WeekOverview({ onAddEvent, selectedClientId }: WeekOverviewProps
           </div>
         )}
 
-        {/* Main content grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
-          {/* Mini Calendar */}
-          <div className="px-5 pb-5">
-            {/* Weekday headers */}
-            <div className="grid grid-cols-7 mb-1">
-              {['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'].map((d) => (
-                <div key={d} className="text-center text-xs font-medium text-surface-400 py-1">
-                  {d}
+        {/* Mini Calendar */}
+        <div className="px-5 pb-4">
+          {/* Weekday headers */}
+          <div className="grid grid-cols-7 mb-1">
+            {['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'].map((d) => (
+              <div key={d} className="text-center text-xs font-medium text-surface-400 py-1">
+                {d}
+              </div>
+            ))}
+          </div>
+
+          {/* Calendar days */}
+          <div className="grid grid-cols-7 gap-0.5">
+            {calendarDays.slice(0, 35).map((date, idx) => {
+              const dayEvents = getEventsForDay(date)
+              const isCurrentMonth = isSameMonth(date, currentMonth)
+              const isCurrentDay = isToday(date)
+
+              // Get unique event colors for dots
+              const eventColors = dayEvents.slice(0, 3).map(e => e.color)
+
+              return (
+                <div
+                  key={idx}
+                  className={cn(
+                    'relative aspect-square flex flex-col items-center justify-center rounded-lg text-sm',
+                    !isCurrentMonth && 'text-surface-300',
+                    isCurrentMonth && 'text-surface-700',
+                    isCurrentDay && 'bg-primary text-black font-bold'
+                  )}
+                >
+                  <span>{format(date, 'd')}</span>
+                  {/* Event dots */}
+                  {eventColors.length > 0 && (
+                    <div className="flex gap-0.5 mt-0.5">
+                      {eventColors.map((color, i) => (
+                        <span
+                          key={i}
+                          className="w-1 h-1 rounded-full"
+                          style={{ backgroundColor: isCurrentDay ? '#000' : color }}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
+              )
+            })}
+          </div>
+        </div>
 
-            {/* Calendar days */}
-            <div className="grid grid-cols-7 gap-0.5">
-              {calendarDays.slice(0, 35).map((date, idx) => {
-                const dayEvents = getEventsForDay(date)
-                const isCurrentMonth = isSameMonth(date, currentMonth)
-                const isCurrentDay = isToday(date)
+        {/* Upcoming Events */}
+        <div className="bg-white/50 px-5 py-4 border-t border-surface-200/50">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="font-medium text-surface-700 text-sm">Marketingevents</h4>
+            {onAddEvent && (
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={onAddEvent}>
+                <Plus className="h-3 w-3 mr-1" />
+                Toevoegen
+              </Button>
+            )}
+          </div>
 
-                // Get unique event colors for dots
-                const eventColors = dayEvents.slice(0, 3).map(e => e.color)
+          {upcomingEvents.length === 0 ? (
+            <p className="text-sm text-surface-500 py-4 text-center">
+              Geen events deze maand
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {upcomingEvents.map((event) => {
+                const eventDate = parseISO(event.event_date)
 
                 return (
-                  <div
-                    key={idx}
-                    className={cn(
-                      'relative aspect-square flex flex-col items-center justify-center rounded-lg text-sm',
-                      !isCurrentMonth && 'text-surface-300',
-                      isCurrentMonth && 'text-surface-700',
-                      isCurrentDay && 'bg-primary text-black font-bold'
-                    )}
+                  <Link
+                    key={event.id}
+                    href="/calendar"
+                    className="block group"
                   >
-                    <span>{format(date, 'd')}</span>
-                    {/* Event dots */}
-                    {eventColors.length > 0 && (
-                      <div className="flex gap-0.5 mt-0.5">
-                        {eventColors.map((color, i) => (
-                          <span
-                            key={i}
-                            className="w-1 h-1 rounded-full"
-                            style={{ backgroundColor: isCurrentDay ? '#000' : color }}
-                          />
-                        ))}
+                    <div
+                      className="flex items-start gap-3 p-2 -mx-2 rounded-lg hover:bg-surface-100/50 transition-colors"
+                    >
+                      <div
+                        className="w-1 h-full min-h-[36px] rounded-full flex-shrink-0"
+                        style={{ backgroundColor: event.color }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p
+                          className="font-medium text-sm group-hover:text-primary transition-colors truncate"
+                          style={{ color: event.color }}
+                        >
+                          {event.title}
+                        </p>
+                        <p className="text-xs text-surface-500">
+                          {format(eventDate, 'd MMMM', { locale: nl })}
+                        </p>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  </Link>
                 )
               })}
             </div>
-          </div>
+          )}
 
-          {/* Upcoming Events */}
-          <div className="bg-white/50 px-5 py-4 border-l border-surface-200/50">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="font-medium text-surface-700 text-sm">Marketingevents</h4>
-              {onAddEvent && (
-                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={onAddEvent}>
-                  <Plus className="h-3 w-3 mr-1" />
-                  Toevoegen
-                </Button>
-              )}
-            </div>
-
-            {upcomingEvents.length === 0 ? (
-              <p className="text-sm text-surface-500 py-4 text-center">
-                Geen events deze maand
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {upcomingEvents.map((event) => {
-                  const eventDate = parseISO(event.event_date)
-
-                  return (
-                    <Link
-                      key={event.id}
-                      href="/calendar"
-                      className="block group"
-                    >
-                      <div
-                        className="flex items-start gap-3 p-2 -mx-2 rounded-lg hover:bg-surface-100/50 transition-colors"
-                      >
-                        <div
-                          className="w-1 h-full min-h-[40px] rounded-full flex-shrink-0"
-                          style={{ backgroundColor: event.color }}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p
-                            className="font-medium text-sm group-hover:text-primary transition-colors truncate"
-                            style={{ color: event.color }}
-                          >
-                            {event.title}
-                          </p>
-                          <p className="text-xs text-surface-500">
-                            {format(eventDate, 'd MMMM', { locale: nl })}
-                          </p>
-                        </div>
-                      </div>
-                    </Link>
-                  )
-                })}
-              </div>
-            )}
-
-            {/* View all link */}
-            <Link href="/calendar" className="block mt-3">
-              <Button variant="ghost" size="sm" className="w-full text-xs text-surface-600">
-                Bekijk volledige kalender
-                <ChevronRight className="h-3 w-3 ml-1" />
-              </Button>
-            </Link>
-          </div>
+          {/* View all link */}
+          <Link href="/calendar" className="block mt-3">
+            <Button variant="ghost" size="sm" className="w-full text-xs text-surface-600">
+              Bekijk volledige kalender
+              <ChevronRight className="h-3 w-3 ml-1" />
+            </Button>
+          </Link>
         </div>
       </CardContent>
     </Card>
