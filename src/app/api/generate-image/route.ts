@@ -243,7 +243,7 @@ async function generateWithGemini(
   parts.push({ text: prompt })
 
   const response = await genAI.models.generateContent({
-    model: 'gemini-2.0-flash-preview-image-generation',
+    model: 'gemini-2.0-flash-exp',
     contents: [{ role: 'user', parts }],
     config: {
       responseModalities: ['IMAGE', 'TEXT'],
