@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { MessageSquare, Clock, Trash2, Loader2 } from 'lucide-react'
+import { AssistantAvatar } from '@/components/assistant-avatars'
 import type { Assistant, Conversation } from '@/types'
 
 export default function ChatPage() {
@@ -118,12 +119,7 @@ export default function ChatPage() {
             >
               <CardContent className="p-6">
                 <div className="flex items-start gap-4">
-                  <div
-                    className="w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold text-white shrink-0"
-                    style={{ backgroundColor: assistant.avatar_color }}
-                  >
-                    {assistant.avatar_letter}
-                  </div>
+                  <AssistantAvatar slug={assistant.slug} size="lg" />
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-surface-900">{assistant.name}</h3>
                     <p className="text-sm text-surface-600 mt-1 line-clamp-2">
@@ -154,12 +150,10 @@ export default function ChatPage() {
               >
                 <CardContent className="p-4">
                   <div className="flex items-center gap-4">
-                    <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0"
-                      style={{ backgroundColor: conversation.assistant?.avatar_color || '#00FFCC' }}
-                    >
-                      {conversation.assistant?.avatar_letter || '?'}
-                    </div>
+                    <AssistantAvatar
+                      slug={conversation.assistant?.slug || ''}
+                      size="md"
+                    />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-surface-500">

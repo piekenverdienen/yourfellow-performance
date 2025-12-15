@@ -22,7 +22,9 @@ import {
   Type,
   Tags,
   Brain,
+  Zap,
 } from 'lucide-react'
+import { AssistantAvatar } from '@/components/assistant-avatars'
 import { getGreeting } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import type { ClientWithRole } from '@/types'
@@ -90,25 +92,49 @@ export default function DashboardPage() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
-      {/* Welcome Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-surface-900">
-            {greeting} {userName}!
-          </h1>
-          <p className="text-surface-600 mt-1">
-            Welkom bij YourFellow Performance. Selecteer een client om te beginnen.
-          </p>
-        </div>
-        {selectedClient && (
-          <div className="flex items-center gap-3 px-4 py-2 bg-primary/5 rounded-xl border border-primary/20">
-            <Building2 className="h-5 w-5 text-primary" />
-            <div>
-              <p className="text-xs text-surface-500">Actieve client</p>
-              <p className="font-semibold text-surface-900">{selectedClient.name}</p>
+      {/* Welcome Header - Premium Gradient */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-surface-900 via-surface-800 to-surface-900 p-6 md:p-8">
+        {/* Decorative elements */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-primary/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+        <div className="absolute bottom-0 left-0 w-48 h-48 bg-primary/10 rounded-full blur-2xl translate-y-1/2 -translate-x-1/2" />
+
+        <div className="relative flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Zap className="h-5 w-5 text-primary" />
+              <span className="text-primary text-sm font-medium">YourFellow Performance</span>
             </div>
+            <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">
+              {greeting} {userName}!
+            </h1>
+            <p className="text-surface-400 max-w-md">
+              {selectedClient
+                ? `Je werkt momenteel aan ${selectedClient.name}. Gebruik de AI tools om content te genereren.`
+                : 'Selecteer een client om te beginnen met AI-powered marketing.'}
+            </p>
           </div>
-        )}
+          {selectedClient && (
+            <div className="hidden md:flex items-center gap-3 px-5 py-3 bg-white/10 backdrop-blur-sm rounded-xl border border-white/10">
+              <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
+                {selectedClient.logo_url ? (
+                  <img
+                    src={selectedClient.logo_url}
+                    alt={selectedClient.name}
+                    className="w-10 h-10 rounded-lg object-cover"
+                  />
+                ) : (
+                  <span className="text-lg font-bold text-primary">
+                    {selectedClient.name.charAt(0).toUpperCase()}
+                  </span>
+                )}
+              </div>
+              <div>
+                <p className="text-xs text-surface-400">Actieve client</p>
+                <p className="font-semibold text-white">{selectedClient.name}</p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Clients Section */}
@@ -245,19 +271,14 @@ export default function DashboardPage() {
                 <Link
                   key={assistant.slug}
                   href={`/chat/${assistant.slug}`}
-                  className="flex items-center gap-3 p-3 rounded-xl hover:bg-surface-50 transition-colors border border-transparent hover:border-surface-200"
+                  className="flex items-center gap-3 p-3 rounded-xl hover:bg-surface-50 transition-all hover:shadow-sm border border-transparent hover:border-surface-200 group"
                 >
-                  <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold"
-                    style={{ backgroundColor: assistant.color }}
-                  >
-                    {assistant.name.charAt(0)}
-                  </div>
+                  <AssistantAvatar slug={assistant.slug} size="md" />
                   <div className="flex-1">
                     <p className="font-medium text-surface-900">{assistant.name}</p>
                     <p className="text-xs text-surface-500">{assistant.description}</p>
                   </div>
-                  <MessageSquare className="h-4 w-4 text-surface-400" />
+                  <MessageSquare className="h-4 w-4 text-surface-400 group-hover:text-primary transition-colors" />
                 </Link>
               ))}
               <Link href="/chat" className="block">
