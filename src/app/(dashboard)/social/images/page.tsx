@@ -1,10 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useSelectedClientId } from '@/stores/client-store'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
 import {
@@ -15,25 +14,28 @@ import {
   Wand2,
   Copy,
   CheckCircle,
-  Palette,
   Maximize,
+  Upload,
+  X,
+  Cpu,
 } from 'lucide-react'
-import { cn, copyToClipboard } from '@/lib/utils'
+import { copyToClipboard } from '@/lib/utils'
+
+const modelOptions = [
+  { value: 'gpt-image', label: 'GPT Image (OpenAI)' },
+  { value: 'gemini-flash', label: 'Gemini 2.0 Flash (Google)' },
+]
 
 const sizeOptions = [
   { value: '1024x1024', label: 'Vierkant (1024x1024)' },
-  { value: '1792x1024', label: 'Landschap (1792x1024)' },
-  { value: '1024x1792', label: 'Portret (1024x1792)' },
-]
-
-const styleOptions = [
-  { value: 'vivid', label: 'Vivid - Levendig & dramatisch' },
-  { value: 'natural', label: 'Natural - Realistisch & subtiel' },
+  { value: '1536x1024', label: 'Landschap (1536x1024)' },
+  { value: '1024x1536', label: 'Portret (1024x1536)' },
 ]
 
 const qualityOptions = [
-  { value: 'standard', label: 'Standard - Sneller, goedkoper' },
-  { value: 'hd', label: 'HD - Meer detail, hogere kwaliteit' },
+  { value: 'low', label: 'Low - Snelste, goedkoopste' },
+  { value: 'medium', label: 'Medium - Balans kwaliteit/snelheid' },
+  { value: 'high', label: 'High - Beste kwaliteit' },
 ]
 
 const templatePrompts = [
@@ -49,9 +51,9 @@ export default function ImageGeneratorPage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [formData, setFormData] = useState({
     prompt: '',
+    model: 'gpt-image',
     size: '1024x1024',
-    style: 'vivid',
-    quality: 'standard',
+    quality: 'medium',
   })
   const [generatedImage, setGeneratedImage] = useState<{
     url: string
@@ -60,6 +62,62 @@ export default function ImageGeneratorPage() {
   const [error, setError] = useState<string | null>(null)
   const [copiedPrompt, setCopiedPrompt] = useState(false)
 
+  // Reference image state
+  const [referenceImage, setReferenceImage] = useState<File | null>(null)
+  const [referencePreview, setReferencePreview] = useState<string | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleFileSelect = (file: File) => {
+    // Validate file type
+    const validTypes = ['image/png', 'image/jpeg', 'image/webp']
+    if (!validTypes.includes(file.type)) {
+      setError('Alleen PNG, JPEG en WebP bestanden zijn toegestaan.')
+      return
+    }
+
+    // Validate file size (max 25MB)
+    if (file.size > 25 * 1024 * 1024) {
+      setError('Bestand is te groot. Maximum is 25MB.')
+      return
+    }
+
+    setReferenceImage(file)
+    setReferencePreview(URL.createObjectURL(file))
+    setError(null)
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+
+    const file = e.dataTransfer.files[0]
+    if (file) {
+      handleFileSelect(file)
+    }
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+  }
+
+  const removeReferenceImage = () => {
+    setReferenceImage(null)
+    if (referencePreview) {
+      URL.revokeObjectURL(referencePreview)
+    }
+    setReferencePreview(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
   const handleGenerate = async () => {
     if (!formData.prompt.trim()) return
 
@@ -67,19 +125,40 @@ export default function ImageGeneratorPage() {
     setError(null)
 
     try {
-      const response = await fetch('/api/generate-image', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          prompt: formData.prompt,
-          size: formData.size,
-          style: formData.style,
-          quality: formData.quality,
-          clientId: clientId || undefined,
-        }),
-      })
+      let response: Response
+
+      if (referenceImage) {
+        // Use FormData when there's a reference image
+        const formDataObj = new FormData()
+        formDataObj.append('prompt', formData.prompt)
+        formDataObj.append('model', formData.model)
+        formDataObj.append('size', formData.size)
+        formDataObj.append('quality', formData.quality)
+        formDataObj.append('referenceImage', referenceImage)
+        if (clientId) {
+          formDataObj.append('clientId', clientId)
+        }
+
+        response = await fetch('/api/generate-image', {
+          method: 'POST',
+          body: formDataObj,
+        })
+      } else {
+        // Use JSON when there's no reference image
+        response = await fetch('/api/generate-image', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            prompt: formData.prompt,
+            model: formData.model,
+            size: formData.size,
+            quality: formData.quality,
+            clientId: clientId || undefined,
+          }),
+        })
+      }
 
       const data = await response.json()
 
@@ -144,7 +223,7 @@ export default function ImageGeneratorPage() {
           <h1 className="text-2xl font-bold font-display text-surface-900">AI Afbeelding Generator</h1>
         </div>
         <p className="text-surface-600">
-          Genereer unieke afbeeldingen met DALL-E 3 voor je social media en marketing.
+          Genereer unieke afbeeldingen met AI voor je social media en marketing.
         </p>
       </div>
 
@@ -159,6 +238,24 @@ export default function ImageGeneratorPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
+              {/* Model Selector */}
+              <div>
+                <label className="label flex items-center gap-2">
+                  <Cpu className="h-4 w-4" />
+                  AI Model
+                </label>
+                <Select
+                  options={modelOptions}
+                  value={formData.model}
+                  onChange={(e) => setFormData({ ...formData, model: e.target.value })}
+                />
+                <p className="text-xs text-surface-500 mt-1">
+                  {formData.model === 'gpt-image'
+                    ? 'Beste voor complexe instructies en tekst in afbeeldingen'
+                    : 'Sneller en goedkoper, goed voor fotorealisme (beperkte regio-beschikbaarheid)'}
+                </p>
+              </div>
+
               <div>
                 <label className="label">Prompt</label>
                 <Textarea
@@ -167,6 +264,68 @@ export default function ImageGeneratorPage() {
                   onChange={(e) => setFormData({ ...formData, prompt: e.target.value })}
                   className="min-h-[120px]"
                 />
+              </div>
+
+              {/* Reference Image Upload */}
+              <div>
+                <label className="label flex items-center gap-2">
+                  <Upload className="h-4 w-4" />
+                  Referentie afbeelding (optioneel)
+                </label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) handleFileSelect(file)
+                  }}
+                />
+
+                {referencePreview ? (
+                  <div className="relative rounded-lg overflow-hidden border border-surface-200">
+                    <img
+                      src={referencePreview}
+                      alt="Reference"
+                      className="w-full h-32 object-cover"
+                    />
+                    <button
+                      onClick={removeReferenceImage}
+                      className="absolute top-2 right-2 p-1 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs px-2 py-1">
+                      {referenceImage?.name}
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    onDrop={handleDrop}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    className={`
+                      border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors
+                      ${isDragging
+                        ? 'border-primary bg-primary/5'
+                        : 'border-surface-300 hover:border-surface-400 hover:bg-surface-50'
+                      }
+                    `}
+                  >
+                    <Upload className="h-6 w-6 mx-auto mb-2 text-surface-400" />
+                    <p className="text-sm text-surface-600">
+                      Sleep een afbeelding of <span className="text-primary font-medium">klik om te uploaden</span>
+                    </p>
+                    <p className="text-xs text-surface-400 mt-1">
+                      PNG, JPEG, WebP (max 25MB)
+                    </p>
+                  </div>
+                )}
+                <p className="text-xs text-surface-500 mt-1">
+                  Upload een afbeelding om te bewerken of als referentie te gebruiken
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -182,28 +341,13 @@ export default function ImageGeneratorPage() {
                   />
                 </div>
                 <div>
-                  <label className="label flex items-center gap-2">
-                    <Palette className="h-4 w-4" />
-                    Stijl
-                  </label>
+                  <label className="label">Kwaliteit</label>
                   <Select
-                    options={styleOptions}
-                    value={formData.style}
-                    onChange={(e) => setFormData({ ...formData, style: e.target.value })}
+                    options={qualityOptions}
+                    value={formData.quality}
+                    onChange={(e) => setFormData({ ...formData, quality: e.target.value })}
                   />
                 </div>
-              </div>
-
-              <div>
-                <label className="label">Kwaliteit</label>
-                <Select
-                  options={qualityOptions}
-                  value={formData.quality}
-                  onChange={(e) => setFormData({ ...formData, quality: e.target.value })}
-                />
-                <p className="text-xs text-surface-500 mt-1">
-                  HD kost meer credits maar geeft meer detail
-                </p>
               </div>
 
               <Button
@@ -289,8 +433,12 @@ export default function ImageGeneratorPage() {
                 <div className="w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center mb-4">
                   <Sparkles className="h-8 w-8 text-primary animate-pulse" />
                 </div>
-                <p className="text-surface-600 font-medium">DALL-E is aan het creeren...</p>
-                <p className="text-sm text-surface-400 mt-1">Dit duurt meestal 10-20 seconden</p>
+                <p className="text-surface-600 font-medium">
+                  {formData.model === 'gpt-image' ? 'GPT Image' : 'Gemini Flash'} is aan het creëren...
+                </p>
+                <p className="text-sm text-surface-400 mt-1">
+                  Dit duurt meestal {formData.model === 'gpt-image' ? '10-20' : '5-15'} seconden
+                </p>
                 <div className="mt-4 w-48 h-1 bg-surface-200 rounded-full overflow-hidden">
                   <div className="h-full bg-primary animate-pulse" style={{ width: '60%' }} />
                 </div>
@@ -309,7 +457,7 @@ export default function ImageGeneratorPage() {
                 {/* Revised Prompt */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-medium text-surface-700">Gebruikte prompt (door DALL-E verfijnd)</h4>
+                    <h4 className="text-sm font-medium text-surface-700">Gebruikte prompt</h4>
                     <Button
                       variant="ghost"
                       size="sm"
