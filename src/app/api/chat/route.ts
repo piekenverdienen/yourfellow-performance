@@ -214,8 +214,11 @@ export async function POST(request: NextRequest) {
       .limit(50)
 
     // Build message history for Claude (filter out empty messages)
+    const rawMessages = messages || []
+    console.log('Raw messages from DB:', rawMessages.map(m => ({ role: m.role, contentLength: m.content?.length || 0, isEmpty: !m.content || m.content.trim() === '' })))
+
     const messageHistory: { role: 'user' | 'assistant'; content: string }[] =
-      (messages || [])
+      rawMessages
         .filter(m => m.content && m.content.trim() !== '')
         .map(m => ({
           role: m.role as 'user' | 'assistant',
@@ -224,6 +227,8 @@ export async function POST(request: NextRequest) {
 
     // Add current message
     messageHistory.push({ role: 'user', content: message })
+
+    console.log('Final messageHistory length:', messageHistory.length)
 
     // Build system prompt with user and client context
     let systemPrompt = assistant.system_prompt
@@ -352,6 +357,13 @@ export async function POST(request: NextRequest) {
                 { role: 'assistant', content: initialResponse.content },
                 { role: 'user', content: toolResults },
               ]
+
+              // Debug: log the messages to check for empty content
+              console.log('Messages with tool results:', JSON.stringify(messagesWithToolResults.map(m => ({
+                role: m.role,
+                contentLength: Array.isArray(m.content) ? m.content.length : (m.content as string)?.length || 0,
+                contentType: Array.isArray(m.content) ? m.content.map(c => c.type) : typeof m.content
+              })), null, 2))
 
               controller.enqueue(
                 encoder.encode(`data: ${JSON.stringify({ type: 'status', status: 'thinking', message: '💭 Verwerken van resultaten...' })}\n\n`)
