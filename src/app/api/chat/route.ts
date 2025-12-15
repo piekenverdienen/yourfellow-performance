@@ -389,29 +389,46 @@ export async function POST(request: NextRequest) {
               )
 
               // Stream the final response after tool use
-              const finalResponse = await anthropic.messages.create({
-                model: assistant.model || 'claude-sonnet-4-20250514',
-                max_tokens: assistant.max_tokens || 4096,
-                system: systemPrompt,
-                messages: messagesWithToolResults,
-                stream: true,
-              })
+              console.log('Making final API call with tool results...')
+              try {
+                const finalResponse = await anthropic.messages.create({
+                  model: assistant.model || 'claude-sonnet-4-20250514',
+                  max_tokens: assistant.max_tokens || 4096,
+                  system: systemPrompt,
+                  messages: messagesWithToolResults,
+                  stream: true,
+                })
 
-              for await (const event of finalResponse) {
-                if (event.type === 'content_block_delta') {
-                  const delta = event.delta
-                  if ('text' in delta) {
-                    fullResponse += delta.text
-                    controller.enqueue(
-                      encoder.encode(`data: ${JSON.stringify({ type: 'text', content: delta.text })}\n\n`)
-                    )
+                console.log('Final response stream started')
+                let eventCount = 0
+
+                for await (const event of finalResponse) {
+                  eventCount++
+                  console.log('Stream event:', event.type)
+
+                  if (event.type === 'content_block_delta') {
+                    const delta = event.delta
+                    if ('text' in delta) {
+                      fullResponse += delta.text
+                      controller.enqueue(
+                        encoder.encode(`data: ${JSON.stringify({ type: 'text', content: delta.text })}\n\n`)
+                      )
+                    }
+                  }
+                  if (event.type === 'message_delta') {
+                    if (event.usage) {
+                      totalTokens += event.usage.output_tokens
+                    }
+                  }
+                  if (event.type === 'error') {
+                    console.error('Stream error event:', event)
                   }
                 }
-                if (event.type === 'message_delta') {
-                  if (event.usage) {
-                    totalTokens += event.usage.output_tokens
-                  }
-                }
+
+                console.log('Stream finished. Events:', eventCount, 'Response length:', fullResponse.length)
+              } catch (streamError) {
+                console.error('Final response stream error:', streamError)
+                throw streamError
               }
             } else {
               // No tool use needed - extract text from initial response
