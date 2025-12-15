@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -19,6 +19,10 @@ import {
 } from 'lucide-react'
 import type { ClickUpTask, ClickUpStatus } from '@/types'
 import { formatDueDate, isTaskClosed, getPriorityColor } from '@/lib/clickup'
+
+// Simple in-memory cache for tasks per client
+const tasksCache = new Map<string, { tasks: ClickUpTask[]; statuses: ClickUpStatus[]; timestamp: number }>()
+const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
 
 interface ClickUpTasksProps {
   clientId: string
@@ -48,8 +52,20 @@ export function ClickUpTasks({
   const [showClosed, setShowClosed] = useState(false)
   const [expandedTask, setExpandedTask] = useState<string | null>(null)
 
-  const fetchTasks = useCallback(async () => {
+  const fetchTasks = useCallback(async (forceRefresh = false) => {
     if (!listId) {
+      setLoading(false)
+      return
+    }
+
+    const cacheKey = `${clientId}-${listId}-${showClosed}`
+    const cached = tasksCache.get(cacheKey)
+    const now = Date.now()
+
+    // Use cache if valid and not forcing refresh
+    if (!forceRefresh && cached && (now - cached.timestamp) < CACHE_DURATION) {
+      setTasks(cached.tasks)
+      setStatuses(cached.statuses)
       setLoading(false)
       return
     }
@@ -67,15 +83,25 @@ export function ClickUpTasks({
         throw new Error(data.error)
       }
 
-      setTasks(data.tasks || [])
+      const fetchedTasks = data.tasks || []
+      setTasks(fetchedTasks)
 
       // Also fetch list statuses
       const listRes = await fetch(`/api/clickup/lists?listId=${listId}`)
       const listData = await listRes.json()
 
+      let fetchedStatuses: ClickUpStatus[] = []
       if (listRes.ok && listData.list?.statuses) {
-        setStatuses(listData.list.statuses)
+        fetchedStatuses = listData.list.statuses
+        setStatuses(fetchedStatuses)
       }
+
+      // Update cache
+      tasksCache.set(cacheKey, {
+        tasks: fetchedTasks,
+        statuses: fetchedStatuses,
+        timestamp: now,
+      })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Fout bij ophalen van taken')
     } finally {
@@ -110,6 +136,10 @@ export function ClickUpTasks({
       setTasks((prev) =>
         prev.map((t) => (t.id === taskId ? data.task : t))
       )
+
+      // Invalidate cache so next fetch gets fresh data
+      const cacheKey = `${clientId}-${listId}-${showClosed}`
+      tasksCache.delete(cacheKey)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Fout bij bijwerken van taak')
     } finally {
@@ -253,7 +283,7 @@ export function ClickUpTasks({
             <Button
               variant="ghost"
               size="sm"
-              onClick={fetchTasks}
+              onClick={() => fetchTasks(true)}
               disabled={loading}
             >
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
