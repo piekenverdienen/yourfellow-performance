@@ -1,9 +1,13 @@
 -- 2026 Marketing Calendar Seed Data
 -- Run this after running supabase-calendar-migration.sql
 -- These are global events visible to all users
+-- Safe to run multiple times - duplicates are skipped
 
--- First, get an admin user ID for created_by (replace with actual admin UUID if needed)
--- In production, run this after a user exists
+-- First clear existing 2026 global events to avoid duplicates
+DELETE FROM marketing_events
+WHERE is_global = true
+AND event_date >= '2026-01-01'
+AND event_date <= '2026-12-31';
 
 -- Nederlandse feestdagen en marketing momenten 2026
 INSERT INTO marketing_events (title, description, event_date, event_type, color, is_global, created_by) VALUES
@@ -38,33 +42,18 @@ INSERT INTO marketing_events (title, description, event_date, event_type, color,
 
 -- Q4 2026
 ('Start Herfstvakantie', 'Herfstvakantie campagnes', '2026-10-17', 'campaign', '#F59E0B', true, NULL),
-('Halloween', 'Griezelige campagnes', '2026-10-31', 'campaign', '#F97316', true, NULL),
 ('Wintertijd Start', 'Klokken 1 uur terug', '2026-10-25', 'life', '#60A5FA', true, NULL),
+('Halloween', 'Griezelige campagnes', '2026-10-31', 'campaign', '#F97316', true, NULL),
 ('Singles Day (11.11)', 'Chinese shopping dag - grote sales', '2026-11-11', 'sale', '#EF4444', true, NULL),
 ('Sint Maarten', 'Lampionnen en zoetigheid', '2026-11-11', 'holiday', '#F59E0B', true, NULL),
 ('Black Friday', 'Grootste sale dag van het jaar!', '2026-11-27', 'sale', '#000000', true, NULL),
 ('Small Business Saturday', 'Support lokale ondernemers', '2026-11-28', 'campaign', '#22C55E', true, NULL),
 ('Cyber Monday', 'Online sale dag', '2026-11-30', 'sale', '#3B82F6', true, NULL),
-('Sinterklaas', 'Pakjesavond - laatste cadeau rush', '2026-12-05', 'holiday', '#EF4444', true, NULL),
 ('Groene Vrijdag', 'Duurzame Black Friday alternatief', '2026-12-04', 'campaign', '#22C55E', true, NULL),
+('Sinterklaas', 'Pakjesavond - laatste cadeau rush', '2026-12-05', 'holiday', '#EF4444', true, NULL),
 ('Free Shipping Day', 'Gratis verzending campagnes', '2026-12-14', 'sale', '#3B82F6', true, NULL),
 ('Laatste Besteldag Kerst', 'Deadline voor kerst bezorging', '2026-12-21', 'deadline', '#EF4444', true, NULL),
 ('Kerstavond', 'Start kerstperiode', '2026-12-24', 'holiday', '#22C55E', true, NULL),
 ('Eerste Kerstdag', 'Kerstdag', '2026-12-25', 'holiday', '#22C55E', true, NULL),
 ('Tweede Kerstdag', 'Boxing Day sales', '2026-12-26', 'holiday', '#22C55E', true, NULL),
 ('Oudejaarsavond', 'Einde jaar campagnes', '2026-12-31', 'holiday', '#FFD700', true, NULL);
-
--- Additional marketing events without specific dates (examples for clients to use)
--- These are suggestions, not inserted by default
-
-/*
-Marketing momenten om te overwegen voor je clients:
-- Product launches
-- Seizoensgebonden campagnes (lente/zomer/herfst/winter collectie)
-- Jubilea en bedrijfsverjaardagen
-- Branche-specifieke beurzen
-- Influencer samenwerkingen
-- Email campagne deadlines
-- Content publicatie data
-- Social media speciale dagen (#NationalePizzadag etc.)
-*/

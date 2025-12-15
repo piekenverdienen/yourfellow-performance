@@ -26,6 +26,8 @@ import {
 import { useUser } from '@/hooks/use-user'
 import { useClientStore } from '@/stores/client-store'
 import { ClientContextForm } from '@/components/client-context-form'
+import { LogoUpload } from '@/components/logo-upload'
+import { ClientLogo } from '@/components/client-logo'
 import type { Client, ClientMemberRole, ClientContext, User } from '@/types'
 
 interface ClientMember {
@@ -260,19 +262,12 @@ export default function ClientDetailPage() {
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex items-center gap-3 flex-1">
-          <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-            {client.logo_url ? (
-              <img
-                src={client.logo_url}
-                alt={client.name}
-                className="w-12 h-12 rounded-xl object-cover"
-              />
-            ) : (
-              <span className="text-xl font-bold text-primary">
-                {client.name.charAt(0).toUpperCase()}
-              </span>
-            )}
-          </div>
+          <ClientLogo
+            name={client.name}
+            logoUrl={client.logo_url}
+            size="lg"
+            className="rounded-xl"
+          />
           <div>
             <h1 className="text-xl font-bold text-surface-900">{client.name}</h1>
             <Badge variant={['owner', 'admin'].includes(client.role) ? 'default' : 'secondary'}>
@@ -551,48 +546,69 @@ export default function ClientDetailPage() {
       )}
 
       {activeTab === 'settings' && isAdmin && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Client Instellingen</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-surface-700 mb-1.5">
-                Naam *
-              </label>
-              <Input
-                value={editedName}
-                onChange={(e) => setEditedName(e.target.value)}
-                placeholder="Client naam"
+        <div className="space-y-6">
+          {/* Logo Upload */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Logo</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <LogoUpload
+                clientId={id}
+                clientName={client.name}
+                currentLogoUrl={client.logo_url}
+                onLogoChange={(newUrl) => {
+                  setClient((prev) => prev ? { ...prev, logo_url: newUrl } : prev)
+                  fetchClients() // Refresh global client list
+                }}
               />
-            </div>
+            </CardContent>
+          </Card>
 
-            <div>
-              <label className="block text-sm font-medium text-surface-700 mb-1.5">
-                Beschrijving
-              </label>
-              <Input
-                value={editedDescription}
-                onChange={(e) => setEditedDescription(e.target.value)}
-                placeholder="Korte beschrijving"
-              />
-            </div>
+          {/* General Settings */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Algemene Instellingen</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-surface-700 mb-1.5">
+                  Naam *
+                </label>
+                <Input
+                  value={editedName}
+                  onChange={(e) => setEditedName(e.target.value)}
+                  placeholder="Client naam"
+                />
+              </div>
 
-            <div className="pt-4 border-t border-surface-100">
-              <Button
-                onClick={saveClientSettings}
-                disabled={!editedName.trim() || saving}
-              >
-                {saving ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4 mr-2" />
-                )}
-                Opslaan
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+              <div>
+                <label className="block text-sm font-medium text-surface-700 mb-1.5">
+                  Beschrijving
+                </label>
+                <Input
+                  value={editedDescription}
+                  onChange={(e) => setEditedDescription(e.target.value)}
+                  placeholder="Korte beschrijving"
+                />
+              </div>
+
+              <div className="pt-4 border-t border-surface-100">
+                <Button
+                  onClick={saveClientSettings}
+                  disabled={!editedName.trim() || saving}
+                >
+                  {saving ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4 mr-2" />
+                  )}
+                  Opslaan
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   )
