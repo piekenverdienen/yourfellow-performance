@@ -39,6 +39,7 @@ export default function ChatInterfacePage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
+  const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [pageLoading, setPageLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -156,6 +157,7 @@ export default function ChatInterfacePage() {
     setIsLoading(true)
     setIsStreaming(true)
     setStreamingContent('')
+    setStatusMessage(null)
 
     // Optimistically add user message
     const tempUserMessage: Message = {
@@ -210,12 +212,18 @@ export default function ChatInterfacePage() {
                   '',
                   `/chat/${assistantId}?conversation=${data.id}`
                 )
+              } else if (data.type === 'status') {
+                // Show status updates (searching, thinking, etc.)
+                setStatusMessage(data.message)
               } else if (data.type === 'text') {
+                setStatusMessage(null) // Clear status when text starts
                 fullContent += data.content
                 setStreamingContent(fullContent)
               } else if (data.type === 'done') {
+                setStatusMessage(null)
                 // Streaming complete
               } else if (data.type === 'error') {
+                setStatusMessage(null)
                 console.error('Stream error:', data.message)
               }
             } catch {
@@ -246,6 +254,7 @@ export default function ChatInterfacePage() {
     } finally {
       setIsLoading(false)
       setIsStreaming(false)
+      setStatusMessage(null)
     }
   }
 
@@ -463,7 +472,7 @@ export default function ChatInterfacePage() {
             </div>
           )}
 
-          {/* Loading indicator */}
+          {/* Loading indicator with status */}
           {isLoading && !streamingContent && (
             <div className="flex gap-3 justify-start">
               <div
@@ -475,7 +484,9 @@ export default function ChatInterfacePage() {
               <Card className="px-4 py-3 bg-white">
                 <div className="flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin text-surface-400" />
-                  <span className="text-sm text-surface-500">Aan het typen...</span>
+                  <span className="text-sm text-surface-500">
+                    {statusMessage || 'Aan het typen...'}
+                  </span>
                 </div>
               </Card>
             </div>
