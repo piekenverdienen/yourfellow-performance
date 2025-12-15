@@ -22,6 +22,7 @@ import {
 import type { Assistant, Conversation, Message } from '@/types'
 import { cn } from '@/lib/utils'
 import ReactMarkdown from 'react-markdown'
+import { AssistantAvatar } from '@/components/assistant-avatars'
 
 export default function ChatInterfacePage() {
   const params = useParams()
@@ -316,12 +317,7 @@ export default function ChatInterfacePage() {
               <ArrowLeft className="h-5 w-5 text-surface-600" />
             </Link>
             <div className="flex items-center gap-3">
-              <div
-                className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white"
-                style={{ backgroundColor: assistant.avatar_color }}
-              >
-                {assistant.avatar_letter}
-              </div>
+              <AssistantAvatar slug={assistant.slug} size="md" />
               <div>
                 <h2 className="font-semibold text-surface-900">{assistant.name}</h2>
               </div>
@@ -391,12 +387,7 @@ export default function ChatInterfacePage() {
           </button>
           {!sidebarOpen && (
             <div className="flex items-center gap-3">
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white"
-                style={{ backgroundColor: assistant.avatar_color }}
-              >
-                {assistant.avatar_letter}
-              </div>
+              <AssistantAvatar slug={assistant.slug} size="sm" />
               <span className="font-medium text-surface-900">{assistant.name}</span>
             </div>
           )}
@@ -406,11 +397,8 @@ export default function ChatInterfacePage() {
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {messages.length === 0 && !isStreaming && (
             <div className="flex flex-col items-center justify-center h-full text-center">
-              <div
-                className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold text-white mb-4"
-                style={{ backgroundColor: assistant.avatar_color }}
-              >
-                {assistant.avatar_letter}
+              <div className="mb-4">
+                <AssistantAvatar slug={assistant.slug} size="lg" className="w-16 h-16" />
               </div>
               <h3 className="text-lg font-semibold text-surface-900">{assistant.name}</h3>
               <p className="text-surface-600 max-w-md mt-2">{assistant.description}</p>
@@ -429,12 +417,7 @@ export default function ChatInterfacePage() {
               )}
             >
               {message.role === 'assistant' && (
-                <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
-                  style={{ backgroundColor: assistant.avatar_color }}
-                >
-                  {assistant.avatar_letter}
-                </div>
+                <AssistantAvatar slug={assistant.slug} size="sm" />
               )}
               <Card
                 className={cn(
@@ -459,12 +442,7 @@ export default function ChatInterfacePage() {
           {/* Streaming message */}
           {isStreaming && streamingContent && (
             <div className="flex gap-3 justify-start">
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
-                style={{ backgroundColor: assistant.avatar_color }}
-              >
-                {assistant.avatar_letter}
-              </div>
+              <AssistantAvatar slug={assistant.slug} size="sm" />
               <Card className="max-w-[80%] px-4 py-3 bg-white">
                 <div className="prose prose-sm max-w-none">
                   <ReactMarkdown>{streamingContent}</ReactMarkdown>
@@ -476,12 +454,7 @@ export default function ChatInterfacePage() {
           {/* Loading indicator with status */}
           {isLoading && !streamingContent && (
             <div className="flex gap-3 justify-start">
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
-                style={{ backgroundColor: assistant.avatar_color }}
-              >
-                {assistant.avatar_letter}
-              </div>
+              <AssistantAvatar slug={assistant.slug} size="sm" />
               <Card className="px-4 py-3 bg-white">
                 <div className="flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin text-surface-400" />

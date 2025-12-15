@@ -16,6 +16,7 @@ import {
   ExternalLink,
 } from 'lucide-react'
 import { useUser } from '@/hooks/use-user'
+import { ClientLogoFallback } from '@/components/logo-upload'
 import type { ClientWithRole } from '@/types'
 
 export default function ClientsPage() {
@@ -158,17 +159,15 @@ export default function ClientsPage() {
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <div className="flex-shrink-0">
                       {client.logo_url ? (
                         <img
                           src={client.logo_url}
                           alt={client.name}
-                          className="w-10 h-10 rounded-xl object-cover"
+                          className="w-10 h-10 rounded-xl object-cover border border-surface-200"
                         />
                       ) : (
-                        <span className="text-lg font-bold text-primary">
-                          {client.name.charAt(0).toUpperCase()}
-                        </span>
+                        <ClientLogoFallback name={client.name} size="sm" className="w-10 h-10 text-base" />
                       )}
                     </div>
                     <div className="min-w-0">

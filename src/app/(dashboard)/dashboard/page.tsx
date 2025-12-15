@@ -9,6 +9,8 @@ import { Badge } from '@/components/ui/badge'
 import { useUser } from '@/hooks/use-user'
 import { useClientStore } from '@/stores/client-store'
 import { WeekOverview, AddEventDialog } from '@/components/calendar'
+import { ClientLogoFallback } from '@/components/logo-upload'
+import { AssistantAvatar } from '@/components/assistant-avatars'
 import {
   Building2,
   ChevronRight,
@@ -23,6 +25,7 @@ import {
   Type,
   Tags,
   Brain,
+  Zap,
 } from 'lucide-react'
 import { getGreeting } from '@/lib/utils'
 import { cn } from '@/lib/utils'
@@ -97,25 +100,45 @@ export default function DashboardPage() {
 
   return (
     <div className="max-w-7xl mx-auto">
-      {/* Welcome Header */}
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-surface-900">
-            {greeting} {userName}!
-          </h1>
-          <p className="text-surface-600 mt-1">
-            Welkom bij YourFellow Performance. Selecteer een client om te beginnen.
-          </p>
-        </div>
-        {selectedClient && (
-          <div className="flex items-center gap-3 px-4 py-2 bg-primary/5 rounded-xl border border-primary/20">
-            <Building2 className="h-5 w-5 text-primary" />
-            <div>
-              <p className="text-xs text-surface-500">Actieve client</p>
-              <p className="font-semibold text-surface-900">{selectedClient.name}</p>
+      {/* Welcome Header - Premium Gradient */}
+      <div className="relative mb-8 p-6 rounded-2xl bg-gradient-to-br from-surface-900 via-surface-800 to-surface-900 overflow-hidden">
+        {/* Decorative elements */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-primary/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+        <div className="absolute bottom-0 left-0 w-48 h-48 bg-blue-500/10 rounded-full blur-2xl translate-y-1/2 -translate-x-1/4" />
+
+        <div className="relative flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Zap className="h-5 w-5 text-primary" />
+              <span className="text-primary text-sm font-medium">YourFellow Performance Agency</span>
             </div>
+            <h1 className="text-2xl font-bold text-white">
+              {greeting} {userName}!
+            </h1>
+            <p className="text-surface-400 mt-1">
+              {selectedClient
+                ? `Je werkt momenteel aan ${selectedClient.name}`
+                : 'Selecteer een client om te beginnen met AI-powered marketing'}
+            </p>
           </div>
-        )}
+          {selectedClient && (
+            <div className="flex items-center gap-3 px-4 py-3 bg-white/10 backdrop-blur-sm rounded-xl border border-white/10">
+              {selectedClient.logo_url ? (
+                <img
+                  src={selectedClient.logo_url}
+                  alt={selectedClient.name}
+                  className="w-10 h-10 rounded-lg object-cover"
+                />
+              ) : (
+                <ClientLogoFallback name={selectedClient.name} size="sm" className="w-10 h-10" />
+              )}
+              <div>
+                <p className="text-xs text-surface-400">Actieve client</p>
+                <p className="font-semibold text-white">{selectedClient.name}</p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Main Grid: 2/3 content + 1/3 calendar */}
@@ -183,17 +206,15 @@ export default function DashboardPage() {
                   >
                     <CardContent className="p-5">
                       <div className="flex items-start gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <div className="flex-shrink-0">
                           {client.logo_url ? (
                             <img
                               src={client.logo_url}
                               alt={client.name}
-                              className="w-12 h-12 rounded-xl object-cover"
+                              className="w-12 h-12 rounded-xl object-cover border border-surface-200"
                             />
                           ) : (
-                            <span className="text-xl font-bold text-primary">
-                              {client.name.charAt(0).toUpperCase()}
-                            </span>
+                            <ClientLogoFallback name={client.name} size="md" />
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -256,19 +277,16 @@ export default function DashboardPage() {
                     <Link
                       key={assistant.slug}
                       href={`/chat/${assistant.slug}`}
-                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-surface-50 transition-colors border border-transparent hover:border-surface-200"
+                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-surface-50 transition-all hover:shadow-sm border border-transparent hover:border-surface-200 group"
                     >
-                      <div
-                        className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold"
-                        style={{ backgroundColor: assistant.color }}
-                      >
-                        {assistant.name.charAt(0)}
-                      </div>
+                      <AssistantAvatar slug={assistant.slug} size="md" />
                       <div className="flex-1">
-                        <p className="font-medium text-surface-900">{assistant.name}</p>
+                        <p className="font-medium text-surface-900 group-hover:text-primary transition-colors">
+                          {assistant.name}
+                        </p>
                         <p className="text-xs text-surface-500">{assistant.description}</p>
                       </div>
-                      <MessageSquare className="h-4 w-4 text-surface-400" />
+                      <MessageSquare className="h-4 w-4 text-surface-400 group-hover:text-primary transition-colors" />
                     </Link>
                   ))}
                   <Link href="/chat" className="block">
