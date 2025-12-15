@@ -69,19 +69,19 @@ export default function ChatInterfacePage() {
   const fetchInitialData = async () => {
     setPageLoading(true)
 
-    // Fetch assistant
+    // Fetch assistant by slug (used from dashboard links) or id
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(assistantId)
     const { data: assistantData } = await supabase
       .from('assistants')
       .select('*')
-      .eq('id', assistantId)
+      .eq(isUUID ? 'id' : 'slug', assistantId)
       .single()
 
     if (assistantData) {
       setAssistant(assistantData)
+      // Fetch conversations using the real assistant ID
+      await fetchConversations(assistantData.id)
     }
-
-    // Fetch conversations for this assistant
-    await fetchConversations()
 
     // Fetch messages if conversation exists
     if (conversationParam) {
@@ -91,11 +91,14 @@ export default function ChatInterfacePage() {
     setPageLoading(false)
   }
 
-  const fetchConversations = async () => {
+  const fetchConversations = async (realAssistantId?: string) => {
+    const idToUse = realAssistantId || assistant?.id
+    if (!idToUse) return
+
     const { data: conversationsData } = await supabase
       .from('conversations')
       .select('*')
-      .eq('assistant_id', assistantId)
+      .eq('assistant_id', idToUse)
       .eq('is_archived', false)
       .order('updated_at', { ascending: false })
       .limit(20)
@@ -170,7 +173,7 @@ export default function ChatInterfacePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          assistantId,
+          assistantId: assistant?.id, // Use real assistant ID, not slug from URL
           conversationId,
           message: userMessage,
           clientId: selectedClientId,

@@ -45,11 +45,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get assistant
+    // Get assistant by ID or slug
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(assistantId)
     const { data: assistant, error: assistantError } = await supabase
       .from('assistants')
       .select('*')
-      .eq('id', assistantId)
+      .eq(isUUID ? 'id' : 'slug', assistantId)
       .eq('is_active', true)
       .single()
 
@@ -100,12 +101,12 @@ export async function POST(request: NextRequest) {
     let activeConversationId = conversationId
 
     if (!activeConversationId) {
-      // Create new conversation
+      // Create new conversation using the real assistant ID from database
       const { data: newConversation, error: createError } = await supabase
         .from('conversations')
         .insert({
           user_id: user.id,
-          assistant_id: assistantId,
+          assistant_id: assistant.id,
           client_id: clientId || null,
           title: message.slice(0, 50) + (message.length > 50 ? '...' : ''),
         })
