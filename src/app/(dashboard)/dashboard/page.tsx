@@ -25,6 +25,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { AssistantAvatar } from '@/components/assistant-avatars'
+import { ClientLogo } from '@/components/client-logo'
 import { getGreeting } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 
@@ -120,19 +121,11 @@ export default function DashboardPage() {
               </div>
               {selectedClient && (
                 <div className="hidden md:flex items-center gap-3 px-5 py-3 bg-white/10 backdrop-blur-sm rounded-xl border border-white/10">
-                  <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
-                    {selectedClient.logo_url ? (
-                      <img
-                        src={selectedClient.logo_url}
-                        alt={selectedClient.name}
-                        className="w-10 h-10 rounded-lg object-cover"
-                      />
-                    ) : (
-                      <span className="text-lg font-bold text-primary">
-                        {selectedClient.name.charAt(0).toUpperCase()}
-                      </span>
-                    )}
-                  </div>
+                  <ClientLogo
+                    name={selectedClient.name}
+                    logoUrl={selectedClient.logo_url}
+                    size="md"
+                  />
                   <div>
                     <p className="text-xs text-surface-400">Actieve client</p>
                     <p className="font-semibold text-white">{selectedClient.name}</p>
@@ -203,19 +196,12 @@ export default function DashboardPage() {
                   >
                     <CardContent className="p-5">
                       <div className="flex items-start gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                          {client.logo_url ? (
-                            <img
-                              src={client.logo_url}
-                              alt={client.name}
-                              className="w-12 h-12 rounded-xl object-cover"
-                            />
-                          ) : (
-                            <span className="text-xl font-bold text-primary">
-                              {client.name.charAt(0).toUpperCase()}
-                            </span>
-                          )}
-                        </div>
+                        <ClientLogo
+                          name={client.name}
+                          logoUrl={client.logo_url}
+                          size="lg"
+                          className="rounded-xl flex-shrink-0"
+                        />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <h3 className="font-semibold text-surface-900 truncate">{client.name}</h3>

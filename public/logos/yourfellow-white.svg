@@ -1,0 +1,6 @@
+<svg viewBox="0 0 90 72" xmlns="http://www.w3.org/2000/svg" fill="#FFFFFF">
+  <!-- Placeholder - vervang dit bestand met het echte YourFellow logo (wit) -->
+  <path d="M 6 0 C 2 0, 0 3, 0 8 L 0 44 C 0 60, 12 72, 28 72 C 44 72, 52 60, 52 44 L 52 40 C 52 32, 44 28, 38 32 C 32 36, 30 42, 30 48 C 30 54, 26 58, 20 56 C 14 54, 12 48, 12 40 L 12 8 C 12 3, 10 0, 6 0 Z"/>
+  <circle cx="44" cy="8" r="6"/>
+  <path d="M 72 0 C 80 0, 86 6, 86 14 L 86 16 L 74 16 L 74 14 C 74 10, 72 8, 70 10 C 68 12, 68 16, 68 20 L 68 46 C 68 58, 76 66, 86 64 L 90 64 L 90 72 C 88 72, 84 72, 80 72 C 64 72, 56 60, 56 44 L 56 20 C 56 8, 62 0, 72 0 Z"/>
+</svg>
