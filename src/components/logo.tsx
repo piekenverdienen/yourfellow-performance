@@ -79,7 +79,7 @@ export function Logo({
             'text-xs font-medium',
             variant === 'default' ? 'text-primary' : 'text-primary/80'
           )}>
-            Performance
+            Performance Agency
           </span>
         </div>
       )}
