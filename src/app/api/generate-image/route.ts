@@ -1,29 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI, { toFile } from 'openai'
+import { GoogleGenAI } from '@google/genai'
 import { createClient } from '@/lib/supabase/server'
 
 // XP reward for image generation
 const IMAGE_XP_REWARD = 20
 
+// Types for image generation result
+interface ImageGenerationResult {
+  imageUrl: string
+  revisedPrompt?: string
+}
+
 export async function POST(request: NextRequest) {
   try {
-    if (!process.env.OPENAI_API_KEY) {
-      console.error('OPENAI_API_KEY is not set')
-      return NextResponse.json(
-        { error: 'OpenAI API key ontbreekt. Voeg OPENAI_API_KEY toe aan je .env.local bestand.' },
-        { status: 500 }
-      )
-    }
-
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    })
-
     const supabase = await createClient()
 
     // Check content type to determine how to parse the request
     const contentType = request.headers.get('content-type') || ''
     let prompt: string
+    let model = 'gpt-image'
     let size = '1024x1024'
     let quality = 'medium'
     let tool = 'social-image'
@@ -34,6 +30,7 @@ export async function POST(request: NextRequest) {
       // Parse FormData (with reference image)
       const formData = await request.formData()
       prompt = formData.get('prompt') as string
+      model = (formData.get('model') as string) || 'gpt-image'
       size = (formData.get('size') as string) || '1024x1024'
       quality = (formData.get('quality') as string) || 'medium'
       tool = (formData.get('tool') as string) || 'social-image'
@@ -43,6 +40,7 @@ export async function POST(request: NextRequest) {
       // Parse JSON (without reference image)
       const body = await request.json()
       prompt = body.prompt
+      model = body.model || 'gpt-image'
       size = body.size || '1024x1024'
       quality = body.quality || 'medium'
       tool = body.tool || 'social-image'
@@ -65,68 +63,27 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Enhance prompt for better GPT Image results, including client context
+    // Enhance prompt for better results, including client context
     const enhancedPrompt = referenceImageFile
       ? `${prompt}. ${clientContextPrompt}High quality, suitable for business use.`
       : `Create a professional marketing image: ${prompt}. ${clientContextPrompt}High quality, suitable for business use, clean design.`
 
-    // Map old DALL-E sizes to gpt-image-1 sizes (for backwards compatibility)
-    const sizeMapping: Record<string, string> = {
-      '1792x1024': '1536x1024', // landscape
-      '1024x1792': '1024x1536', // portrait
-    }
-    const mappedSize = sizeMapping[size] || size
+    // Generate image based on selected model
+    let result: ImageGenerationResult
 
-    let response: OpenAI.Images.ImagesResponse
-
-    if (referenceImageFile) {
-      // Use images.edit when there's a reference image
-      const imageBuffer = await referenceImageFile.arrayBuffer()
-      const imageFile = await toFile(imageBuffer, referenceImageFile.name, {
-        type: referenceImageFile.type,
-      })
-
-      response = await openai.images.edit({
-        model: 'gpt-image-1',
-        image: imageFile,
-        prompt: enhancedPrompt,
-        n: 1,
-        size: mappedSize as '1024x1024' | '1536x1024' | '1024x1536',
-      })
+    if (model === 'gemini-flash') {
+      result = await generateWithGemini(enhancedPrompt, size, referenceImageFile)
     } else {
-      // Generate new image without reference
-      response = await openai.images.generate({
-        model: 'gpt-image-1',
-        prompt: enhancedPrompt,
-        n: 1,
-        size: mappedSize as '1024x1024' | '1536x1024' | '1024x1536',
-        quality: quality as 'low' | 'medium' | 'high',
-      })
-    }
-
-    const imageData = response.data?.[0]
-    // gpt-image-1 returns base64 by default
-    const b64Image = imageData?.b64_json
-    const imageUrl = imageData?.url
-    const revisedPrompt = imageData?.revised_prompt
-
-    // Handle both base64 and URL responses
-    let finalImageUrl: string
-    if (b64Image) {
-      finalImageUrl = `data:image/png;base64,${b64Image}`
-    } else if (imageUrl) {
-      finalImageUrl = imageUrl
-    } else {
-      throw new Error('Geen afbeelding ontvangen van GPT Image')
+      result = await generateWithOpenAI(enhancedPrompt, size, quality, referenceImageFile)
     }
 
     // Track usage, add XP, and save generation (fire and forget)
-    const generationId = await trackImageUsageAndXP(tool, prompt, finalImageUrl, revisedPrompt || enhancedPrompt, clientId)
+    const generationId = await trackImageUsageAndXP(tool, prompt, result.imageUrl, result.revisedPrompt || enhancedPrompt, clientId)
 
     return NextResponse.json({
       success: true,
-      imageUrl: finalImageUrl,
-      revisedPrompt,
+      imageUrl: result.imageUrl,
+      revisedPrompt: result.revisedPrompt,
       generationId,
     })
   } catch (error) {
@@ -177,6 +134,148 @@ export async function POST(request: NextRequest) {
       { error: 'Er ging iets mis bij het genereren van de afbeelding.' },
       { status: 500 }
     )
+  }
+}
+
+// Generate image with OpenAI GPT Image
+async function generateWithOpenAI(
+  prompt: string,
+  size: string,
+  quality: string,
+  referenceImage: File | null
+): Promise<ImageGenerationResult> {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error('OpenAI API key ontbreekt. Voeg OPENAI_API_KEY toe aan je .env.local bestand.')
+  }
+
+  const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  })
+
+  // Map sizes for backwards compatibility
+  const sizeMapping: Record<string, string> = {
+    '1792x1024': '1536x1024',
+    '1024x1792': '1024x1536',
+  }
+  const mappedSize = sizeMapping[size] || size
+
+  let response: OpenAI.Images.ImagesResponse
+
+  if (referenceImage) {
+    // Use images.edit when there's a reference image
+    const imageBuffer = await referenceImage.arrayBuffer()
+    const imageFile = await toFile(imageBuffer, referenceImage.name, {
+      type: referenceImage.type,
+    })
+
+    response = await openai.images.edit({
+      model: 'gpt-image-1',
+      image: imageFile,
+      prompt,
+      n: 1,
+      size: mappedSize as '1024x1024' | '1536x1024' | '1024x1536',
+    })
+  } else {
+    response = await openai.images.generate({
+      model: 'gpt-image-1',
+      prompt,
+      n: 1,
+      size: mappedSize as '1024x1024' | '1536x1024' | '1024x1536',
+      quality: quality as 'low' | 'medium' | 'high',
+    })
+  }
+
+  const imageData = response.data?.[0]
+  const b64Image = imageData?.b64_json
+  const imageUrl = imageData?.url
+
+  let finalImageUrl: string
+  if (b64Image) {
+    finalImageUrl = `data:image/png;base64,${b64Image}`
+  } else if (imageUrl) {
+    finalImageUrl = imageUrl
+  } else {
+    throw new Error('Geen afbeelding ontvangen van GPT Image')
+  }
+
+  return {
+    imageUrl: finalImageUrl,
+    revisedPrompt: imageData?.revised_prompt,
+  }
+}
+
+// Generate image with Google Gemini 2.0 Flash
+async function generateWithGemini(
+  prompt: string,
+  size: string,
+  referenceImage: File | null
+): Promise<ImageGenerationResult> {
+  if (!process.env.GOOGLE_API_KEY) {
+    throw new Error('Google API key ontbreekt. Voeg GOOGLE_API_KEY toe aan je .env.local bestand.')
+  }
+
+  const genAI = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY })
+
+  // Map size to aspect ratio
+  const aspectRatioMapping: Record<string, string> = {
+    '1024x1024': '1:1',
+    '1536x1024': '3:2',
+    '1024x1536': '2:3',
+  }
+  const aspectRatio = aspectRatioMapping[size] || '1:1'
+
+  // Build content parts
+  const parts: Array<{ text: string } | { inlineData: { data: string; mimeType: string } }> = []
+
+  // Add reference image if provided
+  if (referenceImage) {
+    const imageBuffer = await referenceImage.arrayBuffer()
+    const base64Image = Buffer.from(imageBuffer).toString('base64')
+    parts.push({
+      inlineData: {
+        data: base64Image,
+        mimeType: referenceImage.type,
+      },
+    })
+  }
+
+  // Add prompt
+  parts.push({ text: prompt })
+
+  const response = await genAI.models.generateContent({
+    model: 'gemini-2.0-flash-preview-image-generation',
+    contents: [{ role: 'user', parts }],
+    config: {
+      responseModalities: ['IMAGE', 'TEXT'],
+    },
+  })
+
+  // Extract image from response
+  const candidate = response.candidates?.[0]
+  if (!candidate?.content?.parts) {
+    throw new Error('Geen afbeelding ontvangen van Gemini')
+  }
+
+  let imageUrl: string | undefined
+  let textResponse: string | undefined
+
+  for (const part of candidate.content.parts) {
+    if ('inlineData' in part && part.inlineData) {
+      const { data, mimeType } = part.inlineData
+      imageUrl = `data:${mimeType};base64,${data}`
+    }
+    if ('text' in part && part.text) {
+      textResponse = part.text
+    }
+  }
+
+  if (!imageUrl) {
+    throw new Error('Geen afbeelding ontvangen van Gemini')
+  }
+
+  return {
+    imageUrl,
+    revisedPrompt: textResponse || prompt,
   }
 }
 

@@ -17,8 +17,14 @@ import {
   Maximize,
   Upload,
   X,
+  Cpu,
 } from 'lucide-react'
 import { copyToClipboard } from '@/lib/utils'
+
+const modelOptions = [
+  { value: 'gpt-image', label: 'GPT Image (OpenAI)' },
+  { value: 'gemini-flash', label: 'Gemini 2.0 Flash (Google)' },
+]
 
 const sizeOptions = [
   { value: '1024x1024', label: 'Vierkant (1024x1024)' },
@@ -45,6 +51,7 @@ export default function ImageGeneratorPage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [formData, setFormData] = useState({
     prompt: '',
+    model: 'gpt-image',
     size: '1024x1024',
     quality: 'medium',
   })
@@ -124,6 +131,7 @@ export default function ImageGeneratorPage() {
         // Use FormData when there's a reference image
         const formDataObj = new FormData()
         formDataObj.append('prompt', formData.prompt)
+        formDataObj.append('model', formData.model)
         formDataObj.append('size', formData.size)
         formDataObj.append('quality', formData.quality)
         formDataObj.append('referenceImage', referenceImage)
@@ -144,6 +152,7 @@ export default function ImageGeneratorPage() {
           },
           body: JSON.stringify({
             prompt: formData.prompt,
+            model: formData.model,
             size: formData.size,
             quality: formData.quality,
             clientId: clientId || undefined,
@@ -214,7 +223,7 @@ export default function ImageGeneratorPage() {
           <h1 className="text-2xl font-bold font-display text-surface-900">AI Afbeelding Generator</h1>
         </div>
         <p className="text-surface-600">
-          Genereer unieke afbeeldingen met GPT Image voor je social media en marketing.
+          Genereer unieke afbeeldingen met AI voor je social media en marketing.
         </p>
       </div>
 
@@ -229,6 +238,24 @@ export default function ImageGeneratorPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
+              {/* Model Selector */}
+              <div>
+                <label className="label flex items-center gap-2">
+                  <Cpu className="h-4 w-4" />
+                  AI Model
+                </label>
+                <Select
+                  options={modelOptions}
+                  value={formData.model}
+                  onChange={(e) => setFormData({ ...formData, model: e.target.value })}
+                />
+                <p className="text-xs text-surface-500 mt-1">
+                  {formData.model === 'gpt-image'
+                    ? 'Beste voor complexe instructies en tekst in afbeeldingen'
+                    : 'Sneller en goedkoper, goed voor fotorealisme'}
+                </p>
+              </div>
+
               <div>
                 <label className="label">Prompt</label>
                 <Textarea
@@ -406,8 +433,12 @@ export default function ImageGeneratorPage() {
                 <div className="w-16 h-16 rounded-2xl bg-primary/20 flex items-center justify-center mb-4">
                   <Sparkles className="h-8 w-8 text-primary animate-pulse" />
                 </div>
-                <p className="text-surface-600 font-medium">GPT Image is aan het creëren...</p>
-                <p className="text-sm text-surface-400 mt-1">Dit duurt meestal 10-20 seconden</p>
+                <p className="text-surface-600 font-medium">
+                  {formData.model === 'gpt-image' ? 'GPT Image' : 'Gemini Flash'} is aan het creëren...
+                </p>
+                <p className="text-sm text-surface-400 mt-1">
+                  Dit duurt meestal {formData.model === 'gpt-image' ? '10-20' : '5-15'} seconden
+                </p>
                 <div className="mt-4 w-48 h-1 bg-surface-200 rounded-full overflow-hidden">
                   <div className="h-full bg-primary animate-pulse" style={{ width: '60%' }} />
                 </div>
@@ -426,7 +457,7 @@ export default function ImageGeneratorPage() {
                 {/* Revised Prompt */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-medium text-surface-700">Gebruikte prompt (door GPT Image verfijnd)</h4>
+                    <h4 className="text-sm font-medium text-surface-700">Gebruikte prompt</h4>
                     <Button
                       variant="ghost"
                       size="sm"
