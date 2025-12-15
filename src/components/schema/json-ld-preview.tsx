@@ -41,10 +41,13 @@ export function JsonLdPreview({
     URL.revokeObjectURL(url)
   }
 
-  const handleTestInGoogle = () => {
-    const encodedSchema = encodeURIComponent(htmlSnippet)
-    const testUrl = `https://search.google.com/test/rich-results?code=${encodedSchema}`
-    window.open(testUrl, '_blank')
+  const handleTestInGoogle = async () => {
+    // Copy the HTML snippet to clipboard first
+    await copyToClipboard(htmlSnippet)
+    setCopiedField('google')
+    setTimeout(() => setCopiedField(null), 3000)
+    // Open Google Rich Results Test (user can paste the code)
+    window.open('https://search.google.com/test/rich-results', '_blank')
   }
 
   if (isEmpty) {
@@ -85,7 +88,7 @@ export function JsonLdPreview({
               onClick={handleTestInGoogle}
             >
               <ExternalLink className="w-4 h-4 mr-1.5" />
-              Test in Google
+              {copiedField === 'google' ? 'Gekopieerd! Plak in Google' : 'Test in Google'}
             </Button>
           </div>
         </div>
