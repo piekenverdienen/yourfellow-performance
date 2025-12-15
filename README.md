@@ -34,28 +34,28 @@ AI-powered marketing platform voor het YourFellow team.
 
 ### 1. Clone de repository
 
-\`\`\`bash
+```bash
 git clone https://github.com/yourfellow/performance.git
 cd performance
-\`\`\`
+```
 
 ### 2. Installeer dependencies
 
-\`\`\`bash
+```bash
 npm install
-\`\`\`
+```
 
 ### 3. Configureer environment variables
 
 Kopieer het voorbeeld bestand:
 
-\`\`\`bash
+```bash
 cp .env.example .env.local
-\`\`\`
+```
 
 Vul de volgende variabelen in:
 
-\`\`\`env
+```env
 # Supabase (https://supabase.com/dashboard/project/YOUR_PROJECT/settings/api)
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
@@ -65,13 +65,13 @@ ANTHROPIC_API_KEY=sk-ant-api03-...
 
 # App
 NEXT_PUBLIC_APP_URL=http://localhost:3000
-\`\`\`
+```
 
 ### 4. Setup Supabase Database
 
 Voer de volgende SQL uit in je Supabase SQL Editor:
 
-\`\`\`sql
+```sql
 -- Users table (extends Supabase auth.users)
 CREATE TABLE public.profiles (
   id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
@@ -123,13 +123,54 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
-\`\`\`
+```
 
-### 5. Start development server
+### 5. Setup Supabase Storage (voor logo uploads)
 
-\`\`\`bash
+Ga naar je Supabase Dashboard → Storage en maak een nieuwe bucket aan:
+
+1. Klik op **New Bucket**
+2. Naam: `logos`
+3. Zet **Public bucket** aan
+4. Klik op **Create bucket**
+
+Of voer de volgende SQL uit in de SQL Editor:
+
+```sql
+-- Create storage bucket for client logos
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('logos', 'logos', true);
+
+-- Allow authenticated users to upload logos
+CREATE POLICY "Authenticated users can upload logos"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (bucket_id = 'logos');
+
+-- Allow authenticated users can update logos
+CREATE POLICY "Authenticated users can update logos"
+ON storage.objects FOR UPDATE
+TO authenticated
+USING (bucket_id = 'logos');
+
+-- Allow authenticated users to delete logos
+CREATE POLICY "Authenticated users can delete logos"
+ON storage.objects FOR DELETE
+TO authenticated
+USING (bucket_id = 'logos');
+
+-- Allow public access to view logos
+CREATE POLICY "Public can view logos"
+ON storage.objects FOR SELECT
+TO public
+USING (bucket_id = 'logos');
+```
+
+### 6. Start development server
+
+```bash
 npm run dev
-\`\`\`
+```
 
 Open [http://localhost:3000](http://localhost:3000)
 
@@ -146,15 +187,15 @@ Open [http://localhost:3000](http://localhost:3000)
 
 Voeg een CNAME record toe:
 
-\`\`\`
+```
 Type: CNAME
 Name: performance
 Value: cname.vercel-dns.com
-\`\`\`
+```
 
 ## 📁 Project Structuur
 
-\`\`\`
+```
 src/
 ├── app/
 │   ├── (auth)/           # Login, register pages
@@ -175,7 +216,7 @@ src/
 │   └── utils.ts
 └── types/
     └── index.ts
-\`\`\`
+```
 
 ## 🎨 Brand Colors
 
