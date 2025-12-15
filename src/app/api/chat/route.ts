@@ -213,12 +213,14 @@ export async function POST(request: NextRequest) {
       .order('created_at', { ascending: true })
       .limit(50)
 
-    // Build message history for Claude
+    // Build message history for Claude (filter out empty messages)
     const messageHistory: { role: 'user' | 'assistant'; content: string }[] =
-      (messages || []).map(m => ({
-        role: m.role as 'user' | 'assistant',
-        content: m.content,
-      }))
+      (messages || [])
+        .filter(m => m.content && m.content.trim() !== '')
+        .map(m => ({
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+        }))
 
     // Add current message
     messageHistory.push({ role: 'user', content: message })
@@ -421,13 +423,15 @@ export async function POST(request: NextRequest) {
             }
           }
 
-          // Save assistant message
-          await supabase.from('messages').insert({
-            conversation_id: activeConversationId,
-            role: 'assistant',
-            content: fullResponse,
-            tokens_used: totalTokens,
-          })
+          // Save assistant message (only if not empty)
+          if (fullResponse && fullResponse.trim() !== '') {
+            await supabase.from('messages').insert({
+              conversation_id: activeConversationId,
+              role: 'assistant',
+              content: fullResponse,
+              tokens_used: totalTokens,
+            })
+          }
 
           // Update conversation title if it's the first exchange
           if (!conversationId) {
