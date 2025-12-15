@@ -24,9 +24,22 @@ interface ClickUpTasksProps {
   clientId: string
   listId?: string
   canEdit?: boolean
+  /** Limit number of tasks shown */
+  limit?: number
+  /** Only show tasks due this week (or overdue) */
+  filterDueThisWeek?: boolean
+  /** Compact mode - less padding, simpler UI */
+  compact?: boolean
 }
 
-export function ClickUpTasks({ clientId, listId, canEdit = false }: ClickUpTasksProps) {
+export function ClickUpTasks({
+  clientId,
+  listId,
+  canEdit = false,
+  limit,
+  filterDueThisWeek = false,
+  compact = false,
+}: ClickUpTasksProps) {
   const [tasks, setTasks] = useState<ClickUpTask[]>([])
   const [statuses, setStatuses] = useState<ClickUpStatus[]>([])
   const [loading, setLoading] = useState(true)
@@ -185,51 +198,83 @@ export function ClickUpTasks({ clientId, listId, canEdit = false }: ClickUpTasks
     )
   }
 
+  // Filter helper: check if task is due this week or overdue
+  const isDueThisWeekOrOverdue = (task: ClickUpTask) => {
+    if (!task.due_date) return false
+    const dueDate = new Date(parseInt(task.due_date))
+    const now = new Date()
+    const endOfWeek = new Date()
+    endOfWeek.setDate(now.getDate() + (7 - now.getDay())) // End of this week (Sunday)
+    endOfWeek.setHours(23, 59, 59, 999)
+    return dueDate <= endOfWeek
+  }
+
+  // Apply filters
+  let filteredTasks = tasks
+  if (filterDueThisWeek) {
+    filteredTasks = tasks.filter((t) => !isTaskClosed(t) && isDueThisWeekOrOverdue(t))
+  }
+
+  // Sort by due date (overdue first, then soonest)
+  filteredTasks = [...filteredTasks].sort((a, b) => {
+    if (!a.due_date && !b.due_date) return 0
+    if (!a.due_date) return 1
+    if (!b.due_date) return -1
+    return parseInt(a.due_date) - parseInt(b.due_date)
+  })
+
+  // Apply limit
+  if (limit) {
+    filteredTasks = filteredTasks.slice(0, limit)
+  }
+
   const openTasks = tasks.filter((t) => !isTaskClosed(t))
   const closedTasks = tasks.filter((t) => isTaskClosed(t))
 
   return (
-    <div className="space-y-4">
-      {/* Header with refresh and filter */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Badge variant="secondary">{openTasks.length} open</Badge>
-          {closedTasks.length > 0 && (
-            <Badge variant="outline">{closedTasks.length} afgerond</Badge>
-          )}
+    <div className={compact ? 'space-y-2' : 'space-y-4'}>
+      {/* Header with refresh and filter - hide in compact mode */}
+      {!compact && (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary">{openTasks.length} open</Badge>
+            {closedTasks.length > 0 && (
+              <Badge variant="outline">{closedTasks.length} afgerond</Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowClosed(!showClosed)}
+            >
+              {showClosed ? 'Verberg afgerond' : 'Toon afgerond'}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={fetchTasks}
+              disabled={loading}
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowClosed(!showClosed)}
-          >
-            {showClosed ? 'Verberg afgerond' : 'Toon afgerond'}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={fetchTasks}
-            disabled={loading}
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          </Button>
-        </div>
-      </div>
+      )}
 
       {/* Tasks List */}
-      {tasks.length === 0 ? (
+      {filteredTasks.length === 0 ? (
         <Card>
-          <CardContent className="py-8">
+          <CardContent className={compact ? 'py-4' : 'py-8'}>
             <div className="text-center text-surface-500">
-              <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-green-500" />
-              <p>Geen taken gevonden</p>
+              <CheckCircle2 className={`${compact ? 'h-6 w-6' : 'h-8 w-8'} mx-auto mb-2 text-green-500`} />
+              <p>{filterDueThisWeek ? 'Geen taken deze week' : 'Geen taken gevonden'}</p>
             </div>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-2">
-          {tasks.map((task) => {
+          {filteredTasks.map((task) => {
             const isClosed = isTaskClosed(task)
             const dueDateInfo = getDueDateInfo(task)
             const isExpanded = expandedTask === task.id

@@ -281,6 +281,9 @@ export default function DashboardPage() {
                 clientId={selectedClient.id}
                 listId={selectedClient.settings.clickup.listId}
                 canEdit={['editor', 'admin', 'owner'].includes(selectedClient.role)}
+                filterDueThisWeek
+                limit={5}
+                compact
               />
             </section>
           )}
