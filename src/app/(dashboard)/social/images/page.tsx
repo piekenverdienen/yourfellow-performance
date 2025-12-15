@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useSelectedClientId } from '@/stores/client-store'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -15,6 +15,8 @@ import {
   Copy,
   CheckCircle,
   Maximize,
+  Upload,
+  X,
 } from 'lucide-react'
 import { copyToClipboard } from '@/lib/utils'
 
@@ -53,6 +55,62 @@ export default function ImageGeneratorPage() {
   const [error, setError] = useState<string | null>(null)
   const [copiedPrompt, setCopiedPrompt] = useState(false)
 
+  // Reference image state
+  const [referenceImage, setReferenceImage] = useState<File | null>(null)
+  const [referencePreview, setReferencePreview] = useState<string | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleFileSelect = (file: File) => {
+    // Validate file type
+    const validTypes = ['image/png', 'image/jpeg', 'image/webp']
+    if (!validTypes.includes(file.type)) {
+      setError('Alleen PNG, JPEG en WebP bestanden zijn toegestaan.')
+      return
+    }
+
+    // Validate file size (max 25MB)
+    if (file.size > 25 * 1024 * 1024) {
+      setError('Bestand is te groot. Maximum is 25MB.')
+      return
+    }
+
+    setReferenceImage(file)
+    setReferencePreview(URL.createObjectURL(file))
+    setError(null)
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+
+    const file = e.dataTransfer.files[0]
+    if (file) {
+      handleFileSelect(file)
+    }
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+  }
+
+  const removeReferenceImage = () => {
+    setReferenceImage(null)
+    if (referencePreview) {
+      URL.revokeObjectURL(referencePreview)
+    }
+    setReferencePreview(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
   const handleGenerate = async () => {
     if (!formData.prompt.trim()) return
 
@@ -60,18 +118,38 @@ export default function ImageGeneratorPage() {
     setError(null)
 
     try {
-      const response = await fetch('/api/generate-image', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          prompt: formData.prompt,
-          size: formData.size,
-          quality: formData.quality,
-          clientId: clientId || undefined,
-        }),
-      })
+      let response: Response
+
+      if (referenceImage) {
+        // Use FormData when there's a reference image
+        const formDataObj = new FormData()
+        formDataObj.append('prompt', formData.prompt)
+        formDataObj.append('size', formData.size)
+        formDataObj.append('quality', formData.quality)
+        formDataObj.append('referenceImage', referenceImage)
+        if (clientId) {
+          formDataObj.append('clientId', clientId)
+        }
+
+        response = await fetch('/api/generate-image', {
+          method: 'POST',
+          body: formDataObj,
+        })
+      } else {
+        // Use JSON when there's no reference image
+        response = await fetch('/api/generate-image', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            prompt: formData.prompt,
+            size: formData.size,
+            quality: formData.quality,
+            clientId: clientId || undefined,
+          }),
+        })
+      }
 
       const data = await response.json()
 
@@ -159,6 +237,68 @@ export default function ImageGeneratorPage() {
                   onChange={(e) => setFormData({ ...formData, prompt: e.target.value })}
                   className="min-h-[120px]"
                 />
+              </div>
+
+              {/* Reference Image Upload */}
+              <div>
+                <label className="label flex items-center gap-2">
+                  <Upload className="h-4 w-4" />
+                  Referentie afbeelding (optioneel)
+                </label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) handleFileSelect(file)
+                  }}
+                />
+
+                {referencePreview ? (
+                  <div className="relative rounded-lg overflow-hidden border border-surface-200">
+                    <img
+                      src={referencePreview}
+                      alt="Reference"
+                      className="w-full h-32 object-cover"
+                    />
+                    <button
+                      onClick={removeReferenceImage}
+                      className="absolute top-2 right-2 p-1 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs px-2 py-1">
+                      {referenceImage?.name}
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    onDrop={handleDrop}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    className={`
+                      border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors
+                      ${isDragging
+                        ? 'border-primary bg-primary/5'
+                        : 'border-surface-300 hover:border-surface-400 hover:bg-surface-50'
+                      }
+                    `}
+                  >
+                    <Upload className="h-6 w-6 mx-auto mb-2 text-surface-400" />
+                    <p className="text-sm text-surface-600">
+                      Sleep een afbeelding of <span className="text-primary font-medium">klik om te uploaden</span>
+                    </p>
+                    <p className="text-xs text-surface-400 mt-1">
+                      PNG, JPEG, WebP (max 25MB)
+                    </p>
+                  </div>
+                )}
+                <p className="text-xs text-surface-500 mt-1">
+                  Upload een afbeelding om te bewerken of als referentie te gebruiken
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">

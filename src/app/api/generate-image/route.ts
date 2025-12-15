@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import OpenAI from 'openai'
+import OpenAI, { toFile } from 'openai'
 import { createClient } from '@/lib/supabase/server'
 
 // XP reward for image generation
@@ -21,8 +21,33 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createClient()
 
-    const body = await request.json()
-    const { prompt, size = '1024x1024', quality = 'medium', tool = 'social-image', clientId } = body
+    // Check content type to determine how to parse the request
+    const contentType = request.headers.get('content-type') || ''
+    let prompt: string
+    let size = '1024x1024'
+    let quality = 'medium'
+    let tool = 'social-image'
+    let clientId: string | undefined
+    let referenceImageFile: File | null = null
+
+    if (contentType.includes('multipart/form-data')) {
+      // Parse FormData (with reference image)
+      const formData = await request.formData()
+      prompt = formData.get('prompt') as string
+      size = (formData.get('size') as string) || '1024x1024'
+      quality = (formData.get('quality') as string) || 'medium'
+      tool = (formData.get('tool') as string) || 'social-image'
+      clientId = (formData.get('clientId') as string) || undefined
+      referenceImageFile = formData.get('referenceImage') as File | null
+    } else {
+      // Parse JSON (without reference image)
+      const body = await request.json()
+      prompt = body.prompt
+      size = body.size || '1024x1024'
+      quality = body.quality || 'medium'
+      tool = body.tool || 'social-image'
+      clientId = body.clientId
+    }
 
     if (!prompt) {
       return NextResponse.json(
@@ -41,7 +66,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Enhance prompt for better GPT Image results, including client context
-    const enhancedPrompt = `Create a professional marketing image: ${prompt}. ${clientContextPrompt}High quality, suitable for business use, clean design.`
+    const enhancedPrompt = referenceImageFile
+      ? `${prompt}. ${clientContextPrompt}High quality, suitable for business use.`
+      : `Create a professional marketing image: ${prompt}. ${clientContextPrompt}High quality, suitable for business use, clean design.`
 
     // Map old DALL-E sizes to gpt-image-1 sizes (for backwards compatibility)
     const sizeMapping: Record<string, string> = {
@@ -50,14 +77,32 @@ export async function POST(request: NextRequest) {
     }
     const mappedSize = sizeMapping[size] || size
 
-    // Generate image with GPT Image (gpt-image-1)
-    const response = await openai.images.generate({
-      model: 'gpt-image-1',
-      prompt: enhancedPrompt,
-      n: 1,
-      size: mappedSize as '1024x1024' | '1536x1024' | '1024x1536',
-      quality: quality as 'low' | 'medium' | 'high',
-    })
+    let response: OpenAI.Images.ImagesResponse
+
+    if (referenceImageFile) {
+      // Use images.edit when there's a reference image
+      const imageBuffer = await referenceImageFile.arrayBuffer()
+      const imageFile = await toFile(imageBuffer, referenceImageFile.name, {
+        type: referenceImageFile.type,
+      })
+
+      response = await openai.images.edit({
+        model: 'gpt-image-1',
+        image: imageFile,
+        prompt: enhancedPrompt,
+        n: 1,
+        size: mappedSize as '1024x1024' | '1536x1024' | '1024x1536',
+      })
+    } else {
+      // Generate new image without reference
+      response = await openai.images.generate({
+        model: 'gpt-image-1',
+        prompt: enhancedPrompt,
+        n: 1,
+        size: mappedSize as '1024x1024' | '1536x1024' | '1024x1536',
+        quality: quality as 'low' | 'medium' | 'high',
+      })
+    }
 
     const imageData = response.data?.[0]
     // gpt-image-1 returns base64 by default
