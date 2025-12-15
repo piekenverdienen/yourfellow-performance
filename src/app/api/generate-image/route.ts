@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient()
 
     const body = await request.json()
-    const { prompt, size = '1024x1024', style = 'vivid', quality = 'standard', tool = 'social-image', clientId } = body
+    const { prompt, size = '1024x1024', quality = 'medium', tool = 'social-image', clientId } = body
 
     if (!prompt) {
       return NextResponse.json(
@@ -40,33 +40,47 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Enhance prompt for better DALL-E results, including client context
+    // Enhance prompt for better GPT Image results, including client context
     const enhancedPrompt = `Create a professional marketing image: ${prompt}. ${clientContextPrompt}High quality, suitable for business use, clean design.`
 
-    // Generate image with DALL-E 3
+    // Map old DALL-E sizes to gpt-image-1 sizes (for backwards compatibility)
+    const sizeMapping: Record<string, string> = {
+      '1792x1024': '1536x1024', // landscape
+      '1024x1792': '1024x1536', // portrait
+    }
+    const mappedSize = sizeMapping[size] || size
+
+    // Generate image with GPT Image (gpt-image-1)
     const response = await openai.images.generate({
-      model: 'dall-e-3',
+      model: 'gpt-image-1',
       prompt: enhancedPrompt,
       n: 1,
-      size: size as '1024x1024' | '1792x1024' | '1024x1792',
-      style: style as 'vivid' | 'natural',
-      quality: quality as 'standard' | 'hd',
+      size: mappedSize as '1024x1024' | '1536x1024' | '1024x1536',
+      quality: quality as 'low' | 'medium' | 'high',
     })
 
     const imageData = response.data?.[0]
+    // gpt-image-1 returns base64 by default
+    const b64Image = imageData?.b64_json
     const imageUrl = imageData?.url
     const revisedPrompt = imageData?.revised_prompt
 
-    if (!imageUrl) {
-      throw new Error('Geen afbeelding ontvangen van DALL-E')
+    // Handle both base64 and URL responses
+    let finalImageUrl: string
+    if (b64Image) {
+      finalImageUrl = `data:image/png;base64,${b64Image}`
+    } else if (imageUrl) {
+      finalImageUrl = imageUrl
+    } else {
+      throw new Error('Geen afbeelding ontvangen van GPT Image')
     }
 
     // Track usage, add XP, and save generation (fire and forget)
-    const generationId = await trackImageUsageAndXP(tool, prompt, imageUrl, revisedPrompt || enhancedPrompt, clientId)
+    const generationId = await trackImageUsageAndXP(tool, prompt, finalImageUrl, revisedPrompt || enhancedPrompt, clientId)
 
     return NextResponse.json({
       success: true,
-      imageUrl,
+      imageUrl: finalImageUrl,
       revisedPrompt,
       generationId,
     })

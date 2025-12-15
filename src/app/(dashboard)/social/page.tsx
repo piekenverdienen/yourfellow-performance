@@ -24,7 +24,7 @@ const tools = [
   },
   {
     name: 'Afbeeldingen',
-    description: 'Creëer visueel aantrekkelijke afbeeldingen voor je social media posts met DALL-E.',
+    description: 'Creëer visueel aantrekkelijke afbeeldingen voor je social media posts met GPT Image.',
     href: '/social/images',
     icon: Image,
     color: 'bg-purple-500',
