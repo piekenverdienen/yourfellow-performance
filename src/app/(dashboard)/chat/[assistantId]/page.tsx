@@ -203,6 +203,7 @@ export default function ChatInterfacePage() {
           if (line.startsWith('data: ')) {
             try {
               const data = JSON.parse(line.slice(6))
+              console.log('Received event:', data.type, data)
 
               if (data.type === 'conversation_id') {
                 setConversationId(data.id)
@@ -214,7 +215,6 @@ export default function ChatInterfacePage() {
                 )
               } else if (data.type === 'status') {
                 // Show status updates (searching, thinking, etc.)
-                console.log('Status update:', data.message)
                 setStatusMessage(data.message)
               } else if (data.type === 'text') {
                 setStatusMessage(null) // Clear status when text starts
