@@ -110,7 +110,7 @@ export default function DashboardPage() {
           <div>
             <div className="flex items-center gap-2 mb-1">
               <Zap className="h-5 w-5 text-primary" />
-              <span className="text-primary text-sm font-medium">YourFellow Performance</span>
+              <span className="text-primary text-sm font-medium">YourFellow Performance Agency</span>
             </div>
             <h1 className="text-2xl font-bold text-white">
               {greeting} {userName}!
