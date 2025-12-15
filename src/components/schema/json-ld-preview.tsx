@@ -42,8 +42,8 @@ export function JsonLdPreview({
   }
 
   const handleTestInGoogle = async () => {
-    // Copy the HTML snippet to clipboard first
-    await copyToClipboard(htmlSnippet)
+    // Copy just the JSON-LD (not the HTML script tags) - that's what Google expects
+    await copyToClipboard(jsonLdString)
     setCopiedField('google')
     setTimeout(() => setCopiedField(null), 3000)
     // Open Google Rich Results Test (user can paste the code)
