@@ -193,12 +193,22 @@ export interface RecentActivity {
 }
 
 // Calendar/Marketing events
+export type EventType = 'holiday' | 'sale' | 'campaign' | 'deadline' | 'life' | 'launch'
+
 export interface MarketingEvent {
   id: string
   title: string
-  date: string
-  type: 'holiday' | 'sale' | 'campaign' | 'deadline'
+  description: string | null
+  event_date: string
+  event_type: EventType
   color: string
+  is_global: boolean
+  client_id: string | null
+  created_by: string | null
+  client?: {
+    id: string
+    name: string
+  }
 }
 
 // Client types
