@@ -382,6 +382,7 @@ RETURNS TABLE (
   slug TEXT,
   description TEXT,
   logo_url TEXT,
+  settings JSONB,
   role TEXT,
   is_active BOOLEAN,
   created_at TIMESTAMPTZ
@@ -391,14 +392,14 @@ BEGIN
   -- Note: Use table alias 'p' to avoid ambiguity with return column 'id'
   IF EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = user_uuid AND p.role = 'admin') THEN
     RETURN QUERY
-    SELECT c.id, c.name, c.slug, c.description, c.logo_url, 'admin'::TEXT as role, c.is_active, c.created_at
+    SELECT c.id, c.name, c.slug, c.description, c.logo_url, c.settings, 'admin'::TEXT as role, c.is_active, c.created_at
     FROM public.clients c
     WHERE c.is_active = TRUE
     ORDER BY c.name;
   ELSE
     -- Return only clients user has membership for
     RETURN QUERY
-    SELECT c.id, c.name, c.slug, c.description, c.logo_url, cm.role, c.is_active, c.created_at
+    SELECT c.id, c.name, c.slug, c.description, c.logo_url, c.settings, cm.role, c.is_active, c.created_at
     FROM public.clients c
     INNER JOIN public.client_memberships cm ON cm.client_id = c.id
     WHERE cm.user_id = user_uuid AND c.is_active = TRUE
