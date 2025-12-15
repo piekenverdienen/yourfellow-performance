@@ -215,20 +215,39 @@ export async function POST(request: NextRequest) {
 
     // Build message history for Claude (filter out empty messages)
     const rawMessages = messages || []
-    console.log('Raw messages from DB:', rawMessages.map(m => ({ role: m.role, contentLength: m.content?.length || 0, isEmpty: !m.content || m.content.trim() === '' })))
 
-    const messageHistory: { role: 'user' | 'assistant'; content: string }[] =
-      rawMessages
-        .filter(m => m.content && m.content.trim() !== '')
-        .map(m => ({
+    // Filter empty messages and ensure alternating roles
+    const filteredMessages = rawMessages.filter(m => m.content && m.content.trim() !== '')
+
+    // Normalize: ensure alternating user/assistant pattern (remove consecutive same-role messages)
+    const normalizedMessages: { role: 'user' | 'assistant'; content: string }[] = []
+    for (const m of filteredMessages) {
+      const lastMessage = normalizedMessages[normalizedMessages.length - 1]
+      // Skip if same role as previous (keep only the latest)
+      if (lastMessage && lastMessage.role === m.role) {
+        normalizedMessages[normalizedMessages.length - 1] = {
           role: m.role as 'user' | 'assistant',
           content: m.content,
-        }))
+        }
+      } else {
+        normalizedMessages.push({
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+        })
+      }
+    }
+
+    // Ensure history starts with user message (remove leading assistant messages)
+    while (normalizedMessages.length > 0 && normalizedMessages[0].role === 'assistant') {
+      normalizedMessages.shift()
+    }
+
+    const messageHistory = [...normalizedMessages]
 
     // Add current message
     messageHistory.push({ role: 'user', content: message })
 
-    console.log('Final messageHistory length:', messageHistory.length)
+    console.log('Final messageHistory:', messageHistory.map(m => ({ role: m.role, len: m.content.length })))
 
     // Build system prompt with user and client context
     let systemPrompt = assistant.system_prompt
