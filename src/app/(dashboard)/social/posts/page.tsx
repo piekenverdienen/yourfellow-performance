@@ -238,42 +238,18 @@ Schrijf een engaging post in het Nederlands die past bij het platform en de doel
   // Generate image prompt based on post content
   const generateImagePrompt = async (postText: string) => {
     try {
-      const platformStyles: Record<string, string> = {
-        linkedin: 'Professional corporate photography style. Clean, modern, business-appropriate. Think: office environments, professional portraits, business meetings, corporate events, clean gradients, minimalist design.',
-        instagram: 'Vibrant, eye-catching, scroll-stopping visuals. Bold colors, dynamic compositions, lifestyle photography, aspirational imagery, trendy aesthetics.',
-        facebook: 'Friendly, relatable, community-focused imagery. Warm tones, authentic moments, approachable visuals, lifestyle scenes.',
-        twitter: 'Bold, impactful, attention-grabbing. High contrast, clear focal point, works well as thumbnail, punchy visuals.',
-      }
-
-      const prompt = `Je bent een expert image prompt engineer. Schrijf een gedetailleerde prompt voor een AI image generator (zoals DALL-E of Midjourney).
-
-SOCIAL MEDIA POST:
+      // Send only the relevant context - the API system prompt handles the instructions
+      const prompt = `SOCIAL MEDIA POST:
 "${postText}"
 
 CONTEXT:
-- Platform: ${formData.platform.toUpperCase()}
-- Stijl: ${platformStyles[formData.platform] || 'Professional and modern'}
-- Doelgroep: ${formData.targetAudience || 'Professionals'}
+- Platform: ${formData.platform}
 - Onderwerp: ${formData.topic}
+- Doelgroep: ${formData.targetAudience || 'Professionals'}
+- Tone of voice: ${formData.tone}
+- Type post: ${formData.postType}
 
-INSTRUCTIES:
-1. Analyseer de INHOUD en BOODSCHAP van de post
-2. Bedenk een visueel concept dat de boodschap versterkt
-3. Schrijf een gedetailleerde image prompt in het ENGELS
-
-BELANGRIJKE REGELS:
-- GEEN tekst, woorden, letters of logo's in de afbeelding (AI kan dit niet goed)
-- Beschrijf: onderwerp, setting, belichting, stijl, kleuren, compositie
-- Gebruik beschrijvende bijvoeglijke naamwoorden
-- Specificeer camera-perspectief indien relevant
-- Max 80 woorden
-
-VOORBEELDEN VAN GOEDE PROMPTS:
-- "Professional business team collaborating around a modern glass table, warm natural lighting from large windows, minimalist Scandinavian office interior, shallow depth of field, corporate photography style"
-- "Abstract flowing shapes in teal and navy blue gradients, geometric patterns, modern digital art style, clean corporate aesthetic, suitable for business presentation background"
-- "Entrepreneur working on laptop in bright co-working space, plants and natural elements, morning golden hour light, candid lifestyle photography, optimistic mood"
-
-Geef ALLEEN de image prompt terug, geen uitleg of inleiding.`
+Genereer een passende image prompt voor deze post.`
 
       const response = await fetch('/api/generate', {
         method: 'POST',
