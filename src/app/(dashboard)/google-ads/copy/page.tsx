@@ -105,6 +105,8 @@ export default function GoogleAdsCopyPage() {
   const [showExportDropdown, setShowExportDropdown] = useState(false)
   const [campaignName, setCampaignName] = useState('AI Generated Campaign')
   const [adGroupName, setAdGroupName] = useState('General')
+  const [path1, setPath1] = useState('')
+  const [path2, setPath2] = useState('')
 
   const handleAnalyzeUrl = async () => {
     if (!formData.landingPageUrl) return
@@ -321,6 +323,18 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
     if (!generatedAd) return []
     const warnings: string[] = []
 
+    if (!formData.landingPageUrl) {
+      warnings.push('Final URL ontbreekt')
+    }
+
+    if (path1.length > 15) {
+      warnings.push(`Path 1 > 15 tekens (${path1.length}/15)`)
+    }
+
+    if (path2.length > 15) {
+      warnings.push(`Path 2 > 15 tekens (${path2.length}/15)`)
+    }
+
     const longHeadlines = generatedAd.headlines.filter(h => h.length > 30)
     if (longHeadlines.length > 0) {
       warnings.push(`${longHeadlines.length} headline(s) > 30 tekens`)
@@ -346,6 +360,9 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
     const headers = [
       'Campaign',
       'Ad group',
+      'Final URL',
+      'Path 1',
+      'Path 2',
       'Headline 1',
       'Headline 2',
       'Headline 3',
@@ -375,9 +392,15 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
     const paddedHeadlines = [...headlines, ...Array(15 - headlines.length).fill('')]
     const paddedDescriptions = [...descriptions, ...Array(4 - descriptions.length).fill('')]
 
+    // Use landing page URL as Final URL
+    const finalUrl = formData.landingPageUrl || ''
+
     const row = [
       campaignName,
       adGroupName,
+      finalUrl,
+      path1,
+      path2,
       ...paddedHeadlines,
       ...paddedDescriptions,
     ]
@@ -405,6 +428,8 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
     setAnalyzeError(null)
     setCampaignName('AI Generated Campaign')
     setAdGroupName('General')
+    setPath1('')
+    setPath2('')
   }
 
   return (
@@ -747,6 +772,41 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
                               placeholder="General"
                               className="mt-1 text-sm"
                             />
+                          </div>
+                          <div className="pt-2 border-t border-surface-100">
+                            <label className="text-xs font-medium text-surface-600">Final URL</label>
+                            <p className={cn(
+                              "mt-1 text-sm truncate",
+                              formData.landingPageUrl ? "text-surface-900" : "text-surface-400 italic"
+                            )}>
+                              {formData.landingPageUrl || 'Voer een landingspagina URL in'}
+                            </p>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-xs font-medium text-surface-600">
+                                Path 1 <span className={cn("text-xs", path1.length > 15 ? "text-red-500" : "text-surface-400")}>({path1.length}/15)</span>
+                              </label>
+                              <Input
+                                value={path1}
+                                onChange={(e) => setPath1(e.target.value)}
+                                placeholder="bijv. schoenen"
+                                className="mt-1 text-sm"
+                                maxLength={15}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs font-medium text-surface-600">
+                                Path 2 <span className={cn("text-xs", path2.length > 15 ? "text-red-500" : "text-surface-400")}>({path2.length}/15)</span>
+                              </label>
+                              <Input
+                                value={path2}
+                                onChange={(e) => setPath2(e.target.value)}
+                                placeholder="bijv. sale"
+                                className="mt-1 text-sm"
+                                maxLength={15}
+                              />
+                            </div>
                           </div>
                           {/* Soft validation warnings */}
                           {getExportWarnings().length > 0 && (
