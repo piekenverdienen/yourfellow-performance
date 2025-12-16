@@ -24,8 +24,14 @@ import {
   GitBranch,
   Building2,
   Code2,
+  Trophy,
+  Flame,
+  Zap,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useUser } from '@/hooks/use-user'
+import { calculateLevel } from '@/lib/utils'
+import { Progress } from '@/components/ui/progress'
 
 interface NavItem {
   name: string
@@ -41,6 +47,12 @@ const navigation: NavItem[] = [
     href: '/dashboard',
     icon: LayoutDashboard,
     color: 'text-blue-600 bg-blue-100'
+  },
+  {
+    name: 'Leaderboard',
+    href: '/leaderboard',
+    icon: Trophy,
+    color: 'text-amber-600 bg-amber-100'
   },
   {
     name: 'Klanten',
@@ -111,6 +123,28 @@ const bottomNavigation: NavItem[] = [
 export function Sidebar() {
   const pathname = usePathname()
   const [expandedItems, setExpandedItems] = useState<string[]>([])
+  const { user } = useUser()
+  const [streak, setStreak] = useState<{ currentStreak: number; isActive: boolean }>({ currentStreak: 0, isActive: false })
+
+  // Fetch streak data
+  useEffect(() => {
+    async function fetchStreak() {
+      try {
+        const res = await fetch('/api/streaks')
+        if (res.ok) {
+          const data = await res.json()
+          setStreak({ currentStreak: data.currentStreak || 0, isActive: data.isActive || false })
+        }
+      } catch {
+        // Streak endpoint might not exist yet
+      }
+    }
+    if (user) {
+      fetchStreak()
+    }
+  }, [user])
+
+  const levelInfo = user ? calculateLevel(user.xp || 0) : null
 
   const toggleExpanded = (name: string) => {
     setExpandedItems(prev =>
@@ -263,18 +297,49 @@ export function Sidebar() {
           })}
         </div>
 
-        {/* AI Credits indicator */}
+        {/* XP & Streak indicator */}
         <div className="border-t border-surface-200 p-4">
-          <div className="rounded-xl bg-gradient-to-br from-violet-500/10 via-primary/10 to-emerald-500/10 p-4 border border-primary/10">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-primary/20">
-                <Sparkles className="h-4 w-4 text-primary" />
+          <Link href="/leaderboard">
+            <div className="rounded-xl bg-gradient-to-br from-amber-500/10 via-primary/10 to-emerald-500/10 p-4 border border-primary/10 hover:border-primary/30 transition-colors cursor-pointer">
+              {/* Level & XP */}
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-primary/20">
+                    <Zap className="h-4 w-4 text-primary" />
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium text-surface-900">
+                      Level {levelInfo?.level || 1}
+                    </span>
+                    <p className="text-xs text-surface-500">{levelInfo?.title || 'Beginner'}</p>
+                  </div>
+                </div>
+                {streak.currentStreak > 0 && (
+                  <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-orange-100">
+                    <Flame className={cn(
+                      "h-4 w-4",
+                      streak.isActive ? "text-orange-500" : "text-surface-400"
+                    )} />
+                    <span className={cn(
+                      "text-sm font-bold",
+                      streak.isActive ? "text-orange-600" : "text-surface-400"
+                    )}>
+                      {streak.currentStreak}
+                    </span>
+                  </div>
+                )}
               </div>
-              <span className="text-sm font-medium text-surface-900">AI Credits</span>
+
+              {/* XP Progress */}
+              <div className="space-y-1">
+                <div className="flex justify-between text-xs">
+                  <span className="text-surface-600">{user?.xp || 0} XP</span>
+                  <span className="text-surface-400">{Math.round(levelInfo?.progress || 0)}%</span>
+                </div>
+                <Progress value={levelInfo?.progress || 0} className="h-1.5" />
+              </div>
             </div>
-            <div className="text-2xl font-bold text-surface-900">∞</div>
-            <p className="text-xs text-surface-500 mt-1">Unlimited voor team</p>
-          </div>
+          </Link>
         </div>
       </div>
     </aside>
