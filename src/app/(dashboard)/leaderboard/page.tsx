@@ -233,7 +233,7 @@ export default function LeaderboardPage() {
               </div>
 
               <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
+                <div className="flex items-center gap-3 mb-3">
                   <h2 className="text-xl font-bold text-surface-900">{user.full_name || 'Jij'}</h2>
                   <Badge variant="default" className="gap-1">
                     <Star className="h-3 w-3" />
@@ -246,31 +246,37 @@ export default function LeaderboardPage() {
                   )}
                 </div>
 
-                <div className="grid grid-cols-4 gap-6">
+                <div className="grid grid-cols-5 gap-4">
                   <div>
-                    <p className="text-sm text-surface-500">Totaal XP</p>
-                    <p className="text-2xl font-bold text-surface-900">{formatNumber(user.xp || 0)}</p>
+                    <p className="text-xs text-surface-500 mb-0.5">Totaal XP</p>
+                    <p className="text-xl font-bold text-surface-900">{formatNumber(user.xp || 0)}</p>
+                  </div>
+                  {period === 'monthly' && currentUserEntry?.xp_this_month !== undefined && (
+                    <div>
+                      <p className="text-xs text-surface-500 mb-0.5">XP deze maand</p>
+                      <p className="text-xl font-bold text-primary">{formatNumber(currentUserEntry.xp_this_month)}</p>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-xs text-surface-500 mb-0.5">Level</p>
+                    <p className="text-xl font-bold text-surface-900">{levelInfo.level}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-surface-500">Level</p>
-                    <p className="text-2xl font-bold text-surface-900">{levelInfo.level}</p>
+                    <p className="text-xs text-surface-500 mb-0.5">Generaties</p>
+                    <p className="text-xl font-bold text-surface-900">{formatNumber(user.total_generations || 0)}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-surface-500">Generaties</p>
-                    <p className="text-2xl font-bold text-surface-900">{formatNumber(user.total_generations || 0)}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-surface-500">Streak</p>
-                    <p className="text-2xl font-bold text-surface-900 flex items-center gap-1">
+                    <p className="text-xs text-surface-500 mb-0.5">Streak</p>
+                    <p className="text-xl font-bold text-surface-900 flex items-center gap-1">
                       {currentUserEntry?.current_streak || 0}
                       {(currentUserEntry?.current_streak || 0) > 0 && (
-                        <Flame className="h-5 w-5 text-orange-500" />
+                        <Flame className="h-4 w-4 text-orange-500" />
                       )}
                     </p>
                   </div>
                 </div>
 
-                <div className="mt-3">
+                <div className="mt-4">
                   <div className="flex justify-between text-xs text-surface-500 mb-1">
                     <span>Voortgang naar level {levelInfo.level + 1}</span>
                     <span>{Math.round(levelInfo.progress)}%</span>
@@ -311,33 +317,34 @@ export default function LeaderboardPage() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {leaderboard.map((entry, index) => {
+                  {leaderboard.map((entry) => {
                     const isCurrentUser = entry.user_id === user?.id
-                    const entryLevel = calculateLevel(entry.xp || 0)
+                    // Use actual level from entry, calculate title from it
+                    const entryLevelInfo = calculateLevel(entry.xp || 0)
 
                     return (
                       <div
                         key={entry.user_id}
                         className={cn(
-                          'flex items-center gap-4 p-4 rounded-xl border transition-all',
+                          'flex items-center gap-3 p-3 rounded-xl border transition-all',
                           getRankBgColor(entry.rank),
                           isCurrentUser && 'ring-2 ring-primary ring-offset-2'
                         )}
                       >
                         {/* Rank */}
-                        <div className="w-8 flex justify-center">
+                        <div className="w-8 flex justify-center flex-shrink-0">
                           {getRankIcon(entry.rank)}
                         </div>
 
                         {/* Avatar */}
-                        <div className="relative">
+                        <div className="relative flex-shrink-0">
                           <Avatar
                             src={entry.avatar_url}
                             name={entry.full_name || 'User'}
                             size="md"
                           />
                           <div className="absolute -bottom-1 -right-1 bg-surface-800 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                            {entryLevel.level}
+                            {entry.level || entryLevelInfo.level}
                           </div>
                         </div>
 
@@ -355,7 +362,7 @@ export default function LeaderboardPage() {
                               </span>
                             )}
                           </div>
-                          <p className="text-sm text-surface-500">{entryLevel.title}</p>
+                          <p className="text-sm text-surface-500">{entryLevelInfo.title}</p>
                         </div>
 
                         {/* Stats */}
@@ -412,34 +419,34 @@ export default function LeaderboardPage() {
         <div className="space-y-6">
           {/* Tool Usage Stats */}
           <Card>
-            <CardHeader>
+            <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
                 <BarChart3 className="h-5 w-5 text-surface-500" />
                 Jouw Tool Gebruik
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-0">
               {toolStats.length === 0 ? (
                 <p className="text-sm text-surface-500 text-center py-4">
                   Nog geen gebruik deze maand
                 </p>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2.5">
                   {toolStats.slice(0, 6).map((stat, index) => {
                     const maxCount = toolStats[0]?.count || 1
                     const percentage = (stat.count / maxCount) * 100
 
                     return (
                       <div key={stat.tool}>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-medium text-surface-700 truncate">
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="text-sm font-medium text-surface-700 truncate pr-2">
                             {stat.name}
                           </span>
-                          <span className="text-sm text-surface-500">
+                          <span className="text-sm text-surface-500 flex-shrink-0">
                             {stat.count}x
                           </span>
                         </div>
-                        <div className="h-2 bg-surface-100 rounded-full overflow-hidden">
+                        <div className="h-1.5 bg-surface-100 rounded-full overflow-hidden">
                           <div
                             className={cn(
                               'h-full rounded-full transition-all',
