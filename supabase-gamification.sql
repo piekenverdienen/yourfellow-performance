@@ -177,18 +177,19 @@ SELECT
   p.full_name,
   p.avatar_url,
   p.level,
+  p.xp,
   COUNT(u.id) as generations_this_month,
   COALESCE(SUM(COALESCE(pt.xp_reward, 10)), 0) as xp_this_month,
   COALESCE(s.current_streak, 0) as current_streak,
-  RANK() OVER (ORDER BY COALESCE(SUM(COALESCE(pt.xp_reward, 10)), 0) DESC) as rank
+  RANK() OVER (ORDER BY COUNT(u.id) DESC) as rank
 FROM public.profiles p
 LEFT JOIN public.usage u ON p.id = u.user_id
   AND u.created_at >= DATE_TRUNC('month', CURRENT_DATE)
 LEFT JOIN public.prompt_templates pt ON u.tool = pt.key
 LEFT JOIN public.user_streaks s ON p.id = s.user_id
-GROUP BY p.id, p.full_name, p.avatar_url, p.level, s.current_streak
+GROUP BY p.id, p.full_name, p.avatar_url, p.level, p.xp, s.current_streak
 HAVING COUNT(u.id) > 0
-ORDER BY xp_this_month DESC;
+ORDER BY generations_this_month DESC;
 
 -- ===========================================
 -- 8. TOOL USAGE STATS VIEW

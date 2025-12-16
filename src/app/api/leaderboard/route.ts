@@ -137,11 +137,12 @@ async function getMonthlyLeaderboardFallback(
     user_id: p.id,
     full_name: p.full_name,
     avatar_url: p.avatar_url,
-    level: p.level,
-    xp: p.xp, // Total XP for level title calculation
+    level: p.level || 1,
+    xp: p.xp || 0, // Total XP for level title calculation
     total_generations: 0, // Not available in monthly view
     generations_this_month: userStats[p.id]?.count || 0,
     current_streak: streakMap[p.id] || 0,
+    achievement_count: 0,
     rank: 0,
   }))
     .sort((a, b) => b.generations_this_month - a.generations_this_month)

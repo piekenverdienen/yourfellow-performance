@@ -368,30 +368,28 @@ export default function LeaderboardPage() {
                         </div>
 
                         {/* Stats */}
-                        <div className="flex items-center gap-4 text-right">
-                          <div>
-                            <p className="font-bold text-surface-900">
+                        <div className="flex items-center gap-4 text-right flex-shrink-0">
+                          <div className="w-16">
+                            <p className="font-bold text-surface-900 tabular-nums">
                               {formatNumber(period === 'monthly' ? (entry.generations_this_month || 0) : entry.total_generations)}
                             </p>
                             <p className="text-xs text-surface-500">
-                              {period === 'monthly' ? 'Deze maand' : 'Generaties'}
+                              {period === 'monthly' ? 'Generaties' : 'Generaties'}
                             </p>
                           </div>
-                          <div className="hidden sm:block">
-                            <p className="font-bold text-surface-900">
+                          <div className="w-16 hidden sm:block">
+                            <p className="font-bold text-surface-900 tabular-nums">
                               {formatNumber(entry.xp || 0)}
                             </p>
-                            <p className="text-xs text-surface-500">XP totaal</p>
+                            <p className="text-xs text-surface-500">XP</p>
                           </div>
-                          {entry.achievement_count > 0 && (
-                            <div className="hidden md:block">
-                              <p className="font-bold text-surface-900 flex items-center gap-1">
-                                <Award className="h-4 w-4 text-amber-500" />
-                                {entry.achievement_count}
-                              </p>
-                              <p className="text-xs text-surface-500">Badges</p>
-                            </div>
-                          )}
+                          <div className="w-14 hidden md:block">
+                            <p className="font-bold text-surface-900 flex items-center justify-end gap-1 tabular-nums">
+                              {entry.achievement_count > 0 && <Award className="h-4 w-4 text-amber-500" />}
+                              {entry.achievement_count || 0}
+                            </p>
+                            <p className="text-xs text-surface-500">Badges</p>
+                          </div>
                         </div>
 
                         {/* Kudos Button */}
