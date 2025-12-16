@@ -78,20 +78,36 @@ async function getMonthlyLeaderboardFallback(
   startOfMonth.setDate(1)
   startOfMonth.setHours(0, 0, 0, 0)
 
-  // Get usage counts per user for this month
+  // Get usage with tool info for this month
   const { data: usage } = await supabase
     .from('usage')
-    .select('user_id')
+    .select('user_id, tool')
     .gte('created_at', startOfMonth.toISOString())
 
-  // Count per user
-  const userCounts: Record<string, number> = {}
+  // Get XP rewards per tool
+  const { data: templates } = await supabase
+    .from('prompt_templates')
+    .select('key, xp_reward')
+
+  const xpRewardMap: Record<string, number> = {}
+  templates?.forEach(t => {
+    xpRewardMap[t.key] = t.xp_reward || 10
+  })
+
+  // Count and calculate XP per user
+  const userStats: Record<string, { count: number; xp: number }> = {}
   usage?.forEach(u => {
-    userCounts[u.user_id] = (userCounts[u.user_id] || 0) + 1
+    if (!userStats[u.user_id]) {
+      userStats[u.user_id] = { count: 0, xp: 0 }
+    }
+    userStats[u.user_id].count++
+    // Get XP for this tool, default 5 for chat, 10 for others
+    const toolXp = xpRewardMap[u.tool] || (u.tool.startsWith('chat') ? 5 : 10)
+    userStats[u.user_id].xp += toolXp
   })
 
   // Get profiles for users with activity
-  const userIds = Object.keys(userCounts)
+  const userIds = Object.keys(userStats)
   if (userIds.length === 0) {
     return NextResponse.json({
       leaderboard: [],
@@ -105,18 +121,30 @@ async function getMonthlyLeaderboardFallback(
     .select('id, full_name, avatar_url, level, xp')
     .in('id', userIds)
 
-  // Build leaderboard
+  // Get streaks
+  const { data: streaks } = await supabase
+    .from('user_streaks')
+    .select('user_id, current_streak')
+    .in('user_id', userIds)
+
+  const streakMap: Record<string, number> = {}
+  streaks?.forEach(s => {
+    streakMap[s.user_id] = s.current_streak || 0
+  })
+
+  // Build leaderboard - sort by generations this month
   const leaderboard = profiles?.map(p => ({
     user_id: p.id,
     full_name: p.full_name,
     avatar_url: p.avatar_url,
     level: p.level,
-    generations_this_month: userCounts[p.id] || 0,
-    xp_this_month: (userCounts[p.id] || 0) * 10, // Approximate
-    current_streak: 0,
+    xp: p.xp, // Total XP for level title calculation
+    total_generations: 0, // Not available in monthly view
+    generations_this_month: userStats[p.id]?.count || 0,
+    current_streak: streakMap[p.id] || 0,
     rank: 0,
   }))
-    .sort((a, b) => b.xp_this_month - a.xp_this_month)
+    .sort((a, b) => b.generations_this_month - a.generations_this_month)
     .slice(0, limit)
     .map((entry, index) => ({ ...entry, rank: index + 1 })) || []
 

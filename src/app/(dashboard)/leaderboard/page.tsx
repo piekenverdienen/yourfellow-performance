@@ -246,24 +246,25 @@ export default function LeaderboardPage() {
                   )}
                 </div>
 
-                <div className="grid grid-cols-5 gap-4">
+                <div className="grid grid-cols-4 gap-6">
                   <div>
                     <p className="text-xs text-surface-500 mb-0.5">Totaal XP</p>
                     <p className="text-xl font-bold text-surface-900">{formatNumber(user.xp || 0)}</p>
                   </div>
-                  {period === 'monthly' && currentUserEntry?.xp_this_month !== undefined && (
-                    <div>
-                      <p className="text-xs text-surface-500 mb-0.5">XP deze maand</p>
-                      <p className="text-xl font-bold text-primary">{formatNumber(currentUserEntry.xp_this_month)}</p>
-                    </div>
-                  )}
                   <div>
                     <p className="text-xs text-surface-500 mb-0.5">Level</p>
                     <p className="text-xl font-bold text-surface-900">{levelInfo.level}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-surface-500 mb-0.5">Generaties</p>
-                    <p className="text-xl font-bold text-surface-900">{formatNumber(user.total_generations || 0)}</p>
+                    <p className="text-xs text-surface-500 mb-0.5">
+                      {period === 'monthly' ? 'Generaties deze maand' : 'Generaties totaal'}
+                    </p>
+                    <p className="text-xl font-bold text-primary">
+                      {formatNumber(period === 'monthly'
+                        ? (currentUserEntry?.generations_this_month || 0)
+                        : (user.total_generations || 0)
+                      )}
+                    </p>
                   </div>
                   <div>
                     <p className="text-xs text-surface-500 mb-0.5">Streak</p>
@@ -319,8 +320,9 @@ export default function LeaderboardPage() {
                 <div className="space-y-2">
                   {leaderboard.map((entry) => {
                     const isCurrentUser = entry.user_id === user?.id
-                    // Use actual level from entry, calculate title from it
-                    const entryLevelInfo = calculateLevel(entry.xp || 0)
+                    // Use total XP for level title (not monthly XP)
+                    const totalXp = entry.xp || 0
+                    const entryLevelInfo = calculateLevel(totalXp)
 
                     return (
                       <div
@@ -366,18 +368,20 @@ export default function LeaderboardPage() {
                         </div>
 
                         {/* Stats */}
-                        <div className="flex items-center gap-6 text-right">
+                        <div className="flex items-center gap-4 text-right">
                           <div>
-                            <p className="font-bold text-surface-900">
-                              {formatNumber(period === 'monthly' ? (entry.xp_this_month || 0) : entry.xp)}
-                            </p>
-                            <p className="text-xs text-surface-500">XP</p>
-                          </div>
-                          <div className="hidden sm:block">
                             <p className="font-bold text-surface-900">
                               {formatNumber(period === 'monthly' ? (entry.generations_this_month || 0) : entry.total_generations)}
                             </p>
-                            <p className="text-xs text-surface-500">Generaties</p>
+                            <p className="text-xs text-surface-500">
+                              {period === 'monthly' ? 'Deze maand' : 'Generaties'}
+                            </p>
+                          </div>
+                          <div className="hidden sm:block">
+                            <p className="font-bold text-surface-900">
+                              {formatNumber(entry.xp || 0)}
+                            </p>
+                            <p className="text-xs text-surface-500">XP totaal</p>
                           </div>
                           {entry.achievement_count > 0 && (
                             <div className="hidden md:block">
