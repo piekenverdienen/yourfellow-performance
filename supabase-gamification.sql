@@ -473,7 +473,7 @@ CREATE POLICY "Users can view profiles for leaderboard"
 -- 15. INDEXES FOR PERFORMANCE
 -- ===========================================
 CREATE INDEX IF NOT EXISTS idx_usage_user_tool ON public.usage(user_id, tool);
-CREATE INDEX IF NOT EXISTS idx_usage_month ON public.usage(DATE_TRUNC('month', created_at));
+-- Note: DATE_TRUNC index removed (not IMMUTABLE in PostgreSQL)
 CREATE INDEX IF NOT EXISTS idx_profiles_xp ON public.profiles(xp DESC);
 CREATE INDEX IF NOT EXISTS idx_profiles_level ON public.profiles(level DESC);
 
