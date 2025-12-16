@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useSelectedClientId } from '@/stores/client-store'
 import { usePersistedState } from '@/hooks/use-persisted-form'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
@@ -23,6 +23,9 @@ import {
   Image as ImageIcon,
   Download,
   Wand2,
+  Upload,
+  X,
+  Loader2,
 } from 'lucide-react'
 import { cn, copyToClipboard } from '@/lib/utils'
 
@@ -89,8 +92,55 @@ export default function SocialPostsPage() {
   const [imagePrompt, setImagePrompt] = usePersistedState('social-posts-image-prompt', '')
   const [imageSize, setImageSize] = usePersistedState('social-posts-image-size', '1024x1024')
   const [isGeneratingImage, setIsGeneratingImage] = useState(false)
+  const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false)
   const [generatedImage, setGeneratedImage] = usePersistedState<GeneratedImage | null>('social-posts-image-result', null)
   const [imageError, setImageError] = useState<string | null>(null)
+
+  // Reference image state
+  const [referenceImage, setReferenceImage] = useState<File | null>(null)
+  const [referencePreview, setReferencePreview] = useState<string | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Handle reference image file selection
+  const handleFileSelect = (file: File) => {
+    const validTypes = ['image/png', 'image/jpeg', 'image/webp']
+    if (!validTypes.includes(file.type)) {
+      setImageError('Alleen PNG, JPEG en WebP bestanden zijn toegestaan.')
+      return
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      setImageError('Bestand is te groot. Maximum is 25MB.')
+      return
+    }
+    setReferenceImage(file)
+    setReferencePreview(URL.createObjectURL(file))
+    setImageError(null)
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+    const file = e.dataTransfer.files[0]
+    if (file) handleFileSelect(file)
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+  }
+
+  const removeReferenceImage = () => {
+    setReferenceImage(null)
+    if (referencePreview) URL.revokeObjectURL(referencePreview)
+    setReferencePreview(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
 
   const handleGenerate = async () => {
     setIsGenerating(true)
@@ -152,9 +202,14 @@ Schrijf een engaging post in het Nederlands die past bij het platform en de doel
 
       // If user wants image, generate image prompt automatically
       if (wantsImage && newPost.primary_text) {
-        const generatedPrompt = await generateImagePrompt(newPost.primary_text)
-        if (generatedPrompt) {
-          setImagePrompt(generatedPrompt)
+        setIsGeneratingPrompt(true)
+        try {
+          const generatedPrompt = await generateImagePrompt(newPost.primary_text)
+          if (generatedPrompt) {
+            setImagePrompt(generatedPrompt)
+          }
+        } finally {
+          setIsGeneratingPrompt(false)
         }
       }
     } catch (err) {
@@ -162,6 +217,21 @@ Schrijf een engaging post in het Nederlands die past bij het platform en de doel
       setError(err instanceof Error ? err.message : 'Er ging iets mis. Probeer het opnieuw.')
     } finally {
       setIsGenerating(false)
+    }
+  }
+
+  // Handle manual prompt regeneration
+  const handleRegeneratePrompt = async () => {
+    if (!generatedPost?.primary_text) return
+    setIsGeneratingPrompt(true)
+    setImageError(null)
+    try {
+      const newPrompt = await generateImagePrompt(generatedPost.primary_text)
+      if (newPrompt) {
+        setImagePrompt(newPrompt)
+      }
+    } finally {
+      setIsGeneratingPrompt(false)
     }
   }
 
@@ -221,17 +291,38 @@ Voorbeeld format: "Professional business scene showing [beschrijving], modern mi
     setImageError(null)
 
     try {
-      const response = await fetch('/api/generate-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: imagePrompt,
-          model: 'gpt-image',
-          size: imageSize,
-          quality: 'medium',
-          clientId: clientId || undefined,
-        }),
-      })
+      let response: Response
+
+      if (referenceImage) {
+        // Use FormData when there's a reference image
+        const formDataObj = new FormData()
+        formDataObj.append('prompt', imagePrompt)
+        formDataObj.append('model', 'gpt-image')
+        formDataObj.append('size', imageSize)
+        formDataObj.append('quality', 'medium')
+        formDataObj.append('referenceImage', referenceImage)
+        if (clientId) {
+          formDataObj.append('clientId', clientId)
+        }
+
+        response = await fetch('/api/generate-image', {
+          method: 'POST',
+          body: formDataObj,
+        })
+      } else {
+        // Use JSON when there's no reference image
+        response = await fetch('/api/generate-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: imagePrompt,
+            model: 'gpt-image',
+            size: imageSize,
+            quality: 'medium',
+            clientId: clientId || undefined,
+          }),
+        })
+      }
 
       const data = await response.json()
 
@@ -558,16 +649,95 @@ Voorbeeld format: "Professional business scene showing [beschrijving], modern mi
 
                     {/* Image Prompt Editor */}
                     <div className="space-y-4">
+                      {/* Prompt section with loading state */}
                       <div>
-                        <label className="text-sm text-surface-600 mb-2 block">
-                          Image prompt (je kunt deze aanpassen)
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="text-sm text-surface-600">
+                            Image prompt (je kunt deze aanpassen)
+                          </label>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleRegeneratePrompt}
+                            disabled={isGeneratingPrompt || !generatedPost?.primary_text}
+                          >
+                            {isGeneratingPrompt ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <RefreshCw className="h-4 w-4" />
+                            )}
+                            <span className="ml-1 text-xs">Nieuwe prompt</span>
+                          </Button>
+                        </div>
+
+                        {isGeneratingPrompt ? (
+                          <div className="flex items-center gap-3 p-4 bg-surface-50 rounded-lg border border-surface-200">
+                            <Loader2 className="h-5 w-5 text-primary animate-spin" />
+                            <span className="text-sm text-surface-600">Image prompt wordt gegenereerd...</span>
+                          </div>
+                        ) : (
+                          <Textarea
+                            value={imagePrompt}
+                            onChange={(e) => setImagePrompt(e.target.value)}
+                            placeholder="Beschrijf de afbeelding die je wilt genereren..."
+                            className="min-h-[80px] text-sm"
+                          />
+                        )}
+                      </div>
+
+                      {/* Reference Image Upload */}
+                      <div>
+                        <label className="text-sm text-surface-600 mb-2 block flex items-center gap-2">
+                          <Upload className="h-4 w-4" />
+                          Referentie afbeelding (optioneel)
                         </label>
-                        <Textarea
-                          value={imagePrompt}
-                          onChange={(e) => setImagePrompt(e.target.value)}
-                          placeholder="Beschrijf de afbeelding die je wilt genereren..."
-                          className="min-h-[80px] text-sm"
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0]
+                            if (file) handleFileSelect(file)
+                          }}
                         />
+
+                        {referencePreview ? (
+                          <div className="relative rounded-lg overflow-hidden border border-surface-200">
+                            <img
+                              src={referencePreview}
+                              alt="Reference"
+                              className="w-full h-24 object-cover"
+                            />
+                            <button
+                              onClick={removeReferenceImage}
+                              className="absolute top-2 right-2 p-1 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                            <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs px-2 py-1">
+                              {referenceImage?.name}
+                            </div>
+                          </div>
+                        ) : (
+                          <div
+                            onClick={() => fileInputRef.current?.click()}
+                            onDrop={handleDrop}
+                            onDragOver={handleDragOver}
+                            onDragLeave={handleDragLeave}
+                            className={cn(
+                              "border-2 border-dashed rounded-lg p-3 text-center cursor-pointer transition-colors",
+                              isDragging
+                                ? "border-primary bg-primary/5"
+                                : "border-surface-300 hover:border-surface-400 hover:bg-surface-50"
+                            )}
+                          >
+                            <Upload className="h-5 w-5 mx-auto mb-1 text-surface-400" />
+                            <p className="text-xs text-surface-600">
+                              Sleep of <span className="text-primary font-medium">klik om te uploaden</span>
+                            </p>
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex gap-3">
@@ -583,7 +753,7 @@ Voorbeeld format: "Professional business scene showing [beschrijving], modern mi
                           <Button
                             onClick={handleGenerateImage}
                             isLoading={isGeneratingImage}
-                            disabled={!imagePrompt.trim()}
+                            disabled={!imagePrompt.trim() || isGeneratingPrompt}
                             leftIcon={<Wand2 className="h-4 w-4" />}
                           >
                             {isGeneratingImage ? 'Genereren...' : 'Genereer afbeelding'}
