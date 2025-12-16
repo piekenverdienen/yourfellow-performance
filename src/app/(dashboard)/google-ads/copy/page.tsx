@@ -65,6 +65,12 @@ const adTypeOptions = [
   { value: 'performance_max', label: 'Performance Max' },
 ]
 
+const languageOptions = [
+  { value: 'nl', label: 'Nederlands' },
+  { value: 'en', label: 'Engels' },
+  { value: 'de', label: 'Duits' },
+]
+
 interface GeneratedAd {
   headlines: string[]
   descriptions: string[]
@@ -78,6 +84,7 @@ const initialFormData = {
   keywords: '',
   tone: 'professional',
   adType: 'responsive_search',
+  language: 'nl',
 }
 
 export default function GoogleAdsCopyPage() {
@@ -185,6 +192,14 @@ export default function GoogleAdsCopyPage() {
     setError(null)
 
     try {
+      // Language mapping for the prompt
+      const languageMap: Record<string, string> = {
+        nl: 'Nederlands',
+        en: 'Engels (English)',
+        de: 'Duits (Deutsch)',
+      }
+      const targetLanguage = languageMap[formData.language] || 'Nederlands'
+
       // Build the prompt for the AI
       let prompt = `Genereer Google Ads teksten voor het volgende:
 
@@ -194,6 +209,7 @@ Doelgroep: ${formData.targetAudience || 'Algemeen publiek'}
 Keywords: ${formData.keywords || 'Geen specifieke keywords'}
 Tone of voice: ${formData.tone}
 Advertentietype: ${formData.adType}
+Taal: ${targetLanguage}
 `
 
       // Add rich landing page context if available (from Firecrawl)
@@ -219,7 +235,7 @@ BELANGRIJK: Gebruik EXACT dezelfde woorden, termen en messaging die op de landin
 
       prompt += `
 
-Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karakters) in het Nederlands.`
+Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karakters) in het ${targetLanguage}.`
 
       const response = await fetch('/api/generate', {
         method: 'POST',
@@ -494,7 +510,15 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="label">Taal</label>
+                <Select
+                  options={languageOptions}
+                  value={formData.language}
+                  onChange={(e) => setFormData({ ...formData, language: e.target.value })}
+                />
+              </div>
               <div>
                 <label className="label">Tone of voice</label>
                 <Select
