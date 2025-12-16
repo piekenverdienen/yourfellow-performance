@@ -26,6 +26,9 @@ import {
   ChevronUp,
   ExternalLink,
   AlertCircle,
+  Upload,
+  FileSpreadsheet,
+  AlertTriangle,
 } from 'lucide-react'
 import { cn, copyToClipboard } from '@/lib/utils'
 
@@ -98,6 +101,9 @@ export default function GoogleAdsCopyPage() {
   const [error, setError] = useState<string | null>(null)
   const [analyzeError, setAnalyzeError] = useState<string | null>(null)
   const [showLandingPagePreview, setShowLandingPagePreview] = useState(true)
+  const [showExportDropdown, setShowExportDropdown] = useState(false)
+  const [campaignName, setCampaignName] = useState('AI Generated Campaign')
+  const [adGroupName, setAdGroupName] = useState('General')
 
   const handleAnalyzeUrl = async () => {
     if (!formData.landingPageUrl) return
@@ -168,7 +174,7 @@ export default function GoogleAdsCopyPage() {
         }
 
         // Deduplicate and limit
-        const uniqueKeywords = [...new Set(keywordSources)].slice(0, 8)
+        const uniqueKeywords = Array.from(new Set(keywordSources)).slice(0, 8)
         if (uniqueKeywords.length > 0) {
           updates.keywords = uniqueKeywords.join(', ')
         }
@@ -307,6 +313,87 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
     setFetchedPageData(null)
     setFormData({ ...formData, landingPageUrl: '' })
     setAnalyzeError(null)
+  }
+
+  // Get export validation warnings (soft, non-blocking)
+  const getExportWarnings = () => {
+    if (!generatedAd) return []
+    const warnings: string[] = []
+
+    const longHeadlines = generatedAd.headlines.filter(h => h.length > 30)
+    if (longHeadlines.length > 0) {
+      warnings.push(`${longHeadlines.length} headline(s) > 30 tekens`)
+    }
+
+    const longDescriptions = generatedAd.descriptions.filter(d => d.length > 90)
+    if (longDescriptions.length > 0) {
+      warnings.push(`${longDescriptions.length} description(s) > 90 tekens`)
+    }
+
+    if (generatedAd.headlines.length > 15) {
+      warnings.push(`Meer dan 15 headlines (${generatedAd.headlines.length} totaal)`)
+    }
+
+    return warnings
+  }
+
+  // Generate TSV for Google Ads Editor
+  const generateTSV = () => {
+    if (!generatedAd) return ''
+
+    // Headers according to Google Ads Editor format
+    const headers = [
+      'Campaign',
+      'Ad group',
+      'Headline 1',
+      'Headline 2',
+      'Headline 3',
+      'Headline 4',
+      'Headline 5',
+      'Headline 6',
+      'Headline 7',
+      'Headline 8',
+      'Headline 9',
+      'Headline 10',
+      'Headline 11',
+      'Headline 12',
+      'Headline 13',
+      'Headline 14',
+      'Headline 15',
+      'Description 1',
+      'Description 2',
+      'Description 3',
+      'Description 4',
+    ]
+
+    // Create row with data - limit to max 15 headlines and 4 descriptions
+    const headlines = generatedAd.headlines.slice(0, 15)
+    const descriptions = generatedAd.descriptions.slice(0, 4)
+
+    // Pad arrays to ensure correct column alignment
+    const paddedHeadlines = [...headlines, ...Array(15 - headlines.length).fill('')]
+    const paddedDescriptions = [...descriptions, ...Array(4 - descriptions.length).fill('')]
+
+    const row = [
+      campaignName,
+      adGroupName,
+      ...paddedHeadlines,
+      ...paddedDescriptions,
+    ]
+
+    // Generate TSV string
+    const tsv = headers.join('\t') + '\n' + row.join('\t')
+    return tsv
+  }
+
+  const handleExportTSV = async () => {
+    const tsv = generateTSV()
+    const success = await copyToClipboard(tsv)
+    if (success) {
+      setCopiedIndex('export-tsv')
+      setTimeout(() => setCopiedIndex(null), 3000)
+    }
+    setShowExportDropdown(false)
   }
 
   return (
@@ -567,6 +654,84 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
             </div>
             {generatedAd && (
               <div className="flex gap-2">
+                {/* Export Dropdown */}
+                <div className="relative">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => setShowExportDropdown(!showExportDropdown)}
+                    leftIcon={copiedIndex === 'export-tsv' ? <CheckCircle className="h-4 w-4" /> : <Upload className="h-4 w-4" />}
+                    rightIcon={<ChevronDown className="h-3 w-3" />}
+                  >
+                    {copiedIndex === 'export-tsv' ? 'Gekopieerd!' : 'Exporteren'}
+                  </Button>
+                  {showExportDropdown && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-10"
+                        onClick={() => setShowExportDropdown(false)}
+                      />
+                      <div className="absolute right-0 mt-2 w-72 bg-white rounded-lg shadow-lg border border-surface-200 z-20">
+                        <div className="p-3 border-b border-surface-100">
+                          <button
+                            onClick={handleExportTSV}
+                            className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-surface-50 transition-colors text-left"
+                          >
+                            <FileSpreadsheet className="h-5 w-5 text-primary" />
+                            <div>
+                              <p className="font-medium text-surface-900">Kopieer als tabel</p>
+                              <p className="text-xs text-surface-500">Excel / Google Ads Editor</p>
+                            </div>
+                          </button>
+                          <button
+                            disabled
+                            className="w-full flex items-center gap-3 p-2 rounded-lg text-left opacity-50 cursor-not-allowed mt-1"
+                          >
+                            <FileSpreadsheet className="h-5 w-5 text-surface-400" />
+                            <div>
+                              <p className="font-medium text-surface-500">Download CSV</p>
+                              <p className="text-xs text-surface-400">Coming soon</p>
+                            </div>
+                          </button>
+                        </div>
+                        <div className="p-3 space-y-3">
+                          <div>
+                            <label className="text-xs font-medium text-surface-600">Campaign name</label>
+                            <Input
+                              value={campaignName}
+                              onChange={(e) => setCampaignName(e.target.value)}
+                              placeholder="AI Generated Campaign"
+                              className="mt-1 text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-surface-600">Ad group name</label>
+                            <Input
+                              value={adGroupName}
+                              onChange={(e) => setAdGroupName(e.target.value)}
+                              placeholder="General"
+                              className="mt-1 text-sm"
+                            />
+                          </div>
+                          {/* Soft validation warnings */}
+                          {getExportWarnings().length > 0 && (
+                            <div className="pt-2 border-t border-surface-100">
+                              <p className="text-xs font-medium text-amber-600 flex items-center gap-1 mb-1">
+                                <AlertTriangle className="h-3 w-3" />
+                                Waarschuwingen
+                              </p>
+                              <ul className="text-xs text-surface-500 space-y-0.5">
+                                {getExportWarnings().map((warning, i) => (
+                                  <li key={i}>• {warning}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
                 <Button
                   variant="outline"
                   size="sm"
