@@ -328,13 +328,13 @@ export default function LeaderboardPage() {
                       <div
                         key={entry.user_id}
                         className={cn(
-                          'flex items-center gap-3 p-3 rounded-xl border transition-all',
+                          'flex items-center gap-4 px-4 py-3 rounded-xl border transition-all',
                           getRankBgColor(entry.rank),
                           isCurrentUser && 'ring-2 ring-primary ring-offset-2'
                         )}
                       >
                         {/* Rank */}
-                        <div className="w-8 flex justify-center flex-shrink-0">
+                        <div className="w-10 flex justify-center flex-shrink-0">
                           {getRankIcon(entry.rank)}
                         </div>
 
