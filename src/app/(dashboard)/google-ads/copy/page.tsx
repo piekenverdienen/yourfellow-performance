@@ -29,6 +29,7 @@ import {
   Upload,
   FileSpreadsheet,
   AlertTriangle,
+  RotateCcw,
 } from 'lucide-react'
 import { cn, copyToClipboard } from '@/lib/utils'
 
@@ -396,6 +397,16 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
     setShowExportDropdown(false)
   }
 
+  const handleReset = () => {
+    setFormData(initialFormData)
+    setGeneratedAd(null)
+    setFetchedPageData(null)
+    setError(null)
+    setAnalyzeError(null)
+    setCampaignName('AI Generated Campaign')
+    setAdGroupName('General')
+  }
+
   return (
     <div className="max-w-6xl mx-auto">
       {/* Header */}
@@ -624,16 +635,27 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
               </div>
             </div>
 
-            <Button
-              onClick={handleGenerate}
-              isLoading={isGenerating}
-              className="w-full"
-              size="lg"
-              leftIcon={<Sparkles className="h-4 w-4" />}
-              disabled={!formData.productName}
-            >
-              {isGenerating ? 'Genereren...' : 'Genereer advertentieteksten'}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                onClick={handleGenerate}
+                isLoading={isGenerating}
+                className="flex-1"
+                size="lg"
+                leftIcon={<Sparkles className="h-4 w-4" />}
+                disabled={!formData.productName}
+              >
+                {isGenerating ? 'Genereren...' : 'Genereer advertentieteksten'}
+              </Button>
+              <Button
+                onClick={handleReset}
+                variant="outline"
+                size="lg"
+                title="Alles wissen en opnieuw beginnen"
+                className="px-4"
+              >
+                <RotateCcw className="h-4 w-4" />
+              </Button>
+            </div>
 
             {fetchedPageData && (
               <p className="text-xs text-center text-surface-500">
@@ -653,17 +675,17 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
               </CardDescription>
             </div>
             {generatedAd && (
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
                 {/* Export Dropdown */}
                 <div className="relative">
                   <Button
                     variant="primary"
                     size="sm"
                     onClick={() => setShowExportDropdown(!showExportDropdown)}
-                    leftIcon={copiedIndex === 'export-tsv' ? <CheckCircle className="h-4 w-4" /> : <Upload className="h-4 w-4" />}
+                    leftIcon={copiedIndex === 'export-tsv' || copiedIndex === 'all' ? <CheckCircle className="h-4 w-4" /> : <Upload className="h-4 w-4" />}
                     rightIcon={<ChevronDown className="h-3 w-3" />}
                   >
-                    {copiedIndex === 'export-tsv' ? 'Gekopieerd!' : 'Exporteren'}
+                    {copiedIndex === 'export-tsv' || copiedIndex === 'all' ? 'Gekopieerd!' : 'Exporteren'}
                   </Button>
                   {showExportDropdown && (
                     <>
@@ -681,6 +703,19 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
                             <div>
                               <p className="font-medium text-surface-900">Kopieer als tabel</p>
                               <p className="text-xs text-surface-500">Excel / Google Ads Editor</p>
+                            </div>
+                          </button>
+                          <button
+                            onClick={() => {
+                              handleCopyAll()
+                              setShowExportDropdown(false)
+                            }}
+                            className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-surface-50 transition-colors text-left"
+                          >
+                            <Copy className="h-5 w-5 text-primary" />
+                            <div>
+                              <p className="font-medium text-surface-900">Kopieer als tekst</p>
+                              <p className="text-xs text-surface-500">Plain text format</p>
                             </div>
                           </button>
                           <button
@@ -733,20 +768,13 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
                   )}
                 </div>
                 <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCopyAll}
-                  leftIcon={copiedIndex === 'all' ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                >
-                  {copiedIndex === 'all' ? 'Gekopieerd!' : 'Kopieer alles'}
-                </Button>
-                <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
                   onClick={handleGenerate}
-                  leftIcon={<RefreshCw className="h-4 w-4" />}
+                  className="px-2"
+                  title="Opnieuw genereren"
                 >
-                  Opnieuw
+                  <RefreshCw className="h-4 w-4" />
                 </Button>
               </div>
             )}
