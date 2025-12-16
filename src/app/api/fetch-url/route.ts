@@ -162,7 +162,7 @@ function parseHTML(html: string): LandingPageContent {
   const ogImage = ogImageMatch ? ogImageMatch[1].trim() : undefined
 
   // Extract headers (h1, h2)
-  const headerMatches = [...html.matchAll(/<h[12][^>]*>([\s\S]*?)<\/h[12]>/gi)]
+  const headerMatches = Array.from(html.matchAll(/<h[12][^>]*>([\s\S]*?)<\/h[12]>/gi))
   const headers = headerMatches
     .map(m => stripTags(decodeHTMLEntities(m[1])).trim())
     .filter(h => h.length > 0 && h.length < 200)

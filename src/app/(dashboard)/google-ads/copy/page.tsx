@@ -26,6 +26,10 @@ import {
   ChevronUp,
   ExternalLink,
   AlertCircle,
+  Upload,
+  FileSpreadsheet,
+  AlertTriangle,
+  RotateCcw,
 } from 'lucide-react'
 import { cn, copyToClipboard } from '@/lib/utils'
 
@@ -98,6 +102,11 @@ export default function GoogleAdsCopyPage() {
   const [error, setError] = useState<string | null>(null)
   const [analyzeError, setAnalyzeError] = useState<string | null>(null)
   const [showLandingPagePreview, setShowLandingPagePreview] = useState(true)
+  const [showExportDropdown, setShowExportDropdown] = useState(false)
+  const [campaignName, setCampaignName] = useState('AI Generated Campaign')
+  const [adGroupName, setAdGroupName] = useState('General')
+  const [path1, setPath1] = useState('')
+  const [path2, setPath2] = useState('')
 
   const handleAnalyzeUrl = async () => {
     if (!formData.landingPageUrl) return
@@ -168,7 +177,7 @@ export default function GoogleAdsCopyPage() {
         }
 
         // Deduplicate and limit
-        const uniqueKeywords = [...new Set(keywordSources)].slice(0, 8)
+        const uniqueKeywords = Array.from(new Set(keywordSources)).slice(0, 8)
         if (uniqueKeywords.length > 0) {
           updates.keywords = uniqueKeywords.join(', ')
         }
@@ -307,6 +316,120 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
     setFetchedPageData(null)
     setFormData({ ...formData, landingPageUrl: '' })
     setAnalyzeError(null)
+  }
+
+  // Get export validation warnings (soft, non-blocking)
+  const getExportWarnings = () => {
+    if (!generatedAd) return []
+    const warnings: string[] = []
+
+    if (!formData.landingPageUrl) {
+      warnings.push('Final URL ontbreekt')
+    }
+
+    if (path1.length > 15) {
+      warnings.push(`Path 1 > 15 tekens (${path1.length}/15)`)
+    }
+
+    if (path2.length > 15) {
+      warnings.push(`Path 2 > 15 tekens (${path2.length}/15)`)
+    }
+
+    const longHeadlines = generatedAd.headlines.filter(h => h.length > 30)
+    if (longHeadlines.length > 0) {
+      warnings.push(`${longHeadlines.length} headline(s) > 30 tekens`)
+    }
+
+    const longDescriptions = generatedAd.descriptions.filter(d => d.length > 90)
+    if (longDescriptions.length > 0) {
+      warnings.push(`${longDescriptions.length} description(s) > 90 tekens`)
+    }
+
+    if (generatedAd.headlines.length > 15) {
+      warnings.push(`Meer dan 15 headlines (${generatedAd.headlines.length} totaal)`)
+    }
+
+    return warnings
+  }
+
+  // Generate TSV for Google Ads Editor
+  const generateTSV = () => {
+    if (!generatedAd) return ''
+
+    // Headers according to Google Ads Editor format
+    const headers = [
+      'Campaign',
+      'Ad group',
+      'Final URL',
+      'Path 1',
+      'Path 2',
+      'Headline 1',
+      'Headline 2',
+      'Headline 3',
+      'Headline 4',
+      'Headline 5',
+      'Headline 6',
+      'Headline 7',
+      'Headline 8',
+      'Headline 9',
+      'Headline 10',
+      'Headline 11',
+      'Headline 12',
+      'Headline 13',
+      'Headline 14',
+      'Headline 15',
+      'Description 1',
+      'Description 2',
+      'Description 3',
+      'Description 4',
+    ]
+
+    // Create row with data - limit to max 15 headlines and 4 descriptions
+    const headlines = generatedAd.headlines.slice(0, 15)
+    const descriptions = generatedAd.descriptions.slice(0, 4)
+
+    // Pad arrays to ensure correct column alignment
+    const paddedHeadlines = [...headlines, ...Array(15 - headlines.length).fill('')]
+    const paddedDescriptions = [...descriptions, ...Array(4 - descriptions.length).fill('')]
+
+    // Use landing page URL as Final URL
+    const finalUrl = formData.landingPageUrl || ''
+
+    const row = [
+      campaignName,
+      adGroupName,
+      finalUrl,
+      path1,
+      path2,
+      ...paddedHeadlines,
+      ...paddedDescriptions,
+    ]
+
+    // Generate TSV string
+    const tsv = headers.join('\t') + '\n' + row.join('\t')
+    return tsv
+  }
+
+  const handleExportTSV = async () => {
+    const tsv = generateTSV()
+    const success = await copyToClipboard(tsv)
+    if (success) {
+      setCopiedIndex('export-tsv')
+      setTimeout(() => setCopiedIndex(null), 3000)
+    }
+    setShowExportDropdown(false)
+  }
+
+  const handleReset = () => {
+    setFormData(initialFormData)
+    setGeneratedAd(null)
+    setFetchedPageData(null)
+    setError(null)
+    setAnalyzeError(null)
+    setCampaignName('AI Generated Campaign')
+    setAdGroupName('General')
+    setPath1('')
+    setPath2('')
   }
 
   return (
@@ -537,16 +660,27 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
               </div>
             </div>
 
-            <Button
-              onClick={handleGenerate}
-              isLoading={isGenerating}
-              className="w-full"
-              size="lg"
-              leftIcon={<Sparkles className="h-4 w-4" />}
-              disabled={!formData.productName}
-            >
-              {isGenerating ? 'Genereren...' : 'Genereer advertentieteksten'}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                onClick={handleGenerate}
+                isLoading={isGenerating}
+                className="flex-1"
+                size="lg"
+                leftIcon={<Sparkles className="h-4 w-4" />}
+                disabled={!formData.productName}
+              >
+                {isGenerating ? 'Genereren...' : 'Genereer advertentieteksten'}
+              </Button>
+              <Button
+                onClick={handleReset}
+                variant="outline"
+                size="lg"
+                title="Alles wissen en opnieuw beginnen"
+                className="px-4"
+              >
+                <RotateCcw className="h-4 w-4" />
+              </Button>
+            </div>
 
             {fetchedPageData && (
               <p className="text-xs text-center text-surface-500">
@@ -566,22 +700,141 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
               </CardDescription>
             </div>
             {generatedAd && (
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
+                {/* Export Dropdown */}
+                <div className="relative">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => setShowExportDropdown(!showExportDropdown)}
+                    leftIcon={copiedIndex === 'export-tsv' || copiedIndex === 'all' ? <CheckCircle className="h-4 w-4" /> : <Upload className="h-4 w-4" />}
+                    rightIcon={<ChevronDown className="h-3 w-3" />}
+                  >
+                    {copiedIndex === 'export-tsv' || copiedIndex === 'all' ? 'Gekopieerd!' : 'Exporteren'}
+                  </Button>
+                  {showExportDropdown && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-10"
+                        onClick={() => setShowExportDropdown(false)}
+                      />
+                      <div className="absolute right-0 mt-2 w-72 bg-white rounded-lg shadow-lg border border-surface-200 z-20">
+                        <div className="p-3 border-b border-surface-100">
+                          <button
+                            onClick={handleExportTSV}
+                            className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-surface-50 transition-colors text-left"
+                          >
+                            <FileSpreadsheet className="h-5 w-5 text-primary" />
+                            <div>
+                              <p className="font-medium text-surface-900">Kopieer als tabel</p>
+                              <p className="text-xs text-surface-500">Excel / Google Ads Editor</p>
+                            </div>
+                          </button>
+                          <button
+                            onClick={() => {
+                              handleCopyAll()
+                              setShowExportDropdown(false)
+                            }}
+                            className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-surface-50 transition-colors text-left"
+                          >
+                            <Copy className="h-5 w-5 text-primary" />
+                            <div>
+                              <p className="font-medium text-surface-900">Kopieer als tekst</p>
+                              <p className="text-xs text-surface-500">Plain text format</p>
+                            </div>
+                          </button>
+                          <button
+                            disabled
+                            className="w-full flex items-center gap-3 p-2 rounded-lg text-left opacity-50 cursor-not-allowed mt-1"
+                          >
+                            <FileSpreadsheet className="h-5 w-5 text-surface-400" />
+                            <div>
+                              <p className="font-medium text-surface-500">Download CSV</p>
+                              <p className="text-xs text-surface-400">Coming soon</p>
+                            </div>
+                          </button>
+                        </div>
+                        <div className="p-3 space-y-3">
+                          <div>
+                            <label className="text-xs font-medium text-surface-600">Campaign name</label>
+                            <Input
+                              value={campaignName}
+                              onChange={(e) => setCampaignName(e.target.value)}
+                              placeholder="AI Generated Campaign"
+                              className="mt-1 text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-surface-600">Ad group name</label>
+                            <Input
+                              value={adGroupName}
+                              onChange={(e) => setAdGroupName(e.target.value)}
+                              placeholder="General"
+                              className="mt-1 text-sm"
+                            />
+                          </div>
+                          <div className="pt-2 border-t border-surface-100">
+                            <label className="text-xs font-medium text-surface-600">Final URL</label>
+                            <p className={cn(
+                              "mt-1 text-sm truncate",
+                              formData.landingPageUrl ? "text-surface-900" : "text-surface-400 italic"
+                            )}>
+                              {formData.landingPageUrl || 'Voer een landingspagina URL in'}
+                            </p>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-xs font-medium text-surface-600">
+                                Path 1 <span className={cn("text-xs", path1.length > 15 ? "text-red-500" : "text-surface-400")}>({path1.length}/15)</span>
+                              </label>
+                              <Input
+                                value={path1}
+                                onChange={(e) => setPath1(e.target.value)}
+                                placeholder="bijv. schoenen"
+                                className="mt-1 text-sm"
+                                maxLength={15}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs font-medium text-surface-600">
+                                Path 2 <span className={cn("text-xs", path2.length > 15 ? "text-red-500" : "text-surface-400")}>({path2.length}/15)</span>
+                              </label>
+                              <Input
+                                value={path2}
+                                onChange={(e) => setPath2(e.target.value)}
+                                placeholder="bijv. sale"
+                                className="mt-1 text-sm"
+                                maxLength={15}
+                              />
+                            </div>
+                          </div>
+                          {/* Soft validation warnings */}
+                          {getExportWarnings().length > 0 && (
+                            <div className="pt-2 border-t border-surface-100">
+                              <p className="text-xs font-medium text-amber-600 flex items-center gap-1 mb-1">
+                                <AlertTriangle className="h-3 w-3" />
+                                Waarschuwingen
+                              </p>
+                              <ul className="text-xs text-surface-500 space-y-0.5">
+                                {getExportWarnings().map((warning, i) => (
+                                  <li key={i}>• {warning}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
                 <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCopyAll}
-                  leftIcon={copiedIndex === 'all' ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                >
-                  {copiedIndex === 'all' ? 'Gekopieerd!' : 'Kopieer alles'}
-                </Button>
-                <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
                   onClick={handleGenerate}
-                  leftIcon={<RefreshCw className="h-4 w-4" />}
+                  className="px-2"
+                  title="Opnieuw genereren"
                 >
-                  Opnieuw
+                  <RefreshCw className="h-4 w-4" />
                 </Button>
               </div>
             )}

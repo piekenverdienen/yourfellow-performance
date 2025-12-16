@@ -216,7 +216,7 @@ export function ClickUpTasks({
             <Button
               variant="outline"
               size="sm"
-              onClick={fetchTasks}
+              onClick={() => fetchTasks()}
               className="mt-4"
             >
               <RefreshCw className="h-4 w-4 mr-2" />
