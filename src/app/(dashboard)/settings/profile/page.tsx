@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
-import { Avatar } from '@/components/ui/avatar'
+import { AvatarUpload } from '@/components/avatar-upload'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { useUser } from '@/hooks/use-user'
@@ -84,6 +84,13 @@ export default function ProfilePage() {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
+  const handleAvatarChange = async (url: string | null) => {
+    const { error } = await updateProfile({ avatar_url: url })
+    if (error) {
+      console.error('Failed to update avatar:', error)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -110,7 +117,13 @@ export default function ProfilePage() {
             <CardContent className="p-6">
               <div className="flex flex-col items-center text-center">
                 <div className="relative">
-                  <Avatar name={user?.full_name || 'User'} size="xl" />
+                  <AvatarUpload
+                    userId={user?.id || ''}
+                    userName={user?.full_name || 'User'}
+                    currentAvatarUrl={user?.avatar_url}
+                    onAvatarChange={handleAvatarChange}
+                    size="xl"
+                  />
                   <div className="absolute -bottom-2 -right-2 bg-primary text-black text-xs font-bold rounded-full w-8 h-8 flex items-center justify-center">
                     {levelInfo.level}
                   </div>
