@@ -301,13 +301,13 @@ export default function LeaderboardPage() {
         {/* Main Leaderboard */}
         <div className="lg:col-span-2">
           <Card>
-            <CardHeader>
+            <CardHeader className="pb-4">
               <CardTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5 text-surface-500" />
                 {period === 'monthly' ? 'Ranking Deze Maand' : 'All-Time Ranking'}
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-0">
               {leaderboard.length === 0 ? (
                 <div className="text-center py-12">
                   <Trophy className="h-12 w-12 text-surface-300 mx-auto mb-4" />
