@@ -9,19 +9,48 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { 
-  Sparkles, 
-  Copy, 
-  RefreshCw, 
-  ThumbsUp, 
+import {
+  Sparkles,
+  Copy,
+  RefreshCw,
+  ThumbsUp,
   ThumbsDown,
   CheckCircle,
   Wand2,
   Target,
   Users,
   MessageSquare,
+  Link,
+  Loader2,
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
+  AlertCircle,
 } from 'lucide-react'
 import { cn, copyToClipboard } from '@/lib/utils'
+
+// Type for Firecrawl response
+interface FetchedPageData {
+  url: string
+  title: string
+  description: string
+  markdown: string
+  metadata: {
+    ogTitle?: string
+    ogDescription?: string
+    ogImage?: string
+    language?: string
+  }
+  extractedElements: {
+    headings: { level: number; text: string }[]
+    ctas: string[]
+    testimonials: string[]
+    trustSignals: string[]
+    forms: { fields: number; hasEmail: boolean; hasPhone: boolean }[]
+    prices: string[]
+    urgencyElements: string[]
+  }
+}
 
 const toneOptions = [
   { value: 'professional', label: 'Professioneel' },
@@ -36,35 +65,143 @@ const adTypeOptions = [
   { value: 'performance_max', label: 'Performance Max' },
 ]
 
+const languageOptions = [
+  { value: 'nl', label: 'Nederlands' },
+  { value: 'en', label: 'Engels' },
+  { value: 'de', label: 'Duits' },
+]
+
 interface GeneratedAd {
   headlines: string[]
   descriptions: string[]
 }
 
 const initialFormData = {
+  landingPageUrl: '',
   productName: '',
   productDescription: '',
   targetAudience: '',
   keywords: '',
   tone: 'professional',
   adType: 'responsive_search',
+  language: 'nl',
 }
 
 export default function GoogleAdsCopyPage() {
   const clientId = useSelectedClientId()
   const [isGenerating, setIsGenerating] = useState(false)
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [formData, setFormData] = usePersistedState('google-ads-form', initialFormData)
   const [generatedAd, setGeneratedAd] = usePersistedState<GeneratedAd | null>('google-ads-result', null)
+  const [fetchedPageData, setFetchedPageData] = usePersistedState<FetchedPageData | null>('google-ads-fetched-page', null)
   const [copiedIndex, setCopiedIndex] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null)
+  const [showLandingPagePreview, setShowLandingPagePreview] = useState(true)
+
+  const handleAnalyzeUrl = async () => {
+    if (!formData.landingPageUrl) return
+
+    setIsAnalyzing(true)
+    setAnalyzeError(null)
+
+    try {
+      // Use Firecrawl API for better content extraction
+      const response = await fetch('/api/fetch-page', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          url: formData.landingPageUrl,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Kon de pagina niet analyseren')
+      }
+
+      const pageData = data.data as FetchedPageData
+      setFetchedPageData(pageData)
+
+      // Auto-fill empty fields with rich Firecrawl data
+      const updates: Partial<typeof formData> = {}
+
+      if (!formData.productName && pageData.title) {
+        // Use title, but clean it up (remove site name if present)
+        const cleanTitle = pageData.title.split(/[|\-–—]/)[0].trim()
+        updates.productName = cleanTitle.slice(0, 100)
+      }
+
+      if (!formData.productDescription) {
+        // Use description from metadata, or fallback to markdown content
+        if (pageData.description) {
+          updates.productDescription = pageData.description
+        } else if (pageData.metadata?.ogDescription) {
+          updates.productDescription = pageData.metadata.ogDescription
+        } else if (pageData.markdown) {
+          // Use first ~500 chars of markdown content
+          updates.productDescription = pageData.markdown.slice(0, 500).trim() + (pageData.markdown.length > 500 ? '...' : '')
+        }
+      }
+
+      // Extract keywords from headings, CTAs, and content
+      if (!formData.keywords) {
+        const keywordSources: string[] = []
+
+        // Add headings as keywords
+        if (pageData.extractedElements?.headings) {
+          pageData.extractedElements.headings.slice(0, 3).forEach(h => {
+            const words = h.text.toLowerCase().split(/\s+/).filter(w => w.length > 3)
+            keywordSources.push(...words.slice(0, 2))
+          })
+        }
+
+        // Add CTAs as inspiration for keywords
+        if (pageData.extractedElements?.ctas) {
+          pageData.extractedElements.ctas.slice(0, 3).forEach(cta => {
+            const words = cta.toLowerCase().split(/\s+/).filter(w => w.length > 3)
+            keywordSources.push(...words)
+          })
+        }
+
+        // Deduplicate and limit
+        const uniqueKeywords = [...new Set(keywordSources)].slice(0, 8)
+        if (uniqueKeywords.length > 0) {
+          updates.keywords = uniqueKeywords.join(', ')
+        }
+      }
+
+      if (Object.keys(updates).length > 0) {
+        setFormData({ ...formData, ...updates })
+      }
+
+    } catch (err) {
+      console.error('URL analysis error:', err)
+      setAnalyzeError(err instanceof Error ? err.message : 'Er ging iets mis. Probeer het opnieuw.')
+      setFetchedPageData(null)
+    } finally {
+      setIsAnalyzing(false)
+    }
+  }
 
   const handleGenerate = async () => {
     setIsGenerating(true)
     setError(null)
 
     try {
+      // Language mapping for the prompt
+      const languageMap: Record<string, string> = {
+        nl: 'Nederlands',
+        en: 'Engels (English)',
+        de: 'Duits (Deutsch)',
+      }
+      const targetLanguage = languageMap[formData.language] || 'Nederlands'
+
       // Build the prompt for the AI
-      const prompt = `Genereer Google Ads teksten voor het volgende:
+      let prompt = `Genereer Google Ads teksten voor het volgende:
 
 Product/Dienst: ${formData.productName}
 Beschrijving: ${formData.productDescription || 'Geen beschrijving opgegeven'}
@@ -72,8 +209,33 @@ Doelgroep: ${formData.targetAudience || 'Algemeen publiek'}
 Keywords: ${formData.keywords || 'Geen specifieke keywords'}
 Tone of voice: ${formData.tone}
 Advertentietype: ${formData.adType}
+Taal: ${targetLanguage}
+`
 
-Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karakters) in het Nederlands.`
+      // Add rich landing page context if available (from Firecrawl)
+      if (fetchedPageData) {
+        const elements = fetchedPageData.extractedElements
+
+        prompt += `
+
+LANDINGSPAGINA ANALYSE (gebruik deze informatie voor betere Quality Score):
+- Pagina titel: ${fetchedPageData.title}
+- Meta description: ${fetchedPageData.description || fetchedPageData.metadata?.ogDescription || 'Niet beschikbaar'}
+- Belangrijkste koppen: ${elements?.headings?.slice(0, 5).map(h => h.text).join(' | ') || 'Geen'}
+${elements?.ctas?.length ? `- Call-to-actions op pagina: ${elements.ctas.slice(0, 5).join(', ')}` : ''}
+${elements?.prices?.length ? `- Prijzen op pagina: ${elements.prices.join(', ')}` : ''}
+${elements?.urgencyElements?.length ? `- Urgency elementen: ${elements.urgencyElements.join(', ')}` : ''}
+${elements?.trustSignals?.length ? `- Trust signals: ${elements.trustSignals.slice(0, 3).join(', ')}` : ''}
+
+PAGINA CONTENT (eerste 1500 karakters):
+${fetchedPageData.markdown?.slice(0, 1500) || 'Niet beschikbaar'}
+
+BELANGRIJK: Gebruik EXACT dezelfde woorden, termen en messaging die op de landingspagina staan. Dit verhoogt de Ad Relevance en Quality Score aanzienlijk.`
+      }
+
+      prompt += `
+
+Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karakters) in het ${targetLanguage}.`
 
       const response = await fetch('/api/generate', {
         method: 'POST',
@@ -87,6 +249,7 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
           options: {
             tone: formData.tone,
             adType: formData.adType,
+            hasLandingPageContent: !!fetchedPageData,
           },
         }),
       })
@@ -126,7 +289,7 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
 
   const handleCopyAll = async () => {
     if (!generatedAd) return
-    
+
     const allText = [
       'HEADLINES:',
       ...generatedAd.headlines.map((h, i) => `${i + 1}. ${h}`),
@@ -134,10 +297,16 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
       'DESCRIPTIONS:',
       ...generatedAd.descriptions.map((d, i) => `${i + 1}. ${d}`),
     ].join('\n')
-    
+
     await copyToClipboard(allText)
     setCopiedIndex('all')
     setTimeout(() => setCopiedIndex(null), 2000)
+  }
+
+  const handleClearLandingPage = () => {
+    setFetchedPageData(null)
+    setFormData({ ...formData, landingPageUrl: '' })
+    setAnalyzeError(null)
   }
 
   return (
@@ -165,14 +334,151 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
-            <div>
-              <label className="label">Product/Dienst naam</label>
-              <Input
-                placeholder="bijv. Nike Air Max 90"
-                value={formData.productName}
-                onChange={(e) => setFormData({ ...formData, productName: e.target.value })}
-                leftIcon={<Target className="h-4 w-4" />}
-              />
+            {/* Landing Page URL Section */}
+            <div className="p-4 bg-primary/5 rounded-lg border border-primary/20">
+              <div className="flex items-center gap-2 mb-3">
+                <Link className="h-4 w-4 text-primary" />
+                <span className="font-medium text-surface-900">Landingspagina analyseren</span>
+                <Badge variant="primary" className="text-xs">Quality Score boost</Badge>
+              </div>
+              <p className="text-sm text-surface-600 mb-3">
+                Voer je landingspagina URL in voor betere advertentieteksten die matchen met je pagina content.
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="https://jouwwebsite.nl/product"
+                  value={formData.landingPageUrl}
+                  onChange={(e) => setFormData({ ...formData, landingPageUrl: e.target.value })}
+                  leftIcon={<Link className="h-4 w-4" />}
+                  className="flex-1"
+                />
+                <Button
+                  onClick={handleAnalyzeUrl}
+                  isLoading={isAnalyzing}
+                  disabled={!formData.landingPageUrl || isAnalyzing}
+                  variant="secondary"
+                >
+                  {isAnalyzing ? 'Analyseren...' : 'Analyseer'}
+                </Button>
+              </div>
+
+              {/* Analysis Error */}
+              {analyzeError && (
+                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-red-700">{analyzeError}</p>
+                </div>
+              )}
+
+              {/* Landing Page Preview */}
+              {fetchedPageData && (
+                <div className="mt-3 border border-surface-200 rounded-lg overflow-hidden">
+                  <button
+                    onClick={() => setShowLandingPagePreview(!showLandingPagePreview)}
+                    className="w-full flex items-center justify-between p-3 bg-surface-50 hover:bg-surface-100 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                      <span className="text-sm font-medium text-surface-900">Pagina geanalyseerd</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleClearLandingPage()
+                        }}
+                        className="text-xs text-surface-500 hover:text-surface-700"
+                      >
+                        Wissen
+                      </button>
+                      {showLandingPagePreview ? (
+                        <ChevronUp className="h-4 w-4 text-surface-400" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-surface-400" />
+                      )}
+                    </div>
+                  </button>
+
+                  {showLandingPagePreview && (
+                    <div className="p-3 space-y-3 text-sm">
+                      <div>
+                        <span className="text-surface-500">Titel:</span>
+                        <p className="text-surface-900 font-medium">{fetchedPageData.title || '-'}</p>
+                      </div>
+                      {(fetchedPageData.description || fetchedPageData.metadata?.ogDescription) && (
+                        <div>
+                          <span className="text-surface-500">Beschrijving:</span>
+                          <p className="text-surface-700">{fetchedPageData.description || fetchedPageData.metadata?.ogDescription}</p>
+                        </div>
+                      )}
+                      {fetchedPageData.extractedElements?.headings?.length > 0 && (
+                        <div>
+                          <span className="text-surface-500">Koppen:</span>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {fetchedPageData.extractedElements.headings.slice(0, 5).map((header, i) => (
+                              <Badge key={i} variant="secondary" className="text-xs">
+                                {header.text.length > 40 ? header.text.slice(0, 40) + '...' : header.text}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {fetchedPageData.extractedElements?.ctas?.length > 0 && (
+                        <div>
+                          <span className="text-surface-500">CTAs gevonden:</span>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {fetchedPageData.extractedElements.ctas.slice(0, 5).map((cta, i) => (
+                              <Badge key={i} variant="primary" className="text-xs">
+                                {cta}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {fetchedPageData.extractedElements?.prices?.length > 0 && (
+                        <div>
+                          <span className="text-surface-500">Prijzen:</span>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {fetchedPageData.extractedElements.prices.map((price, i) => (
+                              <Badge key={i} variant="secondary" className="text-xs">
+                                {price}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {fetchedPageData.markdown && (
+                        <div>
+                          <span className="text-surface-500">Content preview:</span>
+                          <p className="text-surface-600 text-xs mt-1 line-clamp-3">
+                            {fetchedPageData.markdown.slice(0, 200)}...
+                          </p>
+                        </div>
+                      )}
+                      <a
+                        href={formData.landingPageUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-primary hover:underline text-xs"
+                      >
+                        Bekijk pagina <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-surface-200 pt-5">
+              <div>
+                <label className="label">Product/Dienst naam</label>
+                <Input
+                  placeholder="bijv. Nike Air Max 90"
+                  value={formData.productName}
+                  onChange={(e) => setFormData({ ...formData, productName: e.target.value })}
+                  leftIcon={<Target className="h-4 w-4" />}
+                />
+              </div>
             </div>
 
             <div>
@@ -204,7 +510,15 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="label">Taal</label>
+                <Select
+                  options={languageOptions}
+                  value={formData.language}
+                  onChange={(e) => setFormData({ ...formData, language: e.target.value })}
+                />
+              </div>
               <div>
                 <label className="label">Tone of voice</label>
                 <Select
@@ -223,7 +537,7 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
               </div>
             </div>
 
-            <Button 
+            <Button
               onClick={handleGenerate}
               isLoading={isGenerating}
               className="w-full"
@@ -233,6 +547,12 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
             >
               {isGenerating ? 'Genereren...' : 'Genereer advertentieteksten'}
             </Button>
+
+            {fetchedPageData && (
+              <p className="text-xs text-center text-surface-500">
+                ✨ Volledige landingspagina content wordt meegenomen voor betere Quality Score
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -247,16 +567,16 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
             </div>
             {generatedAd && (
               <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="sm"
                   onClick={handleCopyAll}
                   leftIcon={copiedIndex === 'all' ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                 >
                   {copiedIndex === 'all' ? 'Gekopieerd!' : 'Kopieer alles'}
                 </Button>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="sm"
                   onClick={handleGenerate}
                   leftIcon={<RefreshCw className="h-4 w-4" />}
@@ -291,7 +611,7 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
                   </div>
                   <div className="space-y-2">
                     {generatedAd.headlines.map((headline, index) => (
-                      <div 
+                      <div
                         key={index}
                         className="group flex items-center justify-between p-3 bg-surface-50 rounded-lg hover:bg-surface-100 transition-colors"
                       >
@@ -300,7 +620,10 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
                             {index + 1}
                           </span>
                           <span className="text-surface-900">{headline}</span>
-                          <span className="text-xs text-surface-400">
+                          <span className={cn(
+                            "text-xs",
+                            headline.length > 30 ? "text-red-500" : "text-surface-400"
+                          )}>
                             ({headline.length}/30)
                           </span>
                         </div>
@@ -329,7 +652,7 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
                   </div>
                   <div className="space-y-2">
                     {generatedAd.descriptions.map((description, index) => (
-                      <div 
+                      <div
                         key={index}
                         className="group p-3 bg-surface-50 rounded-lg hover:bg-surface-100 transition-colors"
                       >
@@ -340,7 +663,10 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
                             </span>
                             <div>
                               <p className="text-surface-900">{description}</p>
-                              <span className="text-xs text-surface-400 mt-1 inline-block">
+                              <span className={cn(
+                                "text-xs mt-1 inline-block",
+                                description.length > 90 ? "text-red-500" : "text-surface-400"
+                              )}>
                                 ({description.length}/90)
                               </span>
                             </div>

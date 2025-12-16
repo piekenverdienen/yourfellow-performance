@@ -56,7 +56,7 @@ export interface UsageRecord {
   created_at: string
 }
 
-export type ToolType = 
+export type ToolType =
   | 'google-ads-copy'
   | 'google-ads-feed'
   | 'google-ads-image'
@@ -65,6 +65,7 @@ export type ToolType =
   | 'seo-content'
   | 'seo-meta'
   | 'cro-analyzer'
+  | 'fetch-url'
 
 // AI Generation types
 export interface GenerationRequest {
@@ -81,6 +82,15 @@ export interface GenerationResponse {
 }
 
 // Google Ads types
+export interface LandingPageContent {
+  title: string
+  metaDescription: string
+  headers: string[]
+  mainContent: string
+  extractedKeywords: string[]
+  ogImage?: string
+}
+
 export interface AdCopyRequest {
   product_name: string
   product_description: string
@@ -88,6 +98,7 @@ export interface AdCopyRequest {
   keywords: string[]
   tone: 'professional' | 'casual' | 'urgent' | 'friendly'
   ad_type: 'responsive_search' | 'responsive_display' | 'performance_max'
+  landing_page_content?: LandingPageContent
 }
 
 export interface AdCopyResult {
