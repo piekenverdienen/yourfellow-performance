@@ -59,7 +59,7 @@ export function ClientSelector({
             ? 'Laden...'
             : selectedClient
             ? selectedClient.name
-            : 'Alle clients'}
+            : 'Alle klanten'}
         </span>
         <ChevronDown
           className={cn(
@@ -76,7 +76,7 @@ export function ClientSelector({
             {/* Header */}
             <div className="px-3 py-2 border-b border-surface-100 bg-surface-50">
               <p className="text-xs font-medium text-surface-500 uppercase tracking-wider">
-                Selecteer client
+                Selecteer klant
               </p>
             </div>
 
@@ -93,7 +93,7 @@ export function ClientSelector({
                 <div className="w-8 h-8 rounded-lg bg-surface-100 flex items-center justify-center">
                   <Building2 className="h-4 w-4 text-surface-400" />
                 </div>
-                <span className="flex-1 font-medium">Alle clients</span>
+                <span className="flex-1 font-medium">Alle klanten</span>
                 {!selectedClient && <Check className="h-4 w-4" />}
               </button>
 
@@ -140,7 +140,7 @@ export function ClientSelector({
               {/* Empty state */}
               {clients.length === 0 && !isLoading && (
                 <div className="px-3 py-4 text-center text-sm text-surface-500">
-                  Geen clients beschikbaar
+                  Geen klanten beschikbaar
                 </div>
               )}
             </div>
@@ -157,7 +157,7 @@ export function ClientSelector({
                   className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-primary hover:bg-primary/5 transition-colors"
                 >
                   <Plus className="h-4 w-4" />
-                  <span className="font-medium">Nieuwe client</span>
+                  <span className="font-medium">Nieuwe klant</span>
                 </button>
               </>
             )}

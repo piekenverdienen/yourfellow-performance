@@ -120,7 +120,7 @@ export default function DashboardPage() {
             <p className="text-surface-400 mt-1">
               {selectedClient
                 ? `Je werkt momenteel aan ${selectedClient.name}`
-                : 'Selecteer een client om te beginnen met AI-powered marketing'}
+                : 'Selecteer een klant om te beginnen met AI-powered marketing'}
             </p>
           </div>
           {selectedClient && (
@@ -135,7 +135,7 @@ export default function DashboardPage() {
                 <ClientLogoFallback name={selectedClient.name} size="sm" className="w-10 h-10" />
               )}
               <div>
-                <p className="text-xs text-surface-400">Actieve client</p>
+                <p className="text-xs text-surface-400">Actieve klant</p>
                 <p className="font-semibold text-white">{selectedClient.name}</p>
               </div>
             </div>
@@ -152,7 +152,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <Building2 className="h-5 w-5 text-surface-500" />
-                <h2 className="text-lg font-semibold text-surface-900">Mijn Clients</h2>
+                <h2 className="text-lg font-semibold text-surface-900">Mijn Klanten</h2>
                 <Badge variant="secondary" className="ml-2">{clients.length}</Badge>
               </div>
               <div className="flex items-center gap-2">
@@ -160,13 +160,13 @@ export default function DashboardPage() {
                   <Link href="/clients">
                     <Button variant="outline" size="sm">
                       <Plus className="h-4 w-4 mr-1" />
-                      Nieuwe Client
+                      Nieuwe Klant
                     </Button>
                   </Link>
                 )}
                 <Link href="/clients">
                   <Button variant="ghost" size="sm">
-                    Alle clients
+                    Alle klanten
                     <ChevronRight className="h-4 w-4 ml-1" />
                   </Button>
                 </Link>
@@ -178,18 +178,18 @@ export default function DashboardPage() {
                 <CardContent>
                   <Building2 className="h-12 w-12 text-surface-300 mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-surface-900 mb-2">
-                    Nog geen clients
+                    Nog geen klanten
                   </h3>
                   <p className="text-surface-600 mb-4">
                     {isAdmin
-                      ? 'Voeg je eerste client toe om te beginnen met YourFellow.'
-                      : 'Je hebt nog geen toegang tot clients. Vraag een admin om je toe te voegen.'}
+                      ? 'Voeg je eerste klant toe om te beginnen met YourFellow.'
+                      : 'Je hebt nog geen toegang tot klanten. Vraag een admin om je toe te voegen.'}
                   </p>
                   {isAdmin && (
                     <Link href="/clients">
                       <Button>
                         <Plus className="h-4 w-4 mr-2" />
-                        Eerste Client Toevoegen
+                        Eerste Klant Toevoegen
                       </Button>
                     </Link>
                   )}
@@ -301,7 +301,7 @@ export default function DashboardPage() {
                   <p className="text-sm text-surface-600 mb-2">
                     {selectedClient
                       ? `Chat met onze AI assistenten over ${selectedClient.name}`
-                      : 'Selecteer eerst een client om context-aware hulp te krijgen'}
+                      : 'Selecteer eerst een klant om context-aware hulp te krijgen'}
                   </p>
                   {aiAssistants.map((assistant) => (
                     <Link
@@ -377,7 +377,7 @@ export default function DashboardPage() {
                     <div className="mt-4 p-3 bg-amber-50 rounded-xl border border-amber-100">
                       <div className="flex items-center gap-2 text-sm text-amber-800">
                         <Building2 className="h-4 w-4" />
-                        <span>Selecteer een client hierboven voor gepersonaliseerde AI output</span>
+                        <span>Selecteer een klant hierboven voor gepersonaliseerde AI output</span>
                       </div>
                     </div>
                   )}
@@ -400,8 +400,8 @@ export default function DashboardPage() {
                         1
                       </div>
                       <div>
-                        <p className="font-medium text-surface-900">Client toevoegen</p>
-                        <p className="text-sm text-surface-600">Maak je eerste client aan</p>
+                        <p className="font-medium text-surface-900">Klant toevoegen</p>
+                        <p className="text-sm text-surface-600">Maak je eerste klant aan</p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
@@ -410,7 +410,7 @@ export default function DashboardPage() {
                       </div>
                       <div>
                         <p className="font-medium text-surface-900">AI Context instellen</p>
-                        <p className="text-sm text-surface-600">Vul de client gegevens in</p>
+                        <p className="text-sm text-surface-600">Vul de klantgegevens in</p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">

@@ -38,7 +38,7 @@ export async function POST(
         .rpc('has_client_access', { check_client_id: clientId, min_role: 'editor' })
 
       if (!clientAccess) {
-        return NextResponse.json({ error: 'Geen toegang tot deze client' }, { status: 403 })
+        return NextResponse.json({ error: 'Geen toegang tot deze klant' }, { status: 403 })
       }
 
       // Fetch client with context
@@ -270,7 +270,7 @@ async function executeNode(
             activeChannels?: string[]
           }
 
-          const contextParts = [`Je werkt voor client: ${clientName}`]
+          const contextParts = [`Je werkt voor klant: ${clientName}`]
           if (ctx.proposition) contextParts.push(`Propositie: ${ctx.proposition}`)
           if (ctx.targetAudience) contextParts.push(`Doelgroep: ${ctx.targetAudience}`)
           if (ctx.usps && ctx.usps.length > 0) contextParts.push(`USP's: ${ctx.usps.join(', ')}`)

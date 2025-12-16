@@ -24,7 +24,6 @@ import {
   GitBranch,
   Building2,
   Code2,
-  Calendar,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -42,12 +41,7 @@ const navigation: NavItem[] = [
     icon: LayoutDashboard
   },
   {
-    name: 'Kalender',
-    href: '/calendar',
-    icon: Calendar
-  },
-  {
-    name: 'Clients',
+    name: 'Klanten',
     href: '/clients',
     icon: Building2
   },

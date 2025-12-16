@@ -139,7 +139,7 @@ export default function ClientDetailPage() {
       if (res.ok) {
         setClient(data.client)
         fetchClients() // Refresh global client list
-        alert('Client instellingen opgeslagen')
+        alert('Klant instellingen opgeslagen')
       } else {
         alert(data.error || 'Er ging iets mis')
       }
@@ -353,7 +353,7 @@ export default function ClientDetailPage() {
       {activeTab === 'overview' && (
         <Card>
           <CardHeader>
-            <CardTitle>Client Informatie</CardTitle>
+            <CardTitle>Klant Informatie</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
@@ -648,7 +648,7 @@ export default function ClientDetailPage() {
                 <Input
                   value={editedName}
                   onChange={(e) => setEditedName(e.target.value)}
-                  placeholder="Client naam"
+                  placeholder="Klant naam"
                 />
               </div>
 
