@@ -20,6 +20,9 @@ import {
   Target,
   Hash,
   MessageSquare,
+  Image as ImageIcon,
+  Download,
+  Wand2,
 } from 'lucide-react'
 import { cn, copyToClipboard } from '@/lib/utils'
 
@@ -53,6 +56,17 @@ interface GeneratedPost {
   suggested_cta: string
 }
 
+interface GeneratedImage {
+  url: string
+  revisedPrompt: string
+}
+
+const imageSizeOptions = [
+  { value: '1024x1024', label: 'Vierkant (1:1)' },
+  { value: '1536x1024', label: 'Landschap (3:2)' },
+  { value: '1024x1536', label: 'Portret (2:3)' },
+]
+
 const initialFormData = {
   topic: '',
   context: '',
@@ -69,6 +83,14 @@ export default function SocialPostsPage() {
   const [generatedPost, setGeneratedPost] = usePersistedState<GeneratedPost | null>('social-posts-result', null)
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // Image generation state
+  const [wantsImage, setWantsImage] = usePersistedState('social-posts-wants-image', false)
+  const [imagePrompt, setImagePrompt] = usePersistedState('social-posts-image-prompt', '')
+  const [imageSize, setImageSize] = usePersistedState('social-posts-image-size', '1024x1024')
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false)
+  const [generatedImage, setGeneratedImage] = usePersistedState<GeneratedImage | null>('social-posts-image-result', null)
+  const [imageError, setImageError] = useState<string | null>(null)
 
   const handleGenerate = async () => {
     setIsGenerating(true)
@@ -120,17 +142,133 @@ Schrijf een engaging post in het Nederlands die past bij het platform en de doel
 
       const parsedResult = JSON.parse(resultText)
 
-      setGeneratedPost({
+      const newPost = {
         primary_text: parsedResult.primary_text || '',
         headline: parsedResult.headline || '',
         hashtags: parsedResult.hashtags || [],
         suggested_cta: parsedResult.suggested_cta || '',
-      })
+      }
+      setGeneratedPost(newPost)
+
+      // If user wants image, generate image prompt automatically
+      if (wantsImage && newPost.primary_text) {
+        const generatedPrompt = await generateImagePrompt(newPost.primary_text)
+        if (generatedPrompt) {
+          setImagePrompt(generatedPrompt)
+        }
+      }
     } catch (err) {
       console.error('Generation error:', err)
       setError(err instanceof Error ? err.message : 'Er ging iets mis. Probeer het opnieuw.')
     } finally {
       setIsGenerating(false)
+    }
+  }
+
+  // Generate image prompt based on post content
+  const generateImagePrompt = async (postText: string) => {
+    try {
+      const platformDescriptions: Record<string, string> = {
+        linkedin: 'professional LinkedIn post, corporate style',
+        instagram: 'Instagram post, vibrant and eye-catching',
+        facebook: 'Facebook post, friendly and engaging',
+        twitter: 'X/Twitter post, bold and impactful',
+      }
+
+      const prompt = `Genereer een korte, beschrijvende image prompt in het Engels voor een AI image generator.
+De afbeelding moet passen bij deze social media post:
+
+"${postText}"
+
+Platform: ${platformDescriptions[formData.platform] || formData.platform}
+Doelgroep: ${formData.targetAudience || 'professionals'}
+
+Geef ALLEEN de image prompt terug, geen uitleg. De prompt moet:
+- In het Engels zijn (werkt beter voor image AI)
+- Beschrijvend maar beknopt (max 100 woorden)
+- Geschikt zijn voor professioneel gebruik
+- Geen tekst of logo's bevatten (AI kan geen tekst goed genereren)
+
+Voorbeeld format: "Professional business scene showing [beschrijving], modern minimalist style, soft lighting, corporate colors"`
+
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tool: 'image-prompt',
+          prompt,
+          clientId: clientId || undefined,
+        }),
+      })
+
+      if (!response.ok) throw new Error('Kon geen image prompt genereren')
+
+      const data = await response.json()
+      if (!data.success) throw new Error(data.error || 'Image prompt generatie mislukt')
+
+      return data.result.trim()
+    } catch (err) {
+      console.error('Image prompt generation error:', err)
+      return null
+    }
+  }
+
+  // Generate image from prompt
+  const handleGenerateImage = async () => {
+    if (!imagePrompt.trim()) return
+
+    setIsGeneratingImage(true)
+    setImageError(null)
+
+    try {
+      const response = await fetch('/api/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: imagePrompt,
+          model: 'gpt-image',
+          size: imageSize,
+          quality: 'medium',
+          clientId: clientId || undefined,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Er ging iets mis bij het genereren van de afbeelding')
+      }
+
+      setGeneratedImage({
+        url: data.imageUrl,
+        revisedPrompt: data.revisedPrompt || imagePrompt,
+      })
+    } catch (err) {
+      console.error('Image generation error:', err)
+      setImageError(err instanceof Error ? err.message : 'Er ging iets mis. Probeer het opnieuw.')
+    } finally {
+      setIsGeneratingImage(false)
+    }
+  }
+
+  // Download generated image
+  const handleDownloadImage = async () => {
+    if (!generatedImage?.url) return
+
+    try {
+      const response = await fetch(generatedImage.url)
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `social-post-image-${Date.now()}.png`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Download error:', err)
+      window.open(generatedImage.url, '_blank')
     }
   }
 
@@ -236,6 +374,36 @@ Schrijf een engaging post in het Nederlands die past bij het platform en de doel
                 value={formData.tone}
                 onChange={(e) => setFormData({ ...formData, tone: e.target.value })}
               />
+            </div>
+
+            {/* Image generation toggle */}
+            <div className="flex items-center justify-between p-4 bg-surface-50 rounded-lg border border-surface-200">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <ImageIcon className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="font-medium text-surface-900">Genereer ook een afbeelding</p>
+                  <p className="text-sm text-surface-500">AI maakt een passende visual bij je post</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={wantsImage}
+                onClick={() => setWantsImage(!wantsImage)}
+                className={cn(
+                  "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
+                  wantsImage ? "bg-primary" : "bg-surface-300"
+                )}
+              >
+                <span
+                  className={cn(
+                    "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                    wantsImage ? "translate-x-5" : "translate-x-0"
+                  )}
+                />
+              </button>
             </div>
 
             <Button
@@ -376,6 +544,98 @@ Schrijf een engaging post in het Nederlands die past bij het platform en de doel
                     <h4 className="font-medium text-surface-900 mb-3">Voorgestelde CTA</h4>
                     <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
                       <p className="text-surface-900">{generatedPost.suggested_cta}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Image Generation Section */}
+                {wantsImage && (
+                  <div className="pt-4 border-t border-surface-200">
+                    <div className="flex items-center gap-2 mb-4">
+                      <ImageIcon className="h-5 w-5 text-primary" />
+                      <h4 className="font-medium text-surface-900">Afbeelding genereren</h4>
+                    </div>
+
+                    {/* Image Prompt Editor */}
+                    <div className="space-y-4">
+                      <div>
+                        <label className="text-sm text-surface-600 mb-2 block">
+                          Image prompt (je kunt deze aanpassen)
+                        </label>
+                        <Textarea
+                          value={imagePrompt}
+                          onChange={(e) => setImagePrompt(e.target.value)}
+                          placeholder="Beschrijf de afbeelding die je wilt genereren..."
+                          className="min-h-[80px] text-sm"
+                        />
+                      </div>
+
+                      <div className="flex gap-3">
+                        <div className="flex-1">
+                          <label className="text-sm text-surface-600 mb-1 block">Formaat</label>
+                          <Select
+                            options={imageSizeOptions}
+                            value={imageSize}
+                            onChange={(e) => setImageSize(e.target.value)}
+                          />
+                        </div>
+                        <div className="flex items-end">
+                          <Button
+                            onClick={handleGenerateImage}
+                            isLoading={isGeneratingImage}
+                            disabled={!imagePrompt.trim()}
+                            leftIcon={<Wand2 className="h-4 w-4" />}
+                          >
+                            {isGeneratingImage ? 'Genereren...' : 'Genereer afbeelding'}
+                          </Button>
+                        </div>
+                      </div>
+
+                      {imageError && (
+                        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                          {imageError}
+                        </div>
+                      )}
+
+                      {isGeneratingImage && (
+                        <div className="flex flex-col items-center justify-center py-8 text-center">
+                          <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center mb-3">
+                            <Sparkles className="h-6 w-6 text-primary animate-pulse" />
+                          </div>
+                          <p className="text-surface-600">Afbeelding wordt gegenereerd...</p>
+                          <p className="text-sm text-surface-400 mt-1">Dit duurt 10-20 seconden</p>
+                        </div>
+                      )}
+
+                      {generatedImage && !isGeneratingImage && (
+                        <div className="space-y-3">
+                          <div className="relative rounded-xl overflow-hidden bg-surface-100">
+                            <img
+                              src={generatedImage.url}
+                              alt="Generated image"
+                              className="w-full h-auto"
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={handleDownloadImage}
+                              leftIcon={<Download className="h-4 w-4" />}
+                            >
+                              Download
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={handleGenerateImage}
+                              leftIcon={<RefreshCw className="h-4 w-4" />}
+                            >
+                              Opnieuw genereren
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
