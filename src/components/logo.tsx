@@ -21,8 +21,8 @@ export function Logo({
   return (
     <div className={cn('flex items-center', className)}>
       <Image
-        src="/bracefox-logo.png.png"
-        alt="BraceFox"
+        src="/yourfellow-logo.png"
+        alt="YourFellow"
         width={sizes[size].width}
         height={sizes[size].height}
         className="object-contain"
