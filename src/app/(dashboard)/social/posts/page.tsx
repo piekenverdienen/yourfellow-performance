@@ -238,28 +238,42 @@ Schrijf een engaging post in het Nederlands die past bij het platform en de doel
   // Generate image prompt based on post content
   const generateImagePrompt = async (postText: string) => {
     try {
-      const platformDescriptions: Record<string, string> = {
-        linkedin: 'professional LinkedIn post, corporate style',
-        instagram: 'Instagram post, vibrant and eye-catching',
-        facebook: 'Facebook post, friendly and engaging',
-        twitter: 'X/Twitter post, bold and impactful',
+      const platformStyles: Record<string, string> = {
+        linkedin: 'Professional corporate photography style. Clean, modern, business-appropriate. Think: office environments, professional portraits, business meetings, corporate events, clean gradients, minimalist design.',
+        instagram: 'Vibrant, eye-catching, scroll-stopping visuals. Bold colors, dynamic compositions, lifestyle photography, aspirational imagery, trendy aesthetics.',
+        facebook: 'Friendly, relatable, community-focused imagery. Warm tones, authentic moments, approachable visuals, lifestyle scenes.',
+        twitter: 'Bold, impactful, attention-grabbing. High contrast, clear focal point, works well as thumbnail, punchy visuals.',
       }
 
-      const prompt = `Genereer een korte, beschrijvende image prompt in het Engels voor een AI image generator.
-De afbeelding moet passen bij deze social media post:
+      const prompt = `Je bent een expert image prompt engineer. Schrijf een gedetailleerde prompt voor een AI image generator (zoals DALL-E of Midjourney).
 
+SOCIAL MEDIA POST:
 "${postText}"
 
-Platform: ${platformDescriptions[formData.platform] || formData.platform}
-Doelgroep: ${formData.targetAudience || 'professionals'}
+CONTEXT:
+- Platform: ${formData.platform.toUpperCase()}
+- Stijl: ${platformStyles[formData.platform] || 'Professional and modern'}
+- Doelgroep: ${formData.targetAudience || 'Professionals'}
+- Onderwerp: ${formData.topic}
 
-Geef ALLEEN de image prompt terug, geen uitleg. De prompt moet:
-- In het Engels zijn (werkt beter voor image AI)
-- Beschrijvend maar beknopt (max 100 woorden)
-- Geschikt zijn voor professioneel gebruik
-- Geen tekst of logo's bevatten (AI kan geen tekst goed genereren)
+INSTRUCTIES:
+1. Analyseer de INHOUD en BOODSCHAP van de post
+2. Bedenk een visueel concept dat de boodschap versterkt
+3. Schrijf een gedetailleerde image prompt in het ENGELS
 
-Voorbeeld format: "Professional business scene showing [beschrijving], modern minimalist style, soft lighting, corporate colors"`
+BELANGRIJKE REGELS:
+- GEEN tekst, woorden, letters of logo's in de afbeelding (AI kan dit niet goed)
+- Beschrijf: onderwerp, setting, belichting, stijl, kleuren, compositie
+- Gebruik beschrijvende bijvoeglijke naamwoorden
+- Specificeer camera-perspectief indien relevant
+- Max 80 woorden
+
+VOORBEELDEN VAN GOEDE PROMPTS:
+- "Professional business team collaborating around a modern glass table, warm natural lighting from large windows, minimalist Scandinavian office interior, shallow depth of field, corporate photography style"
+- "Abstract flowing shapes in teal and navy blue gradients, geometric patterns, modern digital art style, clean corporate aesthetic, suitable for business presentation background"
+- "Entrepreneur working on laptop in bright co-working space, plants and natural elements, morning golden hour light, candid lifestyle photography, optimistic mood"
+
+Geef ALLEEN de image prompt terug, geen uitleg of inleiding.`
 
       const response = await fetch('/api/generate', {
         method: 'POST',
@@ -276,7 +290,12 @@ Voorbeeld format: "Professional business scene showing [beschrijving], modern mi
       const data = await response.json()
       if (!data.success) throw new Error(data.error || 'Image prompt generatie mislukt')
 
-      return data.result.trim()
+      // Clean up the result - remove quotes if wrapped
+      let result = data.result.trim()
+      if (result.startsWith('"') && result.endsWith('"')) {
+        result = result.slice(1, -1)
+      }
+      return result
     } catch (err) {
       console.error('Image prompt generation error:', err)
       return null
