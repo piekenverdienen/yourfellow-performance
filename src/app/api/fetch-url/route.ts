@@ -141,11 +141,15 @@ function parseHTML(html: string): LandingPageContent {
   const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i)
   const title = titleMatch ? decodeHTMLEntities(titleMatch[1].trim()) : ''
 
-  // Extract meta description
+  // Extract meta description (try multiple formats)
   const metaDescMatch = html.match(
     /<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i
   ) || html.match(
     /<meta[^>]*content=["']([^"']+)["'][^>]*name=["']description["']/i
+  ) || html.match(
+    /<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i
+  ) || html.match(
+    /<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:description["']/i
   )
   const metaDescription = metaDescMatch ? decodeHTMLEntities(metaDescMatch[1].trim()) : ''
 

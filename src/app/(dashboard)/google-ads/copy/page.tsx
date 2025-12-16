@@ -105,8 +105,14 @@ export default function GoogleAdsCopyPage() {
         updates.productName = cleanTitle.slice(0, 100)
       }
 
-      if (!formData.productDescription && content.metaDescription) {
-        updates.productDescription = content.metaDescription
+      if (!formData.productDescription) {
+        // Use meta description, or fallback to first part of main content
+        if (content.metaDescription) {
+          updates.productDescription = content.metaDescription
+        } else if (content.mainContent) {
+          // Use first ~300 chars of main content as description
+          updates.productDescription = content.mainContent.slice(0, 300).trim() + (content.mainContent.length > 300 ? '...' : '')
+        }
       }
 
       if (!formData.keywords && content.extractedKeywords.length > 0) {
