@@ -28,7 +28,29 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { cn, copyToClipboard } from '@/lib/utils'
-import type { LandingPageContent } from '@/types'
+
+// Type for Firecrawl response
+interface FetchedPageData {
+  url: string
+  title: string
+  description: string
+  markdown: string
+  metadata: {
+    ogTitle?: string
+    ogDescription?: string
+    ogImage?: string
+    language?: string
+  }
+  extractedElements: {
+    headings: { level: number; text: string }[]
+    ctas: string[]
+    testimonials: string[]
+    trustSignals: string[]
+    forms: { fields: number; hasEmail: boolean; hasPhone: boolean }[]
+    prices: string[]
+    urgencyElements: string[]
+  }
+}
 
 const toneOptions = [
   { value: 'professional', label: 'Professioneel' },
@@ -64,7 +86,7 @@ export default function GoogleAdsCopyPage() {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [formData, setFormData] = usePersistedState('google-ads-form', initialFormData)
   const [generatedAd, setGeneratedAd] = usePersistedState<GeneratedAd | null>('google-ads-result', null)
-  const [landingPageContent, setLandingPageContent] = usePersistedState<LandingPageContent | null>('google-ads-lp-content', null)
+  const [fetchedPageData, setFetchedPageData] = usePersistedState<FetchedPageData | null>('google-ads-fetched-page', null)
   const [copiedIndex, setCopiedIndex] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [analyzeError, setAnalyzeError] = useState<string | null>(null)
@@ -77,7 +99,8 @@ export default function GoogleAdsCopyPage() {
     setAnalyzeError(null)
 
     try {
-      const response = await fetch('/api/fetch-url', {
+      // Use Firecrawl API for better content extraction
+      const response = await fetch('/api/fetch-page', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -93,30 +116,55 @@ export default function GoogleAdsCopyPage() {
         throw new Error(data.error || 'Kon de pagina niet analyseren')
       }
 
-      const content: LandingPageContent = data.content
-      setLandingPageContent(content)
+      const pageData = data.data as FetchedPageData
+      setFetchedPageData(pageData)
 
-      // Auto-fill empty fields
+      // Auto-fill empty fields with rich Firecrawl data
       const updates: Partial<typeof formData> = {}
 
-      if (!formData.productName && content.title) {
+      if (!formData.productName && pageData.title) {
         // Use title, but clean it up (remove site name if present)
-        const cleanTitle = content.title.split(/[|\-–—]/)[0].trim()
+        const cleanTitle = pageData.title.split(/[|\-–—]/)[0].trim()
         updates.productName = cleanTitle.slice(0, 100)
       }
 
       if (!formData.productDescription) {
-        // Use meta description, or fallback to first part of main content
-        if (content.metaDescription) {
-          updates.productDescription = content.metaDescription
-        } else if (content.mainContent) {
-          // Use first ~300 chars of main content as description
-          updates.productDescription = content.mainContent.slice(0, 300).trim() + (content.mainContent.length > 300 ? '...' : '')
+        // Use description from metadata, or fallback to markdown content
+        if (pageData.description) {
+          updates.productDescription = pageData.description
+        } else if (pageData.metadata?.ogDescription) {
+          updates.productDescription = pageData.metadata.ogDescription
+        } else if (pageData.markdown) {
+          // Use first ~500 chars of markdown content
+          updates.productDescription = pageData.markdown.slice(0, 500).trim() + (pageData.markdown.length > 500 ? '...' : '')
         }
       }
 
-      if (!formData.keywords && content.extractedKeywords.length > 0) {
-        updates.keywords = content.extractedKeywords.slice(0, 8).join(', ')
+      // Extract keywords from headings, CTAs, and content
+      if (!formData.keywords) {
+        const keywordSources: string[] = []
+
+        // Add headings as keywords
+        if (pageData.extractedElements?.headings) {
+          pageData.extractedElements.headings.slice(0, 3).forEach(h => {
+            const words = h.text.toLowerCase().split(/\s+/).filter(w => w.length > 3)
+            keywordSources.push(...words.slice(0, 2))
+          })
+        }
+
+        // Add CTAs as inspiration for keywords
+        if (pageData.extractedElements?.ctas) {
+          pageData.extractedElements.ctas.slice(0, 3).forEach(cta => {
+            const words = cta.toLowerCase().split(/\s+/).filter(w => w.length > 3)
+            keywordSources.push(...words)
+          })
+        }
+
+        // Deduplicate and limit
+        const uniqueKeywords = [...new Set(keywordSources)].slice(0, 8)
+        if (uniqueKeywords.length > 0) {
+          updates.keywords = uniqueKeywords.join(', ')
+        }
       }
 
       if (Object.keys(updates).length > 0) {
@@ -126,7 +174,7 @@ export default function GoogleAdsCopyPage() {
     } catch (err) {
       console.error('URL analysis error:', err)
       setAnalyzeError(err instanceof Error ? err.message : 'Er ging iets mis. Probeer het opnieuw.')
-      setLandingPageContent(null)
+      setFetchedPageData(null)
     } finally {
       setIsAnalyzing(false)
     }
@@ -148,17 +196,25 @@ Tone of voice: ${formData.tone}
 Advertentietype: ${formData.adType}
 `
 
-      // Add landing page context if available
-      if (landingPageContent) {
+      // Add rich landing page context if available (from Firecrawl)
+      if (fetchedPageData) {
+        const elements = fetchedPageData.extractedElements
+
         prompt += `
 
 LANDINGSPAGINA ANALYSE (gebruik deze informatie voor betere Quality Score):
-- Pagina titel: ${landingPageContent.title}
-- Meta description: ${landingPageContent.metaDescription}
-- Belangrijkste koppen: ${landingPageContent.headers.slice(0, 5).join(' | ')}
-- Gevonden keywords: ${landingPageContent.extractedKeywords.join(', ')}
+- Pagina titel: ${fetchedPageData.title}
+- Meta description: ${fetchedPageData.description || fetchedPageData.metadata?.ogDescription || 'Niet beschikbaar'}
+- Belangrijkste koppen: ${elements?.headings?.slice(0, 5).map(h => h.text).join(' | ') || 'Geen'}
+${elements?.ctas?.length ? `- Call-to-actions op pagina: ${elements.ctas.slice(0, 5).join(', ')}` : ''}
+${elements?.prices?.length ? `- Prijzen op pagina: ${elements.prices.join(', ')}` : ''}
+${elements?.urgencyElements?.length ? `- Urgency elementen: ${elements.urgencyElements.join(', ')}` : ''}
+${elements?.trustSignals?.length ? `- Trust signals: ${elements.trustSignals.slice(0, 3).join(', ')}` : ''}
 
-BELANGRIJK: Gebruik woorden en thema's die op de landingspagina staan om de relevantie en Quality Score te verbeteren. Zorg dat de messaging consistent is met de landingspagina.`
+PAGINA CONTENT (eerste 1500 karakters):
+${fetchedPageData.markdown?.slice(0, 1500) || 'Niet beschikbaar'}
+
+BELANGRIJK: Gebruik EXACT dezelfde woorden, termen en messaging die op de landingspagina staan. Dit verhoogt de Ad Relevance en Quality Score aanzienlijk.`
       }
 
       prompt += `
@@ -177,7 +233,7 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
           options: {
             tone: formData.tone,
             adType: formData.adType,
-            hasLandingPageContent: !!landingPageContent,
+            hasLandingPageContent: !!fetchedPageData,
           },
         }),
       })
@@ -232,7 +288,7 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
   }
 
   const handleClearLandingPage = () => {
-    setLandingPageContent(null)
+    setFetchedPageData(null)
     setFormData({ ...formData, landingPageUrl: '' })
     setAnalyzeError(null)
   }
@@ -299,7 +355,7 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
               )}
 
               {/* Landing Page Preview */}
-              {landingPageContent && (
+              {fetchedPageData && (
                 <div className="mt-3 border border-surface-200 rounded-lg overflow-hidden">
                   <button
                     onClick={() => setShowLandingPagePreview(!showLandingPagePreview)}
@@ -331,36 +387,56 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
                     <div className="p-3 space-y-3 text-sm">
                       <div>
                         <span className="text-surface-500">Titel:</span>
-                        <p className="text-surface-900 font-medium">{landingPageContent.title || '-'}</p>
+                        <p className="text-surface-900 font-medium">{fetchedPageData.title || '-'}</p>
                       </div>
-                      {landingPageContent.metaDescription && (
+                      {(fetchedPageData.description || fetchedPageData.metadata?.ogDescription) && (
                         <div>
-                          <span className="text-surface-500">Meta description:</span>
-                          <p className="text-surface-700">{landingPageContent.metaDescription}</p>
+                          <span className="text-surface-500">Beschrijving:</span>
+                          <p className="text-surface-700">{fetchedPageData.description || fetchedPageData.metadata?.ogDescription}</p>
                         </div>
                       )}
-                      {landingPageContent.headers.length > 0 && (
+                      {fetchedPageData.extractedElements?.headings?.length > 0 && (
                         <div>
                           <span className="text-surface-500">Koppen:</span>
                           <div className="flex flex-wrap gap-1 mt-1">
-                            {landingPageContent.headers.slice(0, 5).map((header, i) => (
+                            {fetchedPageData.extractedElements.headings.slice(0, 5).map((header, i) => (
                               <Badge key={i} variant="secondary" className="text-xs">
-                                {header.length > 40 ? header.slice(0, 40) + '...' : header}
+                                {header.text.length > 40 ? header.text.slice(0, 40) + '...' : header.text}
                               </Badge>
                             ))}
                           </div>
                         </div>
                       )}
-                      {landingPageContent.extractedKeywords.length > 0 && (
+                      {fetchedPageData.extractedElements?.ctas?.length > 0 && (
                         <div>
-                          <span className="text-surface-500">Gevonden keywords:</span>
+                          <span className="text-surface-500">CTAs gevonden:</span>
                           <div className="flex flex-wrap gap-1 mt-1">
-                            {landingPageContent.extractedKeywords.slice(0, 10).map((keyword, i) => (
+                            {fetchedPageData.extractedElements.ctas.slice(0, 5).map((cta, i) => (
                               <Badge key={i} variant="primary" className="text-xs">
-                                {keyword}
+                                {cta}
                               </Badge>
                             ))}
                           </div>
+                        </div>
+                      )}
+                      {fetchedPageData.extractedElements?.prices?.length > 0 && (
+                        <div>
+                          <span className="text-surface-500">Prijzen:</span>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {fetchedPageData.extractedElements.prices.map((price, i) => (
+                              <Badge key={i} variant="secondary" className="text-xs">
+                                {price}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {fetchedPageData.markdown && (
+                        <div>
+                          <span className="text-surface-500">Content preview:</span>
+                          <p className="text-surface-600 text-xs mt-1 line-clamp-3">
+                            {fetchedPageData.markdown.slice(0, 200)}...
+                          </p>
                         </div>
                       )}
                       <a
@@ -448,9 +524,9 @@ Genereer overtuigende headlines (max 30 karakters) en descriptions (max 90 karak
               {isGenerating ? 'Genereren...' : 'Genereer advertentieteksten'}
             </Button>
 
-            {landingPageContent && (
+            {fetchedPageData && (
               <p className="text-xs text-center text-surface-500">
-                ✨ Landingspagina content wordt meegenomen voor betere Quality Score
+                ✨ Volledige landingspagina content wordt meegenomen voor betere Quality Score
               </p>
             )}
           </CardContent>
