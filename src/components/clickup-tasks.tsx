@@ -185,7 +185,7 @@ export function ClickUpTasks({
         <CardContent className="py-8">
           <div className="text-center text-surface-500">
             <AlertCircle className="h-8 w-8 mx-auto mb-2 text-surface-400" />
-            <p>ClickUp is nog niet gekoppeld voor deze client.</p>
+            <p>ClickUp is nog niet gekoppeld voor deze klant.</p>
             <p className="text-sm mt-1">Ga naar Instellingen om een ClickUp list te koppelen.</p>
           </div>
         </CardContent>

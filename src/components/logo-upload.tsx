@@ -210,7 +210,7 @@ export function LogoUpload({
         {/* Upload Controls */}
         <div className="flex-1 space-y-3">
           <div>
-            <h4 className="font-medium text-surface-900">Client Logo</h4>
+            <h4 className="font-medium text-surface-900">Klant Logo</h4>
             <p className="text-sm text-surface-500">
               Upload een logo voor {clientName}. JPG, PNG, SVG of WebP (max 5MB).
             </p>

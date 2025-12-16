@@ -24,7 +24,7 @@ export async function GET() {
     return NextResponse.json({ clients: clients || [] })
   } catch (error) {
     console.error('Clients fetch error:', error)
-    return NextResponse.json({ error: 'Fout bij ophalen van clients' }, { status: 500 })
+    return NextResponse.json({ error: 'Fout bij ophalen van klanten' }, { status: 500 })
   }
 }
 
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (profile.role !== 'admin') {
-      return NextResponse.json({ error: 'Alleen admins kunnen clients aanmaken' }, { status: 403 })
+      return NextResponse.json({ error: 'Alleen admins kunnen klanten aanmaken' }, { status: 403 })
     }
 
     const body = await request.json()
@@ -105,6 +105,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ client }, { status: 201 })
   } catch (error) {
     console.error('Client create error:', error)
-    return NextResponse.json({ error: 'Fout bij aanmaken van client' }, { status: 500 })
+    return NextResponse.json({ error: 'Fout bij aanmaken van klant' }, { status: 500 })
   }
 }

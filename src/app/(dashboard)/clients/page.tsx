@@ -68,11 +68,11 @@ export default function ClientsPage() {
         setNewClientName('')
         setNewClientDescription('')
       } else {
-        alert(data.error || 'Er ging iets mis bij het aanmaken van de client')
+        alert(data.error || 'Er ging iets mis bij het aanmaken van de klant')
       }
     } catch (error) {
       console.error('Error creating client:', error)
-      alert('Er ging iets mis bij het aanmaken van de client')
+      alert('Er ging iets mis bij het aanmaken van de klant')
     } finally {
       setCreating(false)
     }
@@ -106,7 +106,7 @@ export default function ClientsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-surface-900">Clients</h1>
+          <h1 className="text-2xl font-bold text-surface-900">Klanten</h1>
           <p className="text-surface-600 mt-1">
             Beheer je klanten en team toegang
           </p>
@@ -114,7 +114,7 @@ export default function ClientsPage() {
         {isAdmin && (
           <Button onClick={() => setShowCreateModal(true)}>
             <Plus className="h-4 w-4 mr-2" />
-            Nieuwe Client
+            Nieuwe Klant
           </Button>
         )}
       </div>
@@ -122,7 +122,7 @@ export default function ClientsPage() {
       {/* Search */}
       <div className="w-full max-w-md">
         <Input
-          placeholder="Zoek clients..."
+          placeholder="Zoek klanten..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           leftIcon={<Search className="h-4 w-4" />}
@@ -135,19 +135,19 @@ export default function ClientsPage() {
           <CardContent>
             <Building2 className="h-12 w-12 text-surface-300 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-surface-900 mb-2">
-              {searchQuery ? 'Geen clients gevonden' : 'Nog geen clients'}
+              {searchQuery ? 'Geen klanten gevonden' : 'Nog geen klanten'}
             </h3>
             <p className="text-surface-600 mb-4">
               {searchQuery
                 ? 'Probeer een andere zoekterm'
                 : isAdmin
-                ? 'Voeg je eerste client toe om te beginnen'
-                : 'Je hebt nog geen toegang tot clients'}
+                ? 'Voeg je eerste klant toe om te beginnen'
+                : 'Je hebt nog geen toegang tot klanten'}
             </p>
             {isAdmin && !searchQuery && (
               <Button onClick={() => setShowCreateModal(true)}>
                 <Plus className="h-4 w-4 mr-2" />
-                Nieuwe Client
+                Nieuwe Klant
               </Button>
             )}
           </CardContent>
@@ -214,7 +214,7 @@ export default function ClientsPage() {
           />
           <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md p-6 m-4">
             <h2 className="text-xl font-bold text-surface-900 mb-4">
-              Nieuwe Client
+              Nieuwe Klant
             </h2>
 
             <div className="space-y-4">
@@ -237,7 +237,7 @@ export default function ClientsPage() {
                 <Input
                   value={newClientDescription}
                   onChange={(e) => setNewClientDescription(e.target.value)}
-                  placeholder="Korte beschrijving van de client"
+                  placeholder="Korte beschrijving van de klant"
                 />
               </div>
             </div>

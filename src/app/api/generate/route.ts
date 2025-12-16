@@ -302,7 +302,7 @@ async function getClientContext(
       activeChannels?: string[]
     }
 
-    const contextParts = [`Je werkt nu voor client: ${clientName}`]
+    const contextParts = [`Je werkt nu voor klant: ${clientName}`]
 
     if (ctx.proposition) contextParts.push(`Propositie: ${ctx.proposition}`)
     if (ctx.targetAudience) contextParts.push(`Doelgroep: ${ctx.targetAudience}`)
@@ -322,7 +322,7 @@ async function getClientContext(
       contextParts.push(`✓ VERPLICHT (altijd toevoegen waar relevant): ${ctx.mustHaves.join(', ')}`)
     }
 
-    return `CLIENT CONTEXT (${clientName}):\n${contextParts.join('\n')}`
+    return `KLANT CONTEXT (${clientName}):\n${contextParts.join('\n')}`
   } catch (error) {
     console.error('Error fetching client context:', error)
     return null

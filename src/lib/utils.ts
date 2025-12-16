@@ -30,7 +30,7 @@ export function formatRelativeTime(date: string | Date) {
   return formatDate(date, { day: 'numeric', month: 'short' })
 }
 
-// Level titles based on XP
+// Level titles based on XP (20 levels with exponential XP requirements)
 export const levelTitles: Record<number, string> = {
   1: 'Beginner',
   2: 'Starter',
@@ -42,30 +42,88 @@ export const levelTitles: Record<number, string> = {
   8: 'Kampioen',
   9: 'Elite',
   10: 'AI Wizard',
+  11: 'AI Meester',
+  12: 'AI Strateeg',
+  13: 'AI Architect',
+  14: 'AI Virtuoos',
+  15: 'AI Visionair',
+  16: 'AI Pionier',
+  17: 'AI Genie',
+  18: 'AI Orakel',
+  19: 'AI Transcendent',
+  20: 'AI Overlord',
 }
 
-// Calculate XP level
+// XP thresholds for each level (exponential curve)
+// Early levels are quick, higher levels require more dedication
+export const levelThresholds: number[] = [
+  0,       // Level 1: 0 XP
+  100,     // Level 2: 100 XP
+  250,     // Level 3: 250 XP
+  500,     // Level 4: 500 XP
+  1000,    // Level 5: 1.000 XP
+  1750,    // Level 6: 1.750 XP
+  2750,    // Level 7: 2.750 XP
+  4000,    // Level 8: 4.000 XP
+  5500,    // Level 9: 5.500 XP
+  7500,    // Level 10: 7.500 XP
+  10000,   // Level 11: 10.000 XP
+  13000,   // Level 12: 13.000 XP
+  17000,   // Level 13: 17.000 XP
+  22000,   // Level 14: 22.000 XP
+  28000,   // Level 15: 28.000 XP
+  35000,   // Level 16: 35.000 XP
+  45000,   // Level 17: 45.000 XP
+  60000,   // Level 18: 60.000 XP
+  80000,   // Level 19: 80.000 XP
+  100000,  // Level 20: 100.000 XP
+]
+
+// Calculate XP level with exponential thresholds
 export function calculateLevel(xp: number): { level: number; progress: number; xpForNext: number; title: string } {
-  const xpPerLevel = 100
-  const level = Math.floor(xp / xpPerLevel) + 1
-  const xpInCurrentLevel = xp % xpPerLevel
-  const progress = (xpInCurrentLevel / xpPerLevel) * 100
-  const title = levelTitles[Math.min(level, 10)] || 'AI Wizard'
+  // Find the current level based on XP thresholds
+  let level = 1
+  for (let i = levelThresholds.length - 1; i >= 0; i--) {
+    if (xp >= levelThresholds[i]) {
+      level = i + 1
+      break
+    }
+  }
+
+  // Cap at max level
+  const maxLevel = levelThresholds.length
+  if (level >= maxLevel) {
+    return {
+      level: maxLevel,
+      progress: 100,
+      xpForNext: 0,
+      title: levelTitles[maxLevel] || 'AI Overlord',
+    }
+  }
+
+  // Calculate progress within current level
+  const currentThreshold = levelThresholds[level - 1]
+  const nextThreshold = levelThresholds[level]
+  const xpInCurrentLevel = xp - currentThreshold
+  const xpNeededForLevel = nextThreshold - currentThreshold
+  const progress = (xpInCurrentLevel / xpNeededForLevel) * 100
+
+  const title = levelTitles[level] || 'AI Overlord'
 
   return {
     level,
     progress,
-    xpForNext: xpPerLevel - xpInCurrentLevel,
+    xpForNext: xpNeededForLevel - xpInCurrentLevel,
     title,
   }
 }
 
 // Get XP range for current level
 export function getLevelRange(level: number): { min: number; max: number } {
-  const xpPerLevel = 100
+  const safeLevel = Math.max(1, Math.min(level, levelThresholds.length))
   return {
-    min: (level - 1) * xpPerLevel,
-    max: level * xpPerLevel,
+    min: levelThresholds[safeLevel - 1],
+    max: levelThresholds[safeLevel] || levelThresholds[safeLevel - 1],
   }
 }
 

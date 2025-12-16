@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
         .rpc('has_client_access', { check_client_id: client_id, min_role: 'editor' })
 
       if (!clientAccess) {
-        return NextResponse.json({ error: 'Geen toegang tot deze client' }, { status: 403 })
+        return NextResponse.json({ error: 'Geen toegang tot deze klant' }, { status: 403 })
       }
     }
 
