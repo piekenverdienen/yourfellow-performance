@@ -358,6 +358,19 @@ async function trackUsageAndXP(
       client_id: clientId || null,
     })
 
+    // Update streak and get bonus XP
+    let streakBonus = 0
+    try {
+      const { data: streakResult } = await supabase
+        .rpc('update_user_streak', { user_uuid: user.id })
+      if (streakResult?.[0]?.streak_bonus) {
+        streakBonus = streakResult[0].streak_bonus
+      }
+    } catch {
+      // Streak table might not exist yet, continue without streak bonus
+      console.log('Streak update skipped (table may not exist)')
+    }
+
     // Update user XP and total generations
     const { data: profile } = await supabase
       .from('profiles')
@@ -366,7 +379,7 @@ async function trackUsageAndXP(
       .single()
 
     if (profile) {
-      const newXp = (profile.xp || 0) + xpReward
+      const newXp = (profile.xp || 0) + xpReward + streakBonus
       const newLevel = Math.floor(newXp / 100) + 1
       const newGenerations = (profile.total_generations || 0) + 1
 
@@ -379,6 +392,11 @@ async function trackUsageAndXP(
         })
         .eq('id', user.id)
     }
+
+    // Check for new achievements (fire and forget)
+    supabase.rpc('check_achievements', { user_uuid: user.id }).catch(() => {
+      // Achievement check failed, continue silently
+    })
   } catch (error) {
     console.error('Error tracking usage/XP:', error)
   }

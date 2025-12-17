@@ -549,7 +549,19 @@ async function trackChatUsage(
       })
     }
 
-    // Add XP (5 XP per chat message + 3 bonus for web search)
+    // Update streak and get bonus XP
+    let streakBonus = 0
+    try {
+      const { data: streakResult } = await supabase
+        .rpc('update_user_streak', { user_uuid: userId })
+      if (streakResult?.[0]?.streak_bonus) {
+        streakBonus = streakResult[0].streak_bonus
+      }
+    } catch {
+      // Streak table might not exist yet, continue without streak bonus
+    }
+
+    // Add XP (5 XP per chat message + 3 bonus for web search + streak bonus)
     const { data: profile } = await supabase
       .from('profiles')
       .select('xp, total_generations')
@@ -557,7 +569,7 @@ async function trackChatUsage(
       .single()
 
     if (profile) {
-      const xpToAdd = webSearchUsed ? 8 : 5 // Bonus XP for using web search
+      const xpToAdd = (webSearchUsed ? 8 : 5) + streakBonus // Bonus XP for using web search + streak
       const newXp = (profile.xp || 0) + xpToAdd
       const newLevel = Math.floor(newXp / 100) + 1
       const newGenerations = (profile.total_generations || 0) + 1
@@ -571,6 +583,11 @@ async function trackChatUsage(
         })
         .eq('id', userId)
     }
+
+    // Check for new achievements (fire and forget)
+    supabase.rpc('check_achievements', { user_uuid: userId }).catch(() => {
+      // Achievement check failed, continue silently
+    })
   } catch (error) {
     console.error('Error tracking chat usage:', error)
   }
