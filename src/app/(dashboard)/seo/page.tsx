@@ -10,6 +10,7 @@ import {
   Sparkles,
   Search,
   Code2,
+  TrendingUp,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -38,6 +39,15 @@ const tools = [
     href: '/seo/schema',
     icon: Code2,
     color: 'bg-purple-500',
+    badge: null,
+    badgeVariant: null,
+  },
+  {
+    name: 'Content Advisory',
+    description: 'Analyseer pagina\'s met Search Console data en krijg concrete optimalisatie-adviezen.',
+    href: '/seo/advisor',
+    icon: TrendingUp,
+    color: 'bg-orange-500',
     badge: 'Nieuw',
     badgeVariant: 'secondary' as const,
   },
