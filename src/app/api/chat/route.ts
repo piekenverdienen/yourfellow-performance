@@ -2,8 +2,17 @@ import { NextRequest } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import OpenAI from 'openai'
 import { createClient } from '@/lib/supabase/server'
+import type { ChatActionType } from '@/types'
 
 export const runtime = 'edge'
+
+interface ChatAttachment {
+  type: 'image' | 'document'
+  url: string
+  fileName?: string
+  fileType?: string
+  extractedText?: string
+}
 
 interface ChatRequest {
   conversationId?: string
@@ -11,6 +20,22 @@ interface ChatRequest {
   message: string
   clientId?: string // Optional client ID for client-scoped conversations
   model?: string // Optional model override (user-selectable)
+  action?: ChatActionType // Action type: chat, image_analyze, image_generate, file_analyze
+  attachments?: ChatAttachment[] // Attached files/images
+}
+
+// Check if model supports image analysis (multimodal)
+function supportsImageAnalysis(modelId: string): boolean {
+  const multimodalModels = [
+    'claude-sonnet-4-20250514',
+    'claude-opus-4-20250514',
+    'claude-3-5-sonnet',
+    'claude-3-opus',
+    'gpt-4o',
+    'gpt-4-turbo',
+    'gpt-4-vision',
+  ]
+  return multimodalModels.some(m => modelId.includes(m) || m.includes(modelId))
 }
 
 // Determine provider from model ID
@@ -116,11 +141,34 @@ export async function POST(request: NextRequest) {
     })
 
     const body: ChatRequest = await request.json()
-    const { conversationId, assistantId, message, clientId, model: modelOverride } = body
+    const {
+      conversationId,
+      assistantId,
+      message,
+      clientId,
+      model: modelOverride,
+      action = 'chat',
+      attachments = [],
+    } = body
 
     if (!assistantId || !message) {
       return new Response(
         JSON.stringify({ error: 'Assistant ID en bericht zijn vereist' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Validate action-specific requirements
+    if (action === 'image_analyze' && attachments.filter(a => a.type === 'image').length === 0) {
+      return new Response(
+        JSON.stringify({ error: 'Afbeelding is verplicht voor image_analyze' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+
+    if (action === 'file_analyze' && attachments.filter(a => a.type === 'document').length === 0) {
+      return new Response(
+        JSON.stringify({ error: 'Bestand is verplicht voor file_analyze' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       )
     }
@@ -250,12 +298,89 @@ export async function POST(request: NextRequest) {
       normalizedMessages.shift()
     }
 
-    const messageHistory = [...normalizedMessages]
+    const messageHistory: Anthropic.MessageParam[] = normalizedMessages.map(m => ({
+      role: m.role,
+      content: m.content,
+    }))
 
-    // Add current message
-    messageHistory.push({ role: 'user', content: message })
+    // Build the current user message content based on action type
+    // For multimodal messages, we need to build a content array
+    let currentUserContent: string | (Anthropic.TextBlockParam | Anthropic.ImageBlockParam)[]
 
-    console.log('Final messageHistory:', messageHistory.map(m => ({ role: m.role, len: m.content.length })))
+    if (action === 'image_analyze' && attachments.length > 0) {
+      // Multimodal: image analysis
+      const imageAttachments = attachments.filter(a => a.type === 'image')
+      const contentBlocks: (Anthropic.TextBlockParam | Anthropic.ImageBlockParam)[] = []
+
+      // Add text first
+      if (message) {
+        contentBlocks.push({ type: 'text', text: message })
+      }
+
+      // Add images
+      for (const img of imageAttachments) {
+        // Fetch image and convert to base64 for Anthropic
+        try {
+          const imageResponse = await fetch(img.url)
+          if (imageResponse.ok) {
+            const imageBuffer = await imageResponse.arrayBuffer()
+            const base64 = btoa(
+              new Uint8Array(imageBuffer).reduce(
+                (data, byte) => data + String.fromCharCode(byte),
+                ''
+              )
+            )
+            const mediaType = (img.fileType || 'image/jpeg') as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
+
+            contentBlocks.push({
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: mediaType,
+                data: base64,
+              },
+            })
+          }
+        } catch (e) {
+          console.error('Failed to fetch image:', e)
+        }
+      }
+
+      currentUserContent = contentBlocks.length > 0 ? contentBlocks : message
+    } else if (action === 'file_analyze' && attachments.length > 0) {
+      // File analysis: include extracted text in the message
+      const documentAttachments = attachments.filter(a => a.type === 'document')
+      const documentContext = documentAttachments
+        .map(doc => {
+          const fileName = doc.fileName || 'document'
+          const content = doc.extractedText || '[Inhoud niet beschikbaar]'
+          return `--- BESTAND: ${fileName} ---\n${content}\n--- EINDE BESTAND ---`
+        })
+        .join('\n\n')
+
+      // Combine user message with document context
+      currentUserContent = `${message}\n\n${documentContext}`
+
+      // Future RAG integration point:
+      // TODO: Instead of including full document text, use embeddings to find relevant chunks
+      // This would involve:
+      // 1. Chunk the document during upload
+      // 2. Create embeddings for each chunk
+      // 3. Query similar chunks based on user message
+      // 4. Include only relevant chunks in context
+    } else {
+      // Regular text message
+      currentUserContent = message
+    }
+
+    // Add current message to history
+    messageHistory.push({ role: 'user', content: currentUserContent })
+
+    console.log('Final messageHistory:', messageHistory.map(m => ({
+      role: m.role,
+      contentType: typeof m.content === 'string' ? 'text' : 'multimodal',
+      len: typeof m.content === 'string' ? m.content.length : (m.content as unknown[]).length
+    })))
 
     // Build system prompt with user and client context
     let systemPrompt = assistant.system_prompt
@@ -338,12 +463,36 @@ Verwijs naar specifieke documenten als je informatie daaruit haalt.`
       }
     }
 
-    // Save user message first
-    await supabase.from('messages').insert({
+    // Determine content type for the message
+    const contentType = action === 'image_analyze' ? 'multimodal'
+      : action === 'file_analyze' ? 'file_analysis'
+      : action === 'image_generate' ? 'image_generation'
+      : 'text'
+
+    // Save user message first (store original text, not the multimodal content)
+    const { data: savedMessage } = await supabase.from('messages').insert({
       conversation_id: activeConversationId,
       role: 'user',
       content: message,
-    })
+      content_type: contentType,
+    }).select('id').single()
+
+    // Link attachments to the message if we have any
+    if (savedMessage && attachments.length > 0) {
+      // Update any pre-uploaded attachments to link to this message
+      for (const attachment of attachments) {
+        // The attachment URL contains the file path, extract it
+        const urlParts = attachment.url.split('/chat-attachments/')
+        if (urlParts.length > 1) {
+          const filePath = urlParts[1]
+          await supabase
+            .from('message_attachments')
+            .update({ message_id: savedMessage.id })
+            .eq('file_path', filePath)
+            .eq('user_id', user.id)
+        }
+      }
+    }
 
     // Determine which model to use (override or assistant default)
     const selectedModel = modelOverride || assistant.model || 'claude-sonnet-4-20250514'
@@ -375,14 +524,61 @@ Verwijs naar specifieke documenten als je informatie daaruit haalt.`
 
             const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-            // Convert message history to OpenAI format
+            // Convert message history to OpenAI format (handle multimodal content)
             const openAIMessages: OpenAI.ChatCompletionMessageParam[] = [
-              { role: 'system', content: systemPrompt },
-              ...messageHistory.map(m => ({
-                role: m.role as 'user' | 'assistant',
-                content: m.content,
-              })),
+              { role: 'system' as const, content: systemPrompt },
             ]
+
+            for (const m of messageHistory) {
+              // Handle multimodal content for OpenAI
+              if (typeof m.content !== 'string' && Array.isArray(m.content)) {
+                // Convert Anthropic format to OpenAI format
+                const openAIContent: OpenAI.ChatCompletionContentPart[] = []
+                for (const block of m.content) {
+                  if (block.type === 'text') {
+                    openAIContent.push({ type: 'text', text: block.text })
+                  } else if (block.type === 'image' && 'source' in block) {
+                    // Convert base64 image to OpenAI format
+                    const source = block.source as { type: string; media_type: string; data: string }
+                    openAIContent.push({
+                      type: 'image_url',
+                      image_url: {
+                        url: `data:${source.media_type};base64,${source.data}`,
+                      },
+                    })
+                  }
+                }
+                // Multimodal content is only supported for user messages
+                if (m.role === 'user') {
+                  openAIMessages.push({
+                    role: 'user' as const,
+                    content: openAIContent,
+                  })
+                } else {
+                  // For assistant messages with multimodal content, extract text only
+                  const textContent = openAIContent
+                    .filter((c): c is OpenAI.ChatCompletionContentPartText => c.type === 'text')
+                    .map(c => c.text)
+                    .join('\n')
+                  openAIMessages.push({
+                    role: 'assistant' as const,
+                    content: textContent,
+                  })
+                }
+              } else {
+                if (m.role === 'user') {
+                  openAIMessages.push({
+                    role: 'user' as const,
+                    content: m.content as string,
+                  })
+                } else {
+                  openAIMessages.push({
+                    role: 'assistant' as const,
+                    content: m.content as string,
+                  })
+                }
+              }
+            }
 
             const stream = await openai.chat.completions.create({
               model: selectedModel,
@@ -574,7 +770,7 @@ Verwijs naar specifieke documenten als je informatie daaruit haalt.`
           }
 
           // Track usage and XP
-          await trackChatUsage(supabase, user.id, assistant.slug, totalTokens, clientId, webSearchUsed)
+          await trackChatUsage(supabase, user.id, assistant.slug, totalTokens, clientId, webSearchUsed, action)
 
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({ type: 'done', tokens: totalTokens })}\n\n`)
@@ -613,16 +809,18 @@ async function trackChatUsage(
   assistantSlug: string,
   tokens: number,
   clientId?: string,
-  webSearchUsed?: boolean
+  webSearchUsed?: boolean,
+  actionType: ChatActionType = 'chat'
 ) {
   try {
-    // Insert usage record for chat
+    // Insert usage record for chat with action type
     await supabase.from('usage').insert({
       user_id: userId,
       tool: `chat-${assistantSlug}`,
       completion_tokens: tokens,
       total_tokens: tokens,
       client_id: clientId || null,
+      action_type: actionType,
     })
 
     // Track web search usage separately if used
@@ -647,7 +845,9 @@ async function trackChatUsage(
       // Streak table might not exist yet, continue without streak bonus
     }
 
-    // Add XP (5 XP per chat message + 3 bonus for web search + streak bonus)
+    // Calculate XP based on action type
+    // Base XP: chat=5, image_analyze=10, image_generate=15, file_analyze=12
+    // + 3 bonus for web search + streak bonus
     const { data: profile } = await supabase
       .from('profiles')
       .select('xp, total_generations')
@@ -655,7 +855,14 @@ async function trackChatUsage(
       .single()
 
     if (profile) {
-      const xpToAdd = (webSearchUsed ? 8 : 5) + streakBonus // Bonus XP for using web search + streak
+      const actionXpRewards: Record<ChatActionType, number> = {
+        chat: 5,
+        image_analyze: 10,
+        image_generate: 15,
+        file_analyze: 12,
+      }
+      const baseXp = actionXpRewards[actionType] || 5
+      const xpToAdd = baseXp + (webSearchUsed ? 3 : 0) + streakBonus
       const newXp = (profile.xp || 0) + xpToAdd
       const newLevel = Math.floor(newXp / 100) + 1
       const newGenerations = (profile.total_generations || 0) + 1
