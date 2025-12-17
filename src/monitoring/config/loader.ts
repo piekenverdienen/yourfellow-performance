@@ -37,6 +37,10 @@ export function loadConfig(configPath: string): MonitoringConfig {
  */
 export function loadEnvConfig(): EnvConfig {
   const result = EnvConfig.safeParse({
+    CONFIG_SOURCE: process.env.CONFIG_SOURCE,
+    SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
+    SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY,
+    CONFIG_PATH: process.env.CONFIG_PATH,
     GA4_CREDENTIALS: process.env.GA4_CREDENTIALS,
     CLICKUP_TOKEN: process.env.CLICKUP_TOKEN,
     STORE_PATH: process.env.STORE_PATH,

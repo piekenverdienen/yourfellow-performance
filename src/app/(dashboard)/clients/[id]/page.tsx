@@ -30,7 +30,8 @@ import { ClientContextForm } from '@/components/client-context-form'
 import { LogoUpload, ClientLogoFallback } from '@/components/logo-upload'
 import { ClickUpTasks } from '@/components/clickup-tasks'
 import { ClickUpSetup } from '@/components/clickup-setup'
-import type { Client, ClientMemberRole, ClientContext, User } from '@/types'
+import { GA4MonitoringSetup } from '@/components/ga4-monitoring-setup'
+import type { Client, ClientMemberRole, ClientContext, User, GA4MonitoringSettings } from '@/types'
 
 interface ClientMember {
   id: string
@@ -584,6 +585,38 @@ export default function ClientDetailPage() {
                   const newSettings = {
                     ...client.settings,
                     clickup: listId ? { listId } : undefined,
+                  }
+                  const res = await fetch(`/api/clients/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ settings: newSettings }),
+                  })
+                  if (res.ok) {
+                    const data = await res.json()
+                    setClient(data.client)
+                  } else {
+                    const error = await res.json()
+                    throw new Error(error.error || 'Fout bij opslaan')
+                  }
+                }}
+                disabled={saving}
+              />
+            </CardContent>
+          </Card>
+
+          {/* GA4 Monitoring */}
+          <Card>
+            <CardHeader>
+              <CardTitle>GA4 Monitoring</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <GA4MonitoringSetup
+                clientId={id}
+                currentSettings={client.settings?.ga4Monitoring}
+                onSave={async (ga4Settings) => {
+                  const newSettings = {
+                    ...client.settings,
+                    ga4Monitoring: ga4Settings,
                   }
                   const res = await fetch(`/api/clients/${id}`, {
                     method: 'PUT',

@@ -4,15 +4,16 @@
  * GA4 Anomaly Monitoring CLI
  *
  * Usage:
- *   npx ts-node src/monitoring/run.ts --config ./config/monitoring.json
- *   npx ts-node src/monitoring/run.ts --config ./config/monitoring.json --dry-run
- *   npx ts-node src/monitoring/run.ts --config ./config/monitoring.json --log-level debug
+ *   npm run monitor                    # Run with database config (default)
+ *   npm run monitor -- --source file   # Run with file config
+ *   npm run monitor:dry                # Dry run mode
+ *   npm run monitor:debug              # Debug logging
  */
 
 import { GA4AnomalyMonitor, LogLevel } from './index';
 
 interface CLIArgs {
-  config: string;
+  source: 'database' | 'file';
   dryRun: boolean;
   logLevel: LogLevel;
   help: boolean;
@@ -20,7 +21,7 @@ interface CLIArgs {
 
 function parseArgs(): CLIArgs {
   const args: CLIArgs = {
-    config: './config/monitoring.json',
+    source: 'database',
     dryRun: false,
     logLevel: 'info',
     help: false
@@ -32,9 +33,9 @@ function parseArgs(): CLIArgs {
     const arg = argv[i];
 
     switch (arg) {
-      case '--config':
-      case '-c':
-        args.config = argv[++i];
+      case '--source':
+      case '-s':
+        args.source = argv[++i] as 'database' | 'file';
         break;
       case '--dry-run':
       case '-d':
@@ -59,29 +60,39 @@ function showHelp(): void {
 GA4 Anomaly Monitoring Service
 
 Usage:
-  npx ts-node src/monitoring/run.ts [options]
+  npm run monitor [options]
 
 Options:
-  -c, --config <path>      Path to config file (default: ./config/monitoring.json)
+  -s, --source <type>      Config source: database (default) or file
   -d, --dry-run            Run without creating ClickUp tasks
   -l, --log-level <level>  Log level: debug, info, warn, error (default: info)
   -h, --help               Show this help message
 
 Environment Variables:
+  CONFIG_SOURCE            Config source: database (default) or file
+
+  # For database config (default):
+  NEXT_PUBLIC_SUPABASE_URL Supabase project URL
+  SUPABASE_SERVICE_KEY     Supabase service role key
+
+  # For file config:
+  CONFIG_PATH              Path to config file (default: ./config/monitoring.json)
+
+  # Required for both:
   GA4_CREDENTIALS          JSON string of Google service account credentials
   CLICKUP_TOKEN            ClickUp API token
   STORE_PATH               Path to fingerprint store (default: ./data/fingerprints.json)
   DRY_RUN                  Set to 'true' for dry run mode
 
 Examples:
-  # Run with default config
-  npx ts-node src/monitoring/run.ts
+  # Run with database config (clients from Supabase)
+  npm run monitor
+
+  # Run with file config
+  npm run monitor -- --source file
 
   # Dry run with debug logging
-  npx ts-node src/monitoring/run.ts --dry-run --log-level debug
-
-  # Use custom config
-  npx ts-node src/monitoring/run.ts --config /path/to/config.json
+  npm run monitor:dry -- --log-level debug
 `);
 }
 
@@ -93,6 +104,11 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
+  // Override CONFIG_SOURCE from CLI arg
+  if (args.source) {
+    process.env.CONFIG_SOURCE = args.source;
+  }
+
   console.log('');
   console.log('╔═══════════════════════════════════════════╗');
   console.log('║     GA4 Anomaly Monitoring Service        ║');
@@ -100,8 +116,7 @@ async function main(): Promise<void> {
   console.log('');
 
   try {
-    const monitor = new GA4AnomalyMonitor({
-      configPath: args.config,
+    const monitor = await GA4AnomalyMonitor.create({
       dryRun: args.dryRun,
       logLevel: args.logLevel
     });

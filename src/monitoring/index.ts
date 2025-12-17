@@ -1,6 +1,7 @@
 import {
   loadConfig,
   loadEnvConfig,
+  loadConfigFromDatabase,
   getEffectiveThresholds,
   getEnabledMetrics,
   MonitoringConfig,
@@ -14,7 +15,6 @@ import { FingerprintStore } from './store';
 import { createLogger, Logger, LogLevel } from './utils/logger';
 
 export interface MonitoringOptions {
-  configPath: string;
   dryRun?: boolean;
   logLevel?: LogLevel;
 }
@@ -41,23 +41,16 @@ export class GA4AnomalyMonitor {
   private logger: Logger;
   private dryRun: boolean;
 
-  constructor(options: MonitoringOptions) {
-    this.dryRun = options.dryRun ?? false;
-    this.logger = createLogger(options.logLevel ?? 'info');
-
-    // Load configurations
-    this.logger.info('Loading configuration...');
-    this.config = loadConfig(options.configPath);
-    this.envConfig = loadEnvConfig();
-
-    // Apply dry run from env if set
-    if (this.envConfig.DRY_RUN) {
-      this.dryRun = true;
-    }
-
-    if (this.dryRun) {
-      this.logger.info('🔍 DRY RUN MODE - No ClickUp tasks will be created');
-    }
+  private constructor(
+    config: MonitoringConfig,
+    envConfig: EnvConfig,
+    logger: Logger,
+    dryRun: boolean
+  ) {
+    this.config = config;
+    this.envConfig = envConfig;
+    this.logger = logger;
+    this.dryRun = dryRun;
 
     // Initialize clients
     this.ga4Client = new GA4Client({
@@ -80,6 +73,42 @@ export class GA4AnomalyMonitor {
     );
 
     this.logger.info(`Loaded ${this.config.clients.length} client configurations`);
+  }
+
+  /**
+   * Create a new GA4AnomalyMonitor instance
+   * Automatically chooses between database and file config based on CONFIG_SOURCE
+   */
+  static async create(options: MonitoringOptions = {}): Promise<GA4AnomalyMonitor> {
+    const logger = createLogger(options.logLevel ?? 'info');
+    const envConfig = loadEnvConfig();
+
+    let dryRun = options.dryRun ?? false;
+    if (envConfig.DRY_RUN) {
+      dryRun = true;
+    }
+
+    if (dryRun) {
+      logger.info('🔍 DRY RUN MODE - No ClickUp tasks will be created');
+    }
+
+    logger.info('Loading configuration...');
+
+    let config: MonitoringConfig;
+
+    if (envConfig.CONFIG_SOURCE === 'database') {
+      logger.info('Loading client config from database...');
+      config = await loadConfigFromDatabase(
+        envConfig.SUPABASE_URL!,
+        envConfig.SUPABASE_SERVICE_KEY!,
+        logger
+      );
+    } else {
+      logger.info(`Loading client config from file: ${envConfig.CONFIG_PATH}`);
+      config = loadConfig(envConfig.CONFIG_PATH);
+    }
+
+    return new GA4AnomalyMonitor(config, envConfig, logger, dryRun);
   }
 
   /**

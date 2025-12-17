@@ -125,11 +125,36 @@ export type MonitoringConfig = z.infer<typeof MonitoringConfig>;
 
 // Environment variables schema
 export const EnvConfig = z.object({
+  // Config source: 'database' (default) or 'file'
+  CONFIG_SOURCE: z.enum(['database', 'file']).default('database'),
+
+  // Supabase (required for database config source)
+  SUPABASE_URL: z.string().optional(),
+  SUPABASE_SERVICE_KEY: z.string().optional(),
+
+  // File config path (required for file config source)
+  CONFIG_PATH: z.string().default('./config/monitoring.json'),
+
+  // GA4 credentials
   GA4_CREDENTIALS: z.string().min(1, 'GA4_CREDENTIALS is required'),
+
+  // ClickUp token
   CLICKUP_TOKEN: z.string().min(1, 'CLICKUP_TOKEN is required'),
+
+  // Storage
   STORE_PATH: z.string().default('./data/fingerprints.json'),
+
+  // Runtime options
   DRY_RUN: z.string().transform(v => v === 'true').default(false),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info')
-});
+}).refine(
+  (data) => {
+    if (data.CONFIG_SOURCE === 'database') {
+      return data.SUPABASE_URL && data.SUPABASE_SERVICE_KEY;
+    }
+    return true;
+  },
+  { message: 'SUPABASE_URL and SUPABASE_SERVICE_KEY are required when CONFIG_SOURCE is "database"' }
+);
 
 export type EnvConfig = z.infer<typeof EnvConfig>;
