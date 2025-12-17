@@ -392,6 +392,68 @@ export interface Message {
   conversation_id: string
   role: 'user' | 'assistant'
   content: string
+  content_type?: 'text' | 'multimodal' | 'image_generation' | 'file_analysis'
   tokens_used: number
   created_at: string
+  attachments?: MessageAttachment[]
+}
+
+// Multimodal Chat Types
+export type ChatActionType = 'chat' | 'image_analyze' | 'image_generate' | 'file_analyze'
+
+export interface MessageAttachment {
+  id: string
+  message_id?: string
+  conversation_id: string
+  user_id: string
+  attachment_type: 'image' | 'document' | 'generated_image'
+  file_name: string
+  file_type: string
+  file_size: number
+  file_path: string
+  public_url: string
+  width?: number
+  height?: number
+  extracted_text?: string
+  generation_prompt?: string
+  client_id?: string
+  assistant_slug?: string
+  created_at: string
+}
+
+// Multimodal message content structure (for API)
+export interface MultimodalContent {
+  type: 'text' | 'image' | 'document'
+  text?: string
+  image_url?: string
+  file_url?: string
+  file_name?: string
+  file_type?: string
+  extracted_text?: string
+}
+
+export interface ChatRequest {
+  conversationId?: string
+  assistantId: string
+  message: string
+  clientId?: string
+  model?: string
+  action?: ChatActionType
+  attachments?: {
+    type: 'image' | 'document'
+    url: string
+    fileName?: string
+    fileType?: string
+    extractedText?: string
+  }[]
+  imagePrompt?: string // For image generation
+}
+
+export interface UploadedFile {
+  id: string
+  file: File
+  preview?: string
+  status: 'pending' | 'uploading' | 'uploaded' | 'error'
+  url?: string
+  error?: string
 }

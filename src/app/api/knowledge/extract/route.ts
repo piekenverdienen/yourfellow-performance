@@ -164,6 +164,8 @@ async function extractWithClaude(base64: string, mediaType: string, fileName: st
     apiKey: process.env.ANTHROPIC_API_KEY,
   })
 
+  // Note: Document type requires Anthropic SDK with document support
+  // Using 'as any' to bypass type checking for document block
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
     max_tokens: 8192,
@@ -178,7 +180,7 @@ async function extractWithClaude(base64: string, mediaType: string, fileName: st
               media_type: mediaType,
               data: base64,
             },
-          },
+          } as unknown as Anthropic.TextBlockParam,
           {
             type: 'text',
             text: `Extract all the text content from this document "${fileName}".

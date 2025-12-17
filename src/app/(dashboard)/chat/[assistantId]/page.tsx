@@ -7,10 +7,8 @@ import { createClient } from '@/lib/supabase/client'
 import { useSelectedClientId } from '@/stores/client-store'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
 import {
   ArrowLeft,
-  Send,
   Loader2,
   Plus,
   MessageSquare,
@@ -19,10 +17,11 @@ import {
   PanelLeftClose,
   PanelLeft,
 } from 'lucide-react'
-import type { Assistant, Conversation, Message } from '@/types'
+import type { Assistant, Conversation, Message, ChatActionType, UploadedFile, MessageAttachment } from '@/types'
 import { cn } from '@/lib/utils'
 import ReactMarkdown from 'react-markdown'
 import { AssistantAvatar } from '@/components/assistant-avatars'
+import { ChatActionBar, MultimodalMessage } from '@/components/chat'
 
 export default function ChatInterfacePage() {
   const params = useParams()
@@ -36,7 +35,6 @@ export default function ChatInterfacePage() {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [messages, setMessages] = useState<Message[]>([])
   const [conversationId, setConversationId] = useState<string | null>(conversationParam)
-  const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
@@ -44,9 +42,9 @@ export default function ChatInterfacePage() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [pageLoading, setPageLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const supabase = createClient()
 
   useEffect(() => {
@@ -149,25 +147,198 @@ export default function ChatInterfacePage() {
     setDeletingId(null)
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!input.trim() || isLoading || isStreaming) return
+  // Upload files to storage and return URLs
+  const uploadFiles = async (files: UploadedFile[]): Promise<{
+    type: 'image' | 'document'
+    url: string
+    fileName: string
+    fileType: string
+    extractedText?: string
+  }[]> => {
+    const uploadedAttachments: {
+      type: 'image' | 'document'
+      url: string
+      fileName: string
+      fileType: string
+      extractedText?: string
+    }[] = []
 
-    const userMessage = input.trim()
-    setInput('')
+    for (const uploadedFile of files) {
+      const formData = new FormData()
+      formData.append('file', uploadedFile.file)
+      if (conversationId) formData.append('conversationId', conversationId)
+      if (selectedClientId) formData.append('clientId', selectedClientId)
+      if (assistant?.slug) formData.append('assistantSlug', assistant.slug)
+
+      const response = await fetch('/api/chat/upload', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        uploadedAttachments.push({
+          type: data.attachment.type,
+          url: data.attachment.publicUrl,
+          fileName: data.attachment.fileName,
+          fileType: data.attachment.fileType,
+          extractedText: data.attachment.extractedText,
+        })
+      }
+    }
+
+    return uploadedAttachments
+  }
+
+  // Handle image generation
+  const handleImageGeneration = async (prompt: string): Promise<MessageAttachment | null> => {
+    setIsGeneratingImage(true)
+    setStatusMessage('Afbeelding genereren...')
+
+    try {
+      const response = await fetch('/api/chat/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt,
+          conversationId,
+          clientId: selectedClientId,
+          assistantSlug: assistant?.slug,
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Image generation failed')
+      }
+
+      const data = await response.json()
+      return {
+        id: data.image.id || `gen-${Date.now()}`,
+        conversation_id: conversationId || '',
+        user_id: '',
+        attachment_type: 'generated_image',
+        file_name: 'generated-image.png',
+        file_type: 'image/png',
+        file_size: 0,
+        file_path: data.image.filePath || '',
+        public_url: data.image.url,
+        generation_prompt: prompt,
+        created_at: new Date().toISOString(),
+      }
+    } catch (error) {
+      console.error('Image generation error:', error)
+      return null
+    } finally {
+      setIsGeneratingImage(false)
+    }
+  }
+
+  // New submit handler for ChatActionBar
+  const handleChatSubmit = async (data: {
+    message: string
+    action: ChatActionType
+    files?: UploadedFile[]
+  }) => {
+    if (isLoading || isStreaming) return
+
+    const { message, action, files } = data
+
+    // Handle image generation separately
+    if (action === 'image_generate') {
+      if (!message.trim()) return
+
+      setIsLoading(true)
+      setStreamingContent('')
+      setStatusMessage('Afbeelding genereren...')
+
+      // Add user message first
+      const tempUserMessage: Message = {
+        id: `temp-${Date.now()}`,
+        conversation_id: conversationId || '',
+        role: 'user',
+        content: message,
+        content_type: 'image_generation',
+        tokens_used: 0,
+        created_at: new Date().toISOString(),
+      }
+      setMessages(prev => [...prev, tempUserMessage])
+
+      const generatedImage = await handleImageGeneration(message)
+
+      if (generatedImage) {
+        const assistantMessage: Message = {
+          id: `assistant-${Date.now()}`,
+          conversation_id: conversationId || '',
+          role: 'assistant',
+          content: `Hier is de gegenereerde afbeelding op basis van je prompt: "${message}"`,
+          content_type: 'image_generation',
+          tokens_used: 0,
+          created_at: new Date().toISOString(),
+          attachments: [generatedImage],
+        }
+        setMessages(prev => [...prev, assistantMessage])
+      } else {
+        const errorMessage: Message = {
+          id: `assistant-${Date.now()}`,
+          conversation_id: conversationId || '',
+          role: 'assistant',
+          content: 'Er ging iets mis bij het genereren van de afbeelding. Probeer het opnieuw met een andere beschrijving.',
+          tokens_used: 0,
+          created_at: new Date().toISOString(),
+        }
+        setMessages(prev => [...prev, errorMessage])
+      }
+
+      setIsLoading(false)
+      setStatusMessage(null)
+      await fetchConversations()
+      return
+    }
+
+    // Handle regular chat, image analysis, and file analysis
+    if (!message.trim() && (!files || files.length === 0)) return
+
     setIsLoading(true)
     setIsStreaming(true)
     setStreamingContent('')
     setStatusMessage(null)
 
-    // Optimistically add user message
+    // Upload files if present
+    let uploadedAttachments: {
+      type: 'image' | 'document'
+      url: string
+      fileName: string
+      fileType: string
+      extractedText?: string
+    }[] = []
+
+    if (files && files.length > 0) {
+      setStatusMessage('Bestanden uploaden...')
+      uploadedAttachments = await uploadFiles(files)
+    }
+
+    // Build user message with attachments for display
     const tempUserMessage: Message = {
       id: `temp-${Date.now()}`,
       conversation_id: conversationId || '',
       role: 'user',
-      content: userMessage,
+      content: message,
+      content_type: action === 'image_analyze' ? 'multimodal' : action === 'file_analyze' ? 'file_analysis' : 'text',
       tokens_used: 0,
       created_at: new Date().toISOString(),
+      attachments: uploadedAttachments.map((att, idx) => ({
+        id: `att-${Date.now()}-${idx}`,
+        conversation_id: conversationId || '',
+        user_id: '',
+        attachment_type: att.type as 'image' | 'document',
+        file_name: att.fileName,
+        file_type: att.fileType,
+        file_size: 0,
+        file_path: '',
+        public_url: att.url,
+        created_at: new Date().toISOString(),
+      })),
     }
     setMessages(prev => [...prev, tempUserMessage])
 
@@ -176,10 +347,12 @@ export default function ChatInterfacePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          assistantId: assistant?.id, // Use real assistant ID, not slug from URL
+          assistantId: assistant?.id,
           conversationId,
-          message: userMessage,
+          message,
           clientId: selectedClientId,
+          action,
+          attachments: uploadedAttachments,
         }),
       })
 
@@ -203,30 +376,26 @@ export default function ChatInterfacePage() {
         for (const line of lines) {
           if (line.startsWith('data: ')) {
             try {
-              const data = JSON.parse(line.slice(6))
-              console.log('Received event:', data.type, data)
+              const streamData = JSON.parse(line.slice(6))
 
-              if (data.type === 'conversation_id') {
-                setConversationId(data.id)
-                // Update URL without reload
+              if (streamData.type === 'conversation_id') {
+                setConversationId(streamData.id)
                 window.history.replaceState(
                   null,
                   '',
-                  `/chat/${assistantId}?conversation=${data.id}`
+                  `/chat/${assistantId}?conversation=${streamData.id}`
                 )
-              } else if (data.type === 'status') {
-                // Show status updates (searching, thinking, etc.)
-                setStatusMessage(data.message)
-              } else if (data.type === 'text') {
-                setStatusMessage(null) // Clear status when text starts
-                fullContent += data.content
+              } else if (streamData.type === 'status') {
+                setStatusMessage(streamData.message)
+              } else if (streamData.type === 'text') {
+                setStatusMessage(null)
+                fullContent += streamData.content
                 setStreamingContent(fullContent)
-              } else if (data.type === 'done') {
+              } else if (streamData.type === 'done') {
                 setStatusMessage(null)
-                // Streaming complete
-              } else if (data.type === 'error') {
+              } else if (streamData.type === 'error') {
                 setStatusMessage(null)
-                console.error('Stream error:', data.message)
+                console.error('Stream error:', streamData.message)
               }
             } catch {
               // Ignore JSON parse errors for incomplete chunks
@@ -251,19 +420,11 @@ export default function ChatInterfacePage() {
       await fetchConversations()
     } catch (error) {
       console.error('Chat error:', error)
-      // Remove optimistic message on error
       setMessages(prev => prev.filter(m => m.id !== tempUserMessage.id))
     } finally {
       setIsLoading(false)
       setIsStreaming(false)
       setStatusMessage(null)
-    }
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSubmit(e)
     }
   }
 
@@ -409,34 +570,12 @@ export default function ChatInterfacePage() {
           )}
 
           {messages.map(message => (
-            <div
+            <MultimodalMessage
               key={message.id}
-              className={cn(
-                'flex gap-3',
-                message.role === 'user' ? 'justify-end' : 'justify-start'
-              )}
-            >
-              {message.role === 'assistant' && (
-                <AssistantAvatar slug={assistant.slug} size="sm" />
-              )}
-              <Card
-                className={cn(
-                  'max-w-[80%] px-4 py-3',
-                  message.role === 'user'
-                    ? 'bg-primary text-white'
-                    : 'bg-white'
-                )}
-              >
-                <div
-                  className={cn(
-                    'prose prose-sm max-w-none',
-                    message.role === 'user' && 'prose-invert'
-                  )}
-                >
-                  <ReactMarkdown>{message.content}</ReactMarkdown>
-                </div>
-              </Card>
-            </div>
+              message={message}
+              isUser={message.role === 'user'}
+              assistantAvatar={<AssistantAvatar slug={assistant.slug} size="sm" />}
+            />
           ))}
 
           {/* Streaming message */}
@@ -469,35 +608,12 @@ export default function ChatInterfacePage() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input area */}
-        <div className="p-4 border-t border-surface-200 bg-white">
-          <form onSubmit={handleSubmit} className="flex gap-3">
-            <Textarea
-              ref={textareaRef}
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={`Bericht aan ${assistant.name}...`}
-              className="resize-none min-h-[44px] max-h-32"
-              rows={1}
-              disabled={isLoading}
-            />
-            <Button
-              type="submit"
-              disabled={!input.trim() || isLoading}
-              className="shrink-0"
-            >
-              {isLoading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <Send className="h-5 w-5" />
-              )}
-            </Button>
-          </form>
-          <p className="text-xs text-surface-500 mt-2 text-center">
-            Druk op Enter om te versturen, Shift+Enter voor nieuwe regel
-          </p>
-        </div>
+        {/* Input area with multimodal actions */}
+        <ChatActionBar
+          onSubmit={handleChatSubmit}
+          isLoading={isLoading || isStreaming}
+          placeholder={`Bericht aan ${assistant.name}...`}
+        />
       </div>
     </div>
   )
