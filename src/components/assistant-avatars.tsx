@@ -4,10 +4,11 @@ import { cn } from '@/lib/utils'
 
 interface AvatarProps {
   className?: string
-  size?: 'sm' | 'md' | 'lg'
+  size?: 'xs' | 'sm' | 'md' | 'lg'
 }
 
 const sizes = {
+  xs: 'w-5 h-5',
   sm: 'w-8 h-8',
   md: 'w-10 h-10',
   lg: 'w-12 h-12',

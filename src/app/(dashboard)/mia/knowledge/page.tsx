@@ -35,11 +35,20 @@ interface KnowledgeDocument {
   file_size: number
   category: string
   tags: string[]
+  assistant_slugs: string[]
   is_active: boolean
   is_processed: boolean
   processing_error: string | null
   created_at: string
 }
+
+// Available AI assistants
+const ASSISTANTS = [
+  { slug: 'mia', name: 'Mia', description: 'Marketing Consultant' },
+  { slug: 'max', name: 'Max', description: 'Algemene assistent' },
+  { slug: 'sam', name: 'Sam', description: 'SEO Specialist' },
+  { slug: 'sophie', name: 'Sophie', description: 'Neuromarketing Expert' },
+]
 
 const CATEGORIES = [
   { value: 'general', label: 'Algemeen' },
@@ -75,6 +84,7 @@ export default function KnowledgePage() {
   const [uploadDescription, setUploadDescription] = useState('')
   const [uploadCategory, setUploadCategory] = useState('general')
   const [uploadFile, setUploadFile] = useState<File | null>(null)
+  const [uploadAssistants, setUploadAssistants] = useState<string[]>(['mia']) // Default to Mia
 
   const supabase = createClient()
 
@@ -144,7 +154,7 @@ export default function KnowledgePage() {
           file_path: filePath,
           category: uploadCategory,
           uploaded_by: user.id,
-          assistant_slugs: ['mia'],
+          assistant_slugs: uploadAssistants.length > 0 ? uploadAssistants : ['mia'],
         })
         .select()
         .single()
@@ -168,6 +178,7 @@ export default function KnowledgePage() {
       setUploadName('')
       setUploadDescription('')
       setUploadCategory('general')
+      setUploadAssistants(['mia'])
       setShowUploadForm(false)
 
       // Refresh list
@@ -309,6 +320,50 @@ export default function KnowledgePage() {
               </select>
             </div>
 
+            {/* AI Assistants */}
+            <div>
+              <label className="block text-sm font-medium text-surface-700 mb-2">
+                Beschikbaar voor AI Assistants *
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {ASSISTANTS.map(assistant => (
+                  <label
+                    key={assistant.slug}
+                    className={cn(
+                      "flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all",
+                      uploadAssistants.includes(assistant.slug)
+                        ? "border-primary bg-primary/5"
+                        : "border-surface-200 hover:border-surface-300"
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={uploadAssistants.includes(assistant.slug)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setUploadAssistants([...uploadAssistants, assistant.slug])
+                        } else {
+                          setUploadAssistants(uploadAssistants.filter(s => s !== assistant.slug))
+                        }
+                      }}
+                      className="sr-only"
+                    />
+                    <AssistantAvatar slug={assistant.slug} size="sm" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm text-surface-900">{assistant.name}</p>
+                      <p className="text-xs text-surface-500 truncate">{assistant.description}</p>
+                    </div>
+                    {uploadAssistants.includes(assistant.slug) && (
+                      <Check className="h-4 w-4 text-primary flex-shrink-0" />
+                    )}
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-surface-500 mt-1">
+                Selecteer welke assistants dit document kunnen gebruiken
+              </p>
+            </div>
+
             {/* Actions */}
             <div className="flex gap-3 pt-2">
               <Button
@@ -334,6 +389,7 @@ export default function KnowledgePage() {
                   setUploadFile(null)
                   setUploadName('')
                   setUploadDescription('')
+                  setUploadAssistants(['mia'])
                 }}
                 disabled={isUploading}
               >
@@ -439,6 +495,17 @@ export default function KnowledgePage() {
                       <span>{doc.file_name}</span>
                       <span>{formatFileSize(doc.file_size)}</span>
                       <span>{new Date(doc.created_at).toLocaleDateString('nl-NL')}</span>
+                      {/* Assigned assistants */}
+                      <div className="flex items-center gap-1">
+                        <span className="text-surface-400">|</span>
+                        <div className="flex -space-x-1">
+                          {doc.assistant_slugs?.map(slug => (
+                            <div key={slug} className="relative" title={ASSISTANTS.find(a => a.slug === slug)?.name || slug}>
+                              <AssistantAvatar slug={slug} size="xs" />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </div>
 
