@@ -63,7 +63,6 @@ export default function MiaPage() {
   const [showModelSelector, setShowModelSelector] = useState(false)
   const [selectedImageModel, setSelectedImageModel] = useState('dall-e-3')
   const [showImageModelSelector, setShowImageModelSelector] = useState(false)
-  const [isGeneratingImage, setIsGeneratingImage] = useState(false)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
@@ -130,14 +129,32 @@ export default function MiaPage() {
   }
 
   const fetchMessages = async (convId: string) => {
+    // Fetch messages
     const { data: messagesData } = await supabase
       .from('messages')
       .select('*')
       .eq('conversation_id', convId)
       .order('created_at', { ascending: true })
 
+    // Fetch attachments for this conversation
+    const { data: attachmentsData } = await supabase
+      .from('message_attachments')
+      .select('*')
+      .eq('conversation_id', convId)
+      .order('created_at', { ascending: true })
+
     if (messagesData) {
-      setMessages(messagesData)
+      // Merge attachments with their messages
+      const messagesWithAttachments = messagesData.map(message => {
+        const messageAttachments = attachmentsData?.filter(
+          att => att.message_id === message.id
+        ) || []
+        return {
+          ...message,
+          attachments: messageAttachments.length > 0 ? messageAttachments : undefined,
+        }
+      })
+      setMessages(messagesWithAttachments)
     }
   }
 
@@ -211,53 +228,7 @@ export default function MiaPage() {
     return uploadedAttachments
   }
 
-  // Handle image generation
-  const handleImageGeneration = async (prompt: string): Promise<MessageAttachment | null> => {
-    setIsGeneratingImage(true)
-    const modelName = IMAGE_MODELS.find(m => m.id === selectedImageModel)?.name || 'DALL-E 3'
-    setStatusMessage(`Afbeelding genereren met ${modelName}...`)
-
-    try {
-      const response = await fetch('/api/chat/generate-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt,
-          conversationId,
-          clientId: selectedClientId,
-          assistantSlug: 'mia',
-          model: selectedImageModel,
-        }),
-      })
-
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Image generation failed')
-      }
-
-      const data = await response.json()
-      return {
-        id: data.image.id || `gen-${Date.now()}`,
-        conversation_id: conversationId || '',
-        user_id: '',
-        attachment_type: 'generated_image',
-        file_name: 'generated-image.png',
-        file_type: 'image/png',
-        file_size: 0,
-        file_path: data.image.filePath || '',
-        public_url: data.image.url,
-        generation_prompt: prompt,
-        created_at: new Date().toISOString(),
-      }
-    } catch (error) {
-      console.error('Image generation error:', error)
-      return null
-    } finally {
-      setIsGeneratingImage(false)
-    }
-  }
-
-  // New submit handler for ChatActionBar
+  // Submit handler for ChatActionBar
   const handleChatSubmit = async (data: {
     message: string
     action: ChatActionType
@@ -273,46 +244,128 @@ export default function MiaPage() {
 
       setIsLoading(true)
       setStreamingContent('')
-      setStatusMessage('Afbeelding genereren...')
+      const modelName = IMAGE_MODELS.find(m => m.id === selectedImageModel)?.name || 'DALL-E 3'
+      setStatusMessage(`Afbeelding genereren met ${modelName}...`)
 
-      // Add user message first
-      const tempUserMessage: Message = {
-        id: `temp-${Date.now()}`,
-        conversation_id: conversationId || '',
-        role: 'user',
-        content: message,
-        content_type: 'image_generation',
-        tokens_used: 0,
-        created_at: new Date().toISOString(),
-      }
-      setMessages(prev => [...prev, tempUserMessage])
+      try {
+        // Create conversation if needed
+        let activeConversationId = conversationId
+        if (!activeConversationId) {
+          const { data: newConv } = await supabase
+            .from('conversations')
+            .insert({
+              assistant_id: assistant?.id,
+              title: message.slice(0, 50) + (message.length > 50 ? '...' : ''),
+              client_id: selectedClientId || null,
+            })
+            .select('id')
+            .single()
 
-      const generatedImage = await handleImageGeneration(message)
-
-      if (generatedImage) {
-        // Add assistant response with the generated image
-        const assistantMessage: Message = {
-          id: `assistant-${Date.now()}`,
-          conversation_id: conversationId || '',
-          role: 'assistant',
-          content: `Hier is de gegenereerde afbeelding op basis van je prompt: "${message}"`,
-          content_type: 'image_generation',
-          tokens_used: 0,
-          created_at: new Date().toISOString(),
-          attachments: [generatedImage],
+          if (newConv) {
+            activeConversationId = newConv.id
+            setConversationId(newConv.id)
+            window.history.replaceState(null, '', `/mia?conversation=${newConv.id}`)
+          }
         }
-        setMessages(prev => [...prev, assistantMessage])
-      } else {
-        // Show error message
-        const errorMessage: Message = {
-          id: `assistant-${Date.now()}`,
+
+        // Save user message to database
+        const { data: savedUserMessage } = await supabase
+          .from('messages')
+          .insert({
+            conversation_id: activeConversationId,
+            role: 'user',
+            content: message,
+            content_type: 'image_generation',
+            tokens_used: 0,
+          })
+          .select()
+          .single()
+
+        // Add user message to UI
+        if (savedUserMessage) {
+          setMessages(prev => [...prev, savedUserMessage])
+        }
+
+        // Generate the image
+        const response = await fetch('/api/chat/generate-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: message,
+            conversationId: activeConversationId,
+            clientId: selectedClientId,
+            assistantSlug: 'mia',
+            model: selectedImageModel,
+          }),
+        })
+
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || 'Image generation failed')
+        }
+
+        const imageData = await response.json()
+
+        // Save assistant message to database
+        const assistantContent = `Hier is de gegenereerde afbeelding op basis van je prompt: "${message}"`
+        const { data: savedAssistantMessage } = await supabase
+          .from('messages')
+          .insert({
+            conversation_id: activeConversationId,
+            role: 'assistant',
+            content: assistantContent,
+            content_type: 'image_generation',
+            tokens_used: 0,
+          })
+          .select()
+          .single()
+
+        if (savedAssistantMessage && imageData.image?.id) {
+          // Link the attachment to the assistant message
+          await supabase
+            .from('message_attachments')
+            .update({ message_id: savedAssistantMessage.id })
+            .eq('id', imageData.image.id)
+
+          // Add assistant message with attachment to UI
+          const messageWithAttachment: Message = {
+            ...savedAssistantMessage,
+            attachments: [{
+              id: imageData.image.id,
+              conversation_id: activeConversationId || '',
+              user_id: '',
+              attachment_type: 'generated_image',
+              file_name: 'generated-image.png',
+              file_type: 'image/png',
+              file_size: 0,
+              file_path: imageData.image.filePath || '',
+              public_url: imageData.image.url,
+              generation_prompt: message,
+              created_at: new Date().toISOString(),
+            }],
+          }
+          setMessages(prev => [...prev, messageWithAttachment])
+        }
+
+        // Update conversation timestamp
+        if (activeConversationId) {
+          await supabase
+            .from('conversations')
+            .update({ updated_at: new Date().toISOString() })
+            .eq('id', activeConversationId)
+        }
+      } catch (error) {
+        console.error('Image generation error:', error)
+        // Show error message in UI
+        const errorMsg: Message = {
+          id: `error-${Date.now()}`,
           conversation_id: conversationId || '',
           role: 'assistant',
           content: 'Er ging iets mis bij het genereren van de afbeelding. Probeer het opnieuw met een andere beschrijving.',
           tokens_used: 0,
           created_at: new Date().toISOString(),
         }
-        setMessages(prev => [...prev, errorMessage])
+        setMessages(prev => [...prev, errorMsg])
       }
 
       setIsLoading(false)
