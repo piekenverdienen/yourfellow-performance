@@ -129,3 +129,8 @@ export function useIsClientAdmin(): boolean {
   if (!selectedClient) return false
   return ['admin', 'owner'].includes(selectedClient.role)
 }
+
+// Hook to get the full selected client
+export function useSelectedClient(): ClientWithRole | null {
+  return useClientStore((state) => state.selectedClient)
+}

@@ -31,7 +31,8 @@ import { LogoUpload, ClientLogoFallback } from '@/components/logo-upload'
 import { ClickUpTasks } from '@/components/clickup-tasks'
 import { ClickUpSetup } from '@/components/clickup-setup'
 import { GA4MonitoringSetup } from '@/components/ga4-monitoring-setup'
-import type { Client, ClientMemberRole, ClientContext, User, GA4MonitoringSettings } from '@/types'
+import { SearchConsoleSetup } from '@/components/search-console-setup'
+import type { Client, ClientMemberRole, ClientContext, User, GA4MonitoringSettings, SearchConsoleSettings } from '@/types'
 
 interface ClientMember {
   id: string
@@ -617,6 +618,38 @@ export default function ClientDetailPage() {
                   const newSettings = {
                     ...client.settings,
                     ga4Monitoring: ga4Settings,
+                  }
+                  const res = await fetch(`/api/clients/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ settings: newSettings }),
+                  })
+                  if (res.ok) {
+                    const data = await res.json()
+                    setClient(data.client)
+                  } else {
+                    const error = await res.json()
+                    throw new Error(error.error || 'Fout bij opslaan')
+                  }
+                }}
+                disabled={saving}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Search Console */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Search Console</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <SearchConsoleSetup
+                clientId={id}
+                currentSettings={client.settings?.searchConsole}
+                onSave={async (scSettings) => {
+                  const newSettings = {
+                    ...client.settings,
+                    searchConsole: scSettings,
                   }
                   const res = await fetch(`/api/clients/${id}`, {
                     method: 'PUT',

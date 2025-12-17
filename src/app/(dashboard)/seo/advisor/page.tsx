@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,16 +20,29 @@ import {
   Zap,
   HelpCircle,
   ExternalLink,
+  Settings,
+  Building2,
 } from 'lucide-react'
 import { copyToClipboard, cn } from '@/lib/utils'
+import { useClientStore, useSelectedClient } from '@/stores/client-store'
 import type { ContentAdvisoryReport, RewriteSuggestion, FAQSuggestion } from '@/seo/types'
 
 type AnalysisStep = 'idle' | 'fetching-page' | 'fetching-sc' | 'analyzing' | 'generating' | 'done' | 'error'
 
 export default function SEOAdvisorPage() {
+  const selectedClient = useSelectedClient()
+  const clientScSettings = selectedClient?.settings?.searchConsole
+
   const [pageUrl, setPageUrl] = useState('')
   const [siteUrl, setSiteUrl] = useState('')
   const [step, setStep] = useState<AnalysisStep>('idle')
+
+  // Pre-fill site URL from client settings
+  useEffect(() => {
+    if (clientScSettings?.enabled && clientScSettings?.siteUrl) {
+      setSiteUrl(clientScSettings.siteUrl)
+    }
+  }, [clientScSettings])
   const [error, setError] = useState<string | null>(null)
   const [report, setReport] = useState<ContentAdvisoryReport | null>(null)
   const [expandedSuggestions, setExpandedSuggestions] = useState<Set<string>>(new Set())
@@ -128,11 +142,41 @@ export default function SEOAdvisorPage() {
                 value={siteUrl}
                 onChange={(e) => setSiteUrl(e.target.value)}
                 leftIcon={<Search className="h-4 w-4" />}
+                disabled={clientScSettings?.enabled && !!clientScSettings?.siteUrl}
               />
-              <p className="text-xs text-surface-500 mt-1">
-                Je Search Console property (met trailing slash)
-              </p>
+              {clientScSettings?.enabled && clientScSettings?.siteUrl ? (
+                <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                  <CheckCircle className="h-3 w-3" />
+                  Gekoppeld via {selectedClient?.name}
+                </p>
+              ) : (
+                <p className="text-xs text-surface-500 mt-1">
+                  Je Search Console property (met trailing slash)
+                </p>
+              )}
             </div>
+
+            {/* Client SC not configured notice */}
+            {selectedClient && !clientScSettings?.enabled && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="text-amber-700 font-medium">Search Console niet gekoppeld</p>
+                    <p className="text-amber-600 mt-0.5">
+                      Koppel Search Console in de{' '}
+                      <Link
+                        href={`/clients/${selectedClient.id}?tab=settings`}
+                        className="underline hover:no-underline"
+                      >
+                        client instellingen
+                      </Link>
+                      {' '}voor automatische integratie.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <Button
               onClick={handleAnalyze}
