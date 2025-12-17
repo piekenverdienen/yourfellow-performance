@@ -1,0 +1,66 @@
+{
+  "global": {
+    "defaultThresholds": {
+      "warning": 20,
+      "critical": 40,
+      "minBaseline": 20
+    },
+    "baselineWindowDays": 7,
+    "minDaysForPercentageAlerts": 3,
+    "rateLimiting": {
+      "requestsPerMinute": 60,
+      "retryAttempts": 2,
+      "retryDelayMs": 1000
+    },
+    "clickup": {
+      "errorAlertListId": "your-error-list-id"
+    }
+  },
+  "clients": [
+    {
+      "id": "client-acme",
+      "name": "ACME Corp",
+      "ga4PropertyId": "123456789",
+      "timezone": "Europe/Amsterdam",
+      "metrics": {
+        "sessions": true,
+        "totalUsers": true,
+        "engagementRate": true,
+        "conversions": true,
+        "purchaseRevenue": false
+      },
+      "keyEventName": "purchase",
+      "isEcommerce": false,
+      "thresholds": {
+        "sessions": {
+          "warning": 25,
+          "critical": 50
+        }
+      },
+      "clickup": {
+        "listId": "your-clickup-list-id",
+        "assigneeId": "your-assignee-id",
+        "tags": ["ga4-alert", "acme"]
+      }
+    },
+    {
+      "id": "client-webshop",
+      "name": "WebShop Example",
+      "ga4PropertyId": "987654321",
+      "timezone": "Europe/Amsterdam",
+      "metrics": {
+        "sessions": true,
+        "totalUsers": true,
+        "engagementRate": true,
+        "conversions": true,
+        "purchaseRevenue": true
+      },
+      "keyEventName": "purchase",
+      "isEcommerce": true,
+      "clickup": {
+        "listId": "your-clickup-list-id",
+        "assigneeId": "your-assignee-id"
+      }
+    }
+  ]
+}

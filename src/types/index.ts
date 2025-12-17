@@ -271,9 +271,31 @@ export interface ClickUpSettings {
   folderId?: string // Optional: ClickUp Folder ID
 }
 
+// GA4 Monitoring Settings per client
+export interface GA4MonitoringSettings {
+  enabled?: boolean
+  propertyId?: string  // GA4 property ID (numeric string)
+  timezone?: string    // e.g., 'Europe/Amsterdam'
+  metrics?: {
+    sessions?: boolean
+    totalUsers?: boolean
+    engagementRate?: boolean
+    conversions?: boolean
+    purchaseRevenue?: boolean
+  }
+  keyEventName?: string  // Required if conversions enabled
+  isEcommerce?: boolean
+  thresholds?: {
+    warning?: number   // Default: 20 (%)
+    critical?: number  // Default: 40 (%)
+    minBaseline?: number // Default: 20
+  }
+}
+
 export interface ClientSettings {
   context?: ClientContext
   clickup?: ClickUpSettings
+  ga4Monitoring?: GA4MonitoringSettings
   [key: string]: unknown
 }
 
