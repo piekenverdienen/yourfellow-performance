@@ -11,6 +11,7 @@ import {
   Search,
   Code2,
   TrendingUp,
+  Settings,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -57,6 +58,15 @@ const tools = [
     href: '/seo/schema',
     icon: Code2,
     color: 'bg-purple-500',
+    badge: null,
+    badgeVariant: null,
+  },
+  {
+    name: 'Instellingen',
+    description: 'Beheer branded keywords, topic clusters en content groups.',
+    href: '/seo/settings',
+    icon: Settings,
+    color: 'bg-slate-500',
     badge: null,
     badgeVariant: null,
   },
