@@ -100,51 +100,99 @@ export async function POST(request: NextRequest) {
     })
 
     // Generate image using selected model
-    // Build request based on model capabilities
-    const imageRequest: Parameters<typeof openai.images.generate>[0] = {
-      model: modelConfig.model,
-      prompt: prompt,
-      n: 1,
-      size: modelConfig.size as '256x256' | '512x512' | '1024x1024' | '1792x1024' | '1024x1792',
-      response_format: 'url',
+    // gpt-image-1 uses a different API format (no response_format, returns base64)
+    let imageArrayBuffer: ArrayBuffer
+    let revisedPrompt: string | undefined
+
+    if (model === 'gpt-image-1') {
+      // GPT Image model - uses different API parameters
+      const gptImageRequest = {
+        model: 'gpt-image-1' as const,
+        prompt: prompt,
+        n: 1,
+        size: modelConfig.size as '1024x1024' | '1536x1024' | '1024x1536',
+        quality: modelConfig.quality as 'low' | 'medium' | 'high',
+      }
+
+      const response = await openai.images.generate(gptImageRequest)
+
+      if (!response.data || response.data.length === 0) {
+        return NextResponse.json(
+          { error: 'Geen afbeelding gegenereerd' },
+          { status: 500 }
+        )
+      }
+
+      // gpt-image-1 returns base64 data (b64_json)
+      const imageData = response.data[0]
+      if (imageData.b64_json) {
+        // Decode base64 to ArrayBuffer
+        const binaryString = atob(imageData.b64_json)
+        const bytes = new Uint8Array(binaryString.length)
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i)
+        }
+        imageArrayBuffer = bytes.buffer
+      } else if (imageData.url) {
+        // Fallback to URL if available
+        const imageResponse = await fetch(imageData.url)
+        if (!imageResponse.ok) {
+          throw new Error('Failed to fetch generated image')
+        }
+        imageArrayBuffer = await imageResponse.arrayBuffer()
+      } else {
+        return NextResponse.json(
+          { error: 'Geen afbeelding gegenereerd' },
+          { status: 500 }
+        )
+      }
+
+      revisedPrompt = imageData.revised_prompt
+    } else {
+      // DALL-E 2/3 - standard API with URL response
+      const dalleRequest: Parameters<typeof openai.images.generate>[0] = {
+        model: modelConfig.model,
+        prompt: prompt,
+        n: 1,
+        size: modelConfig.size as '256x256' | '512x512' | '1024x1024' | '1792x1024' | '1024x1792',
+        response_format: 'url',
+      }
+
+      // Add optional parameters based on model support
+      if (modelConfig.quality !== undefined) {
+        dalleRequest.quality = modelConfig.quality as 'standard' | 'hd'
+      }
+      if (modelConfig.style !== undefined) {
+        dalleRequest.style = modelConfig.style
+      }
+
+      const response = await openai.images.generate(dalleRequest)
+
+      if (!response.data || response.data.length === 0) {
+        return NextResponse.json(
+          { error: 'Geen afbeelding gegenereerd' },
+          { status: 500 }
+        )
+      }
+
+      const generatedImageUrl = response.data[0].url
+      revisedPrompt = response.data[0].revised_prompt
+
+      if (!generatedImageUrl) {
+        return NextResponse.json(
+          { error: 'Geen afbeelding gegenereerd' },
+          { status: 500 }
+        )
+      }
+
+      // Download the generated image (OpenAI URLs expire)
+      const imageResponse = await fetch(generatedImageUrl)
+      if (!imageResponse.ok) {
+        throw new Error('Failed to fetch generated image')
+      }
+
+      imageArrayBuffer = await imageResponse.arrayBuffer()
     }
-
-    // Add optional parameters based on model support
-    if (modelConfig.quality !== undefined) {
-      imageRequest.quality = modelConfig.quality as 'standard' | 'hd'
-    }
-    if (modelConfig.style !== undefined) {
-      imageRequest.style = modelConfig.style
-    }
-
-    const response = await openai.images.generate(imageRequest)
-
-    if (!response.data || response.data.length === 0) {
-      return NextResponse.json(
-        { error: 'Geen afbeelding gegenereerd' },
-        { status: 500 }
-      )
-    }
-
-    const generatedImageUrl = response.data[0].url
-    const revisedPrompt = response.data[0].revised_prompt
-
-    if (!generatedImageUrl) {
-      return NextResponse.json(
-        { error: 'Geen afbeelding gegenereerd' },
-        { status: 500 }
-      )
-    }
-
-    // Download the generated image and upload to Supabase Storage
-    // (OpenAI URLs expire after a while)
-    const imageResponse = await fetch(generatedImageUrl)
-    if (!imageResponse.ok) {
-      throw new Error('Failed to fetch generated image')
-    }
-
-    const imageBlob = await imageResponse.blob()
-    const arrayBuffer = await imageBlob.arrayBuffer()
 
     // Generate unique file path
     const date = new Date().toISOString().split('T')[0]
@@ -154,23 +202,18 @@ export async function POST(request: NextRequest) {
     // Upload to Supabase Storage
     const { error: uploadError } = await supabase.storage
       .from('chat-attachments')
-      .upload(filePath, arrayBuffer, {
+      .upload(filePath, imageArrayBuffer, {
         contentType: 'image/png',
         cacheControl: '31536000',
       })
 
     if (uploadError) {
       console.error('Upload error:', uploadError)
-      // Return OpenAI URL as fallback (will expire)
-      return NextResponse.json({
-        success: true,
-        image: {
-          url: generatedImageUrl,
-          isTemporary: true,
-          prompt: prompt,
-          revisedPrompt: revisedPrompt,
-        },
-      })
+      // Return error - we can't provide a fallback URL for base64 responses
+      return NextResponse.json(
+        { error: 'Afbeelding kon niet worden opgeslagen' },
+        { status: 500 }
+      )
     }
 
     // Get public URL
@@ -191,7 +234,7 @@ export async function POST(request: NextRequest) {
           attachment_type: 'generated_image',
           file_name: `generated-${randomId}.png`,
           file_type: 'image/png',
-          file_size: arrayBuffer.byteLength,
+          file_size: imageArrayBuffer.byteLength,
           file_path: filePath,
           public_url: publicUrl,
           generation_prompt: prompt,
