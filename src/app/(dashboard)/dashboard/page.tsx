@@ -29,6 +29,7 @@ import {
   CheckSquare,
 } from 'lucide-react'
 import { ClickUpTasks } from '@/components/clickup-tasks'
+import { ClientControlRoom } from '@/components/client-control-room'
 import { getGreeting } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import type { ClientWithRole } from '@/types'
@@ -267,6 +268,16 @@ export default function DashboardPage() {
               </div>
             )}
           </section>
+
+          {/* Client Control Room - GA4 & More */}
+          {selectedClient && (
+            <section>
+              <ClientControlRoom
+                clientId={selectedClient.id}
+                clientName={selectedClient.name}
+              />
+            </section>
+          )}
 
           {/* ClickUp Tasks for Selected Client */}
           {selectedClient?.settings?.clickup?.listId && (
