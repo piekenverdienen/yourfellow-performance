@@ -23,6 +23,10 @@ import { getAIGateway, type AITask } from '@/lib/ai'
 const GATEWAY_TASKS: Record<string, AITask> = {
   'google-ads-copy': 'google_ads_copy',
   'image-prompt': 'image_prompt',
+  'social-copy': 'social_post',
+  'seo-content': 'seo_content',
+  'seo-meta': 'seo_meta',
+  'cro-analyzer': 'cro_analysis',
 }
 
 // ============================================
@@ -184,6 +188,83 @@ function parsePromptToInput(
     return {
       platform: (options as Record<string, unknown>)?.platform || 'general',
       content: prompt,
+    }
+  }
+
+  if (task === 'social_post') {
+    // Parse the structured prompt from frontend
+    const lines = prompt.split('\n')
+    const getValue = (key: string) => {
+      const line = lines.find(l => l.toLowerCase().startsWith(key.toLowerCase() + ':'))
+      return line ? line.substring(line.indexOf(':') + 1).trim() : ''
+    }
+
+    return {
+      platform: getValue('Platform') || (options as Record<string, unknown>)?.platform || 'linkedin',
+      topic: getValue('Onderwerp'),
+      context: getValue('Context/Details') || getValue('Context'),
+      target_audience: getValue('Doelgroep'),
+      tone: getValue('Tone of voice') || (options as Record<string, unknown>)?.tone || 'professional',
+      post_type: getValue('Type post') || 'announcement',
+    }
+  }
+
+  if (task === 'seo_content') {
+    // Parse the structured prompt from frontend
+    const lines = prompt.split('\n')
+    const getValue = (key: string) => {
+      const line = lines.find(l => l.toLowerCase().startsWith(key.toLowerCase() + ':'))
+      return line ? line.substring(line.indexOf(':') + 1).trim() : ''
+    }
+
+    return {
+      topic: getValue('Onderwerp'),
+      primary_keyword: getValue('Primair keyword'),
+      secondary_keywords: getValue('Secundaire keywords'),
+      target_audience: getValue('Doelgroep'),
+      content_type: getValue('Type content') || (options as Record<string, unknown>)?.contentType || 'blog',
+      length: getValue('Gewenste lengte') || (options as Record<string, unknown>)?.length || 'medium',
+      tone: getValue('Tone of voice') || 'professional',
+    }
+  }
+
+  if (task === 'seo_meta') {
+    // Parse the structured prompt from frontend
+    const lines = prompt.split('\n')
+    const getValue = (key: string) => {
+      const line = lines.find(l => l.toLowerCase().startsWith(key.toLowerCase() + ':'))
+      return line ? line.substring(line.indexOf(':') + 1).trim() : ''
+    }
+
+    // Page content might span multiple lines, so we need to extract it differently
+    const pageContentMatch = prompt.match(/Pagina inhoud\/context:\s*([\s\S]*?)(?=$)/i)
+    const pageContent = pageContentMatch ? pageContentMatch[1].trim() : getValue('Pagina inhoud')
+
+    return {
+      page_url: getValue('URL'),
+      page_content: pageContent,
+      primary_keyword: getValue('Primair keyword'),
+      brand_name: getValue('Merknaam'),
+      page_type: getValue('Type pagina') || (options as Record<string, unknown>)?.pageType || 'homepage',
+    }
+  }
+
+  if (task === 'cro_analysis') {
+    // Parse the structured prompt from frontend
+    const lines = prompt.split('\n')
+    const getValue = (key: string) => {
+      const line = lines.find(l => l.toLowerCase().startsWith(key.toLowerCase() + ':'))
+      return line ? line.substring(line.indexOf(':') + 1).trim() : ''
+    }
+
+    // Page content might span multiple lines
+    const pageContentMatch = prompt.match(/Pagina inhoud:\s*([\s\S]*?)(?=$)/i)
+    const pageContent = pageContentMatch ? pageContentMatch[1].trim() : ''
+
+    return {
+      url: getValue('URL'),
+      page_type: getValue('Type pagina'),
+      page_content: pageContent,
     }
   }
 
