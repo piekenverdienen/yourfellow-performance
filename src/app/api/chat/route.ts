@@ -314,6 +314,30 @@ export async function POST(request: NextRequest) {
       systemPrompt = `${systemPrompt}\n\nCLIENT CONTEXT (${clientName}):\n${clientContextParts.join('\n')}`
     }
 
+    // Add knowledge base context for Mia
+    if (assistant.slug === 'mia') {
+      try {
+        const { data: knowledgeData } = await supabase
+          .rpc('get_assistant_knowledge', {
+            assistant_slug: 'mia',
+            max_chars: 30000 // Limit to avoid token overflow
+          })
+
+        if (knowledgeData && knowledgeData.trim()) {
+          systemPrompt = `${systemPrompt}\n\n=== KENNISBANK ===
+Je hebt toegang tot de volgende interne documenten en kennis:
+${knowledgeData}
+=== EINDE KENNISBANK ===
+
+Gebruik deze kennis wanneer relevant voor de vraag van de gebruiker.
+Verwijs naar specifieke documenten als je informatie daaruit haalt.`
+        }
+      } catch (knowledgeError) {
+        // Knowledge fetch failed, continue without it
+        console.warn('Could not fetch knowledge base:', knowledgeError)
+      }
+    }
+
     // Save user message first
     await supabase.from('messages').insert({
       conversation_id: activeConversationId,

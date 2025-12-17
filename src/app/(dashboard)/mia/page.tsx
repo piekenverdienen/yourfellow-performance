@@ -18,6 +18,7 @@ import {
   PanelLeftClose,
   PanelLeft,
   ChevronDown,
+  BookOpen,
 } from 'lucide-react'
 import type { Assistant, Conversation, Message } from '@/types'
 import { cn } from '@/lib/utils'
@@ -329,6 +330,12 @@ export default function MiaPage() {
             <Plus className="h-4 w-4 mr-2" />
             Nieuw gesprek
           </Button>
+          <Link href="/mia/knowledge" className="block mt-2">
+            <Button variant="outline" className="w-full" size="sm">
+              <BookOpen className="h-4 w-4 mr-2" />
+              Kennisbank
+            </Button>
+          </Link>
         </div>
 
         {/* Conversations list */}
