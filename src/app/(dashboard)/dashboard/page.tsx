@@ -41,6 +41,14 @@ const quickTools = [
 
 const aiAssistants = [
   {
+    name: 'Mia',
+    slug: 'mia',
+    role: 'Marketing Consultant',
+    description: 'Jouw interne AI-collega voor alle marketing vragen',
+    color: '#00FFCC',
+    featured: true,
+  },
+  {
     name: 'Max',
     slug: 'max',
     role: 'Algemene assistent',
@@ -306,14 +314,24 @@ export default function DashboardPage() {
                   {aiAssistants.map((assistant) => (
                     <Link
                       key={assistant.slug}
-                      href={`/chat/${assistant.slug}`}
-                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-surface-50 transition-all hover:shadow-sm border border-transparent hover:border-surface-200 group"
+                      href={assistant.slug === 'mia' ? '/mia' : `/chat/${assistant.slug}`}
+                      className={cn(
+                        "flex items-center gap-3 p-3 rounded-xl hover:bg-surface-50 transition-all hover:shadow-sm border group",
+                        assistant.featured
+                          ? "border-primary/20 bg-primary/5 hover:border-primary/40"
+                          : "border-transparent hover:border-surface-200"
+                      )}
                     >
                       <AssistantAvatar slug={assistant.slug} size="md" />
                       <div className="flex-1">
-                        <p className="font-medium text-surface-900 group-hover:text-primary transition-colors">
-                          {assistant.name}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-surface-900 group-hover:text-primary transition-colors">
+                            {assistant.name}
+                          </p>
+                          {assistant.featured && (
+                            <Badge variant="default" className="text-xs">Aanbevolen</Badge>
+                          )}
+                        </div>
                         <p className="text-xs text-surface-500">{assistant.description}</p>
                       </div>
                       <MessageSquare className="h-4 w-4 text-surface-400 group-hover:text-primary transition-colors" />

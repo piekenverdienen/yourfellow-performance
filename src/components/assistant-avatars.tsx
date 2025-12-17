@@ -4,10 +4,11 @@ import { cn } from '@/lib/utils'
 
 interface AvatarProps {
   className?: string
-  size?: 'sm' | 'md' | 'lg'
+  size?: 'xs' | 'sm' | 'md' | 'lg'
 }
 
 const sizes = {
+  xs: 'w-5 h-5',
   sm: 'w-8 h-8',
   md: 'w-10 h-10',
   lg: 'w-12 h-12',
@@ -98,6 +99,30 @@ export function SamAvatar({ className, size = 'md' }: AvatarProps) {
   )
 }
 
+// Mia - Marketing consultant with profile photo
+// Place a photo at /public/mia-avatar.png to display it
+export function MiaAvatar({ className, size = 'md' }: AvatarProps) {
+  // Use profile photo - place image at /public/mia-avatar.png
+  return (
+    <div className={cn(sizes[size], 'rounded-full overflow-hidden flex-shrink-0 ring-2 ring-primary/20', className)}>
+      <img
+        src="/mia-avatar.png"
+        alt="Mia"
+        className="w-full h-full object-cover"
+        onError={(e) => {
+          // Fallback to gradient with letter if image fails
+          const target = e.currentTarget
+          target.style.display = 'none'
+          const parent = target.parentElement
+          if (parent) {
+            parent.innerHTML = '<div class="w-full h-full bg-gradient-to-br from-[#00FFCC] to-[#00B8A9] flex items-center justify-center text-black font-bold text-lg">M</div>'
+          }
+        }}
+      />
+    </div>
+  )
+}
+
 // Sophie - Neuromarketing expert with creative vibe
 export function SophieAvatar({ className, size = 'md' }: AvatarProps) {
   return (
@@ -151,6 +176,8 @@ export function AssistantAvatar({ slug, ...props }: AssistantAvatarProps) {
   switch (slug) {
     case 'max':
       return <MaxAvatar {...props} />
+    case 'mia':
+      return <MiaAvatar {...props} />
     case 'sam':
       return <SamAvatar {...props} />
     case 'sophie':

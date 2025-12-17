@@ -27,6 +27,7 @@ import {
   Trophy,
   Flame,
   Zap,
+  Bot,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useUser } from '@/hooks/use-user'

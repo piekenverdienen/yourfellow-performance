@@ -541,7 +541,14 @@ async function trackUsageAndXP(
         .eq('id', user.id)
     }
 
-    supabase.rpc('check_achievements', { user_uuid: user.id }).catch(() => {})
+    // Check for new achievements (fire and forget)
+    void (async () => {
+      try {
+        await supabase.rpc('check_achievements', { user_uuid: user.id })
+      } catch {
+        // Achievement check failed, continue silently
+      }
+    })()
   } catch (error) {
     console.error('Error tracking usage/XP:', error)
   }

@@ -196,7 +196,7 @@ export default function LeaderboardPage() {
         {/* Period Tabs */}
         <div className="flex items-center gap-1 p-1 bg-surface-100 rounded-xl">
           <Button
-            variant={period === 'monthly' ? 'default' : 'ghost'}
+            variant={period === 'monthly' ? 'primary' : 'ghost'}
             size="sm"
             onClick={() => setPeriod('monthly')}
             className="gap-2"
@@ -205,7 +205,7 @@ export default function LeaderboardPage() {
             Deze Maand
           </Button>
           <Button
-            variant={period === 'alltime' ? 'default' : 'ghost'}
+            variant={period === 'alltime' ? 'primary' : 'ghost'}
             size="sm"
             onClick={() => setPeriod('alltime')}
             className="gap-2"
