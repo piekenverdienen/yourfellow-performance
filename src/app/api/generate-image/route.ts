@@ -99,6 +99,12 @@ export async function POST(request: NextRequest) {
       imageUrl: result.imageUrl,
       revisedPrompt: result.revisedPrompt,
       generationId,
+      _image: {
+        provider,
+        model: provider === 'openai' ? 'gpt-image-1' : 'gemini-2.0-flash-exp',
+        size,
+        quality,
+      },
     })
   } catch (error) {
     console.error('Image generation error:', error)
