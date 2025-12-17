@@ -5,6 +5,12 @@ import type { CookieOptions } from '@supabase/ssr'
 type CookieToSet = { name: string; value: string; options?: CookieOptions }
 
 export async function updateSession(request: NextRequest) {
+  // DEBUG - verwijder dit later
+  console.log('ENV DEBUG:', {
+    url: process.env.NEXT_PUBLIC_SUPABASE_URL?.substring(0, 20),
+    keyExists: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  })
+
   let supabaseResponse = NextResponse.next({
     request,
   })
