@@ -11,7 +11,10 @@
     "test:run": "vitest run",
     "monitor": "tsx src/monitoring/run.ts",
     "monitor:dry": "tsx src/monitoring/run.ts --dry-run",
-    "monitor:debug": "tsx src/monitoring/run.ts --log-level debug"
+    "monitor:debug": "tsx src/monitoring/run.ts --log-level debug",
+    "seo:run": "tsx src/seo/run.ts",
+    "seo:dry": "tsx src/seo/run.ts --dry-run",
+    "seo:help": "tsx src/seo/run.ts --help"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.30.1",

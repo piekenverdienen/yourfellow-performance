@@ -292,10 +292,18 @@ export interface GA4MonitoringSettings {
   }
 }
 
+// Search Console Settings per client
+export interface SearchConsoleSettings {
+  enabled?: boolean
+  siteUrl?: string      // Search Console property URL (e.g., https://example.com/ or sc-domain:example.com)
+  dateRangeDays?: number // Default: 28
+}
+
 export interface ClientSettings {
   context?: ClientContext
   clickup?: ClickUpSettings
   ga4Monitoring?: GA4MonitoringSettings
+  searchConsole?: SearchConsoleSettings
   [key: string]: unknown
 }
 
