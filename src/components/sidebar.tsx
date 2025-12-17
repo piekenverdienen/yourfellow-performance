@@ -50,12 +50,6 @@ const navigation: NavItem[] = [
     color: 'text-blue-600 bg-blue-100'
   },
   {
-    name: 'Mia',
-    href: '/mia',
-    icon: Bot,
-    color: 'text-cyan-600 bg-cyan-100'
-  },
-  {
     name: 'Leaderboard',
     href: '/leaderboard',
     icon: Trophy,
