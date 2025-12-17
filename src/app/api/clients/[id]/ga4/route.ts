@@ -50,6 +50,10 @@ export async function GET(
 
     // Check if we have GA4 credentials
     const credentialsJson = process.env.GA4_CREDENTIALS
+    console.log('GA4_CREDENTIALS exists:', !!credentialsJson)
+    console.log('GA4_CREDENTIALS length:', credentialsJson?.length || 0)
+    console.log('GA4_CREDENTIALS starts with:', credentialsJson?.substring(0, 30))
+
     if (!credentialsJson) {
       console.error('GA4_CREDENTIALS not configured')
       return NextResponse.json({
