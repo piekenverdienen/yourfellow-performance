@@ -22,9 +22,12 @@ import {
   ExternalLink,
   Settings,
   Building2,
+  RefreshCw,
+  Clock,
 } from 'lucide-react'
 import { copyToClipboard, cn } from '@/lib/utils'
-import { useClientStore, useSelectedClient } from '@/stores/client-store'
+import { useSelectedClient } from '@/stores/client-store'
+import { usePersistedState } from '@/hooks/use-persisted-form'
 import type { ContentAdvisoryReport, RewriteSuggestion, FAQSuggestion } from '@/seo/types'
 
 // Extended query type from API
@@ -44,39 +47,60 @@ interface QueryWithMentions {
 
 type AnalysisStep = 'idle' | 'fetching-page' | 'fetching-sc' | 'analyzing' | 'generating' | 'done' | 'error'
 
+// Types for persisted data
+interface PersistedAnalysis {
+  report: ContentAdvisoryReport | null
+  rawData: {
+    queries: QueryWithMentions[]
+    pageContent: { title: string; metaDescription: string; h1: string[]; h2: string[]; wordCount: number }
+    totals: { impressions: number; clicks: number; averagePosition: number }
+  } | null
+  pageUrl: string
+  siteUrl: string
+  analyzedAt: string | null
+}
+
+const initialAnalysis: PersistedAnalysis = {
+  report: null,
+  rawData: null,
+  pageUrl: '',
+  siteUrl: '',
+  analyzedAt: null,
+}
+
 export default function SEOAdvisorPage() {
   const selectedClient = useSelectedClient()
   const clientScSettings = selectedClient?.settings?.searchConsole
 
-  const [pageUrl, setPageUrl] = useState('')
-  const [siteUrl, setSiteUrl] = useState('')
-  const [step, setStep] = useState<AnalysisStep>('idle')
+  // Persisted analysis results
+  const [analysis, setAnalysis] = usePersistedState<PersistedAnalysis>('seo-advisor-analysis', initialAnalysis)
 
-  // Pre-fill site URL from client settings
-  useEffect(() => {
-    if (clientScSettings?.enabled && clientScSettings?.siteUrl) {
-      setSiteUrl(clientScSettings.siteUrl)
-    }
-  }, [clientScSettings])
+  // Local UI state (not persisted)
+  const [pageUrl, setPageUrl] = useState(analysis.pageUrl)
+  const [siteUrl, setSiteUrl] = useState(analysis.siteUrl)
+  const [step, setStep] = useState<AnalysisStep>(analysis.report ? 'done' : 'idle')
   const [error, setError] = useState<string | null>(null)
-  const [report, setReport] = useState<ContentAdvisoryReport | null>(null)
-  const [rawData, setRawData] = useState<{
-    queries: QueryWithMentions[]
-    pageContent: { title: string; metaDescription: string; h1: string[]; h2: string[]; wordCount: number }
-    totals: { impressions: number; clicks: number; averagePosition: number }
-  } | null>(null)
   const [expandedSuggestions, setExpandedSuggestions] = useState<Set<string>>(new Set())
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set())
   const [showDataTable, setShowDataTable] = useState(true)
+
+  // Derived state from persisted analysis
+  const report = analysis.report
+  const rawData = analysis.rawData
+
+  // Pre-fill site URL from client settings (only if no persisted URL)
+  useEffect(() => {
+    if (!analysis.siteUrl && clientScSettings?.enabled && clientScSettings?.siteUrl) {
+      setSiteUrl(clientScSettings.siteUrl)
+    }
+  }, [clientScSettings, analysis.siteUrl])
 
   const handleAnalyze = async () => {
     if (!pageUrl || !siteUrl) return
 
     setStep('fetching-page')
     setError(null)
-    setReport(null)
-    setRawData(null)
 
     try {
       const response = await fetch('/api/seo/analyze', {
@@ -91,13 +115,28 @@ export default function SEOAdvisorPage() {
         throw new Error(data.error || 'Analyse mislukt')
       }
 
-      setReport(data.data)
-      setRawData(data.rawData)
+      // Persist the analysis results
+      setAnalysis({
+        report: data.data,
+        rawData: data.rawData,
+        pageUrl,
+        siteUrl,
+        analyzedAt: new Date().toISOString(),
+      })
       setStep('done')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Er ging iets mis')
       setStep('error')
     }
+  }
+
+  const handleClearAnalysis = () => {
+    setAnalysis(initialAnalysis)
+    setPageUrl('')
+    setSiteUrl(clientScSettings?.siteUrl || '')
+    setStep('idle')
+    setError(null)
+    setActiveFilters(new Set())
   }
 
   // Filter logic
@@ -149,16 +188,46 @@ export default function SEOAdvisorPage() {
     <div className="max-w-6xl mx-auto">
       {/* Header */}
       <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="p-2 rounded-xl bg-gradient-to-br from-orange-400 to-orange-600">
-            <TrendingUp className="h-6 w-6 text-white" />
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 rounded-xl bg-gradient-to-br from-orange-400 to-orange-600">
+                <TrendingUp className="h-6 w-6 text-white" />
+              </div>
+              <h1 className="text-2xl font-bold text-surface-900">Content Advisory</h1>
+              <Badge variant="secondary">Nieuw</Badge>
+            </div>
+            <p className="text-surface-600">
+              Analyseer pagina&apos;s met Search Console data en krijg concrete SEO-optimalisatie adviezen.
+            </p>
           </div>
-          <h1 className="text-2xl font-bold text-surface-900">Content Advisory</h1>
-          <Badge variant="secondary">Nieuw</Badge>
+          {analysis.analyzedAt && (
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <p className="text-xs text-surface-400 flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  Laatste analyse
+                </p>
+                <p className="text-sm text-surface-600">
+                  {new Date(analysis.analyzedAt).toLocaleString('nl-NL', {
+                    day: 'numeric',
+                    month: 'short',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleClearAnalysis}
+                leftIcon={<RefreshCw className="h-4 w-4" />}
+              >
+                Nieuwe analyse
+              </Button>
+            </div>
+          )}
         </div>
-        <p className="text-surface-600">
-          Analyseer pagina&apos;s met Search Console data en krijg concrete SEO-optimalisatie adviezen.
-        </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
