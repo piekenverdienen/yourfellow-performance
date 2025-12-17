@@ -27,6 +27,7 @@ import {
   Trophy,
   Flame,
   Zap,
+  Bot,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useUser } from '@/hooks/use-user'
@@ -47,6 +48,12 @@ const navigation: NavItem[] = [
     href: '/dashboard',
     icon: LayoutDashboard,
     color: 'text-blue-600 bg-blue-100'
+  },
+  {
+    name: 'Mia',
+    href: '/mia',
+    icon: Bot,
+    color: 'text-cyan-600 bg-cyan-100'
   },
   {
     name: 'Leaderboard',

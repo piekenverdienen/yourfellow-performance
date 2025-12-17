@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import OpenAI from 'openai'
 import { createClient } from '@/lib/supabase/server'
 
 export const runtime = 'edge'
@@ -9,6 +10,13 @@ interface ChatRequest {
   assistantId: string
   message: string
   clientId?: string // Optional client ID for client-scoped conversations
+  model?: string // Optional model override (user-selectable)
+}
+
+// Determine provider from model ID
+function getProvider(modelId: string): 'anthropic' | 'openai' {
+  if (modelId.startsWith('gpt-')) return 'openai'
+  return 'anthropic'
 }
 
 // WebSearch tool definition for Claude
@@ -108,7 +116,7 @@ export async function POST(request: NextRequest) {
     })
 
     const body: ChatRequest = await request.json()
-    const { conversationId, assistantId, message, clientId } = body
+    const { conversationId, assistantId, message, clientId, model: modelOverride } = body
 
     if (!assistantId || !message) {
       return new Response(
@@ -313,6 +321,10 @@ export async function POST(request: NextRequest) {
       content: message,
     })
 
+    // Determine which model to use (override or assistant default)
+    const selectedModel = modelOverride || assistant.model || 'claude-sonnet-4-20250514'
+    const provider = getProvider(selectedModel)
+
     // Create streaming response
     const encoder = new TextEncoder()
     let fullResponse = ''
@@ -327,128 +339,178 @@ export async function POST(request: NextRequest) {
             encoder.encode(`data: ${JSON.stringify({ type: 'conversation_id', id: activeConversationId })}\n\n`)
           )
 
-          // Check if WebSearch is available
-          const hasWebSearch = !!process.env.TAVILY_API_KEY
-
-          if (hasWebSearch) {
-            // With WebSearch: First make a non-streaming call to check if tool use is needed
-            const initialResponse = await anthropic.messages.create({
-              model: assistant.model || 'claude-sonnet-4-20250514',
-              max_tokens: assistant.max_tokens || 4096,
-              system: systemPrompt,
-              messages: messageHistory,
-              tools: [webSearchTool],
-            })
-
-            totalTokens += initialResponse.usage?.output_tokens || 0
-
-            // Check if there are tool use blocks
-            const toolUseBlocks = initialResponse.content.filter(
-              (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use'
-            )
-
-            if (toolUseBlocks.length > 0) {
-              webSearchUsed = true
-
-              // Execute each tool call
-              const toolResults: Anthropic.ToolResultBlockParam[] = []
-
-              for (const toolBlock of toolUseBlocks) {
-                if (toolBlock.name === 'web_search') {
-                  const input = toolBlock.input as { query: string }
-                  controller.enqueue(
-                    encoder.encode(`data: ${JSON.stringify({ type: 'status', status: 'searching', message: `🔍 Zoeken: "${input.query}"` })}\n\n`)
-                  )
-
-                  const searchResult = await performWebSearch(input.query)
-
-                  toolResults.push({
-                    type: 'tool_result',
-                    tool_use_id: toolBlock.id,
-                    content: searchResult,
-                  })
-                }
-              }
-
-              // Continue conversation with tool results
-              const messagesWithToolResults: Anthropic.MessageParam[] = [
-                ...messageHistory,
-                { role: 'assistant', content: initialResponse.content },
-                { role: 'user', content: toolResults },
-              ]
-
-              // Debug: log the messages to check for empty content
-              console.log('Messages with tool results:', JSON.stringify(messagesWithToolResults.map(m => ({
-                role: m.role,
-                contentLength: Array.isArray(m.content) ? m.content.length : (m.content as string)?.length || 0,
-                contentType: Array.isArray(m.content) ? m.content.map(c => c.type) : typeof m.content
-              })), null, 2))
-
+          if (provider === 'openai') {
+            // OpenAI streaming
+            if (!process.env.OPENAI_API_KEY) {
               controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({ type: 'status', status: 'thinking', message: '💭 Verwerken van resultaten...' })}\n\n`)
+                encoder.encode(`data: ${JSON.stringify({ type: 'error', message: 'OpenAI API key niet geconfigureerd' })}\n\n`)
               )
-
-              // Get final response after tool use (non-streaming for stability)
-              console.log('Making final API call with tool results...')
-              const finalResponse = await anthropic.messages.create({
-                model: assistant.model || 'claude-sonnet-4-20250514',
-                max_tokens: assistant.max_tokens || 4096,
-                system: systemPrompt,
-                messages: messagesWithToolResults,
-              })
-
-              console.log('Final response received, content blocks:', finalResponse.content.length)
-              totalTokens += finalResponse.usage?.output_tokens || 0
-
-              // Extract text from response
-              const finalTextBlocks = finalResponse.content.filter(
-                (block): block is Anthropic.TextBlock => block.type === 'text'
-              )
-
-              for (const block of finalTextBlocks) {
-                fullResponse += block.text
-                controller.enqueue(
-                  encoder.encode(`data: ${JSON.stringify({ type: 'text', content: block.text })}\n\n`)
-                )
-              }
-
-              console.log('Final response sent, length:', fullResponse.length)
-            } else {
-              // No tool use needed - extract text from initial response
-              const textBlocks = initialResponse.content.filter(
-                (block): block is Anthropic.TextBlock => block.type === 'text'
-              )
-
-              for (const block of textBlocks) {
-                fullResponse += block.text
-                controller.enqueue(
-                  encoder.encode(`data: ${JSON.stringify({ type: 'text', content: block.text })}\n\n`)
-                )
-              }
+              controller.close()
+              return
             }
-          } else {
-            // Without WebSearch: Stream directly for better performance
-            const response = await anthropic.messages.create({
-              model: assistant.model || 'claude-sonnet-4-20250514',
+
+            const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+            // Convert message history to OpenAI format
+            const openAIMessages: OpenAI.ChatCompletionMessageParam[] = [
+              { role: 'system', content: systemPrompt },
+              ...messageHistory.map(m => ({
+                role: m.role as 'user' | 'assistant',
+                content: m.content,
+              })),
+            ]
+
+            const stream = await openai.chat.completions.create({
+              model: selectedModel,
               max_tokens: assistant.max_tokens || 4096,
-              system: systemPrompt,
-              messages: messageHistory,
+              temperature: Number(assistant.temperature) || 0.6,
+              messages: openAIMessages,
               stream: true,
             })
 
-            for await (const event of response) {
-              if (event.type === 'content_block_delta') {
-                const delta = event.delta
-                if ('text' in delta) {
-                  fullResponse += delta.text
+            for await (const chunk of stream) {
+              const content = chunk.choices[0]?.delta?.content || ''
+              if (content) {
+                fullResponse += content
+                controller.enqueue(
+                  encoder.encode(`data: ${JSON.stringify({ type: 'text', content })}\n\n`)
+                )
+              }
+              // Estimate tokens for OpenAI (actual usage comes at the end)
+              if (chunk.usage) {
+                totalTokens = chunk.usage.completion_tokens || 0
+              }
+            }
+
+            // Estimate tokens if not provided (rough estimate: 4 chars per token)
+            if (totalTokens === 0) {
+              totalTokens = Math.ceil(fullResponse.length / 4)
+            }
+          } else {
+            // Anthropic streaming (existing logic)
+            // Check if WebSearch is available
+            const hasWebSearch = !!process.env.TAVILY_API_KEY
+
+            if (hasWebSearch) {
+              // With WebSearch: First make a non-streaming call to check if tool use is needed
+              const initialResponse = await anthropic.messages.create({
+                model: selectedModel,
+                max_tokens: assistant.max_tokens || 4096,
+                system: systemPrompt,
+                messages: messageHistory,
+                tools: [webSearchTool],
+              })
+
+              totalTokens += initialResponse.usage?.output_tokens || 0
+
+              // Check if there are tool use blocks
+              const toolUseBlocks = initialResponse.content.filter(
+                (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use'
+              )
+
+              if (toolUseBlocks.length > 0) {
+                webSearchUsed = true
+
+                // Execute each tool call
+                const toolResults: Anthropic.ToolResultBlockParam[] = []
+
+                for (const toolBlock of toolUseBlocks) {
+                  if (toolBlock.name === 'web_search') {
+                    const input = toolBlock.input as { query: string }
+                    controller.enqueue(
+                      encoder.encode(`data: ${JSON.stringify({ type: 'status', status: 'searching', message: `🔍 Zoeken: "${input.query}"` })}\n\n`)
+                    )
+
+                    const searchResult = await performWebSearch(input.query)
+
+                    toolResults.push({
+                      type: 'tool_result',
+                      tool_use_id: toolBlock.id,
+                      content: searchResult,
+                    })
+                  }
+                }
+
+                // Continue conversation with tool results
+                const messagesWithToolResults: Anthropic.MessageParam[] = [
+                  ...messageHistory,
+                  { role: 'assistant', content: initialResponse.content },
+                  { role: 'user', content: toolResults },
+                ]
+
+                // Debug: log the messages to check for empty content
+                console.log('Messages with tool results:', JSON.stringify(messagesWithToolResults.map(m => ({
+                  role: m.role,
+                  contentLength: Array.isArray(m.content) ? m.content.length : (m.content as string)?.length || 0,
+                  contentType: Array.isArray(m.content) ? m.content.map(c => c.type) : typeof m.content
+                })), null, 2))
+
+                controller.enqueue(
+                  encoder.encode(`data: ${JSON.stringify({ type: 'status', status: 'thinking', message: '💭 Verwerken van resultaten...' })}\n\n`)
+                )
+
+                // Get final response after tool use (non-streaming for stability)
+                console.log('Making final API call with tool results...')
+                const finalResponse = await anthropic.messages.create({
+                  model: selectedModel,
+                  max_tokens: assistant.max_tokens || 4096,
+                  system: systemPrompt,
+                  messages: messagesWithToolResults,
+                })
+
+                console.log('Final response received, content blocks:', finalResponse.content.length)
+                totalTokens += finalResponse.usage?.output_tokens || 0
+
+                // Extract text from response
+                const finalTextBlocks = finalResponse.content.filter(
+                  (block): block is Anthropic.TextBlock => block.type === 'text'
+                )
+
+                for (const block of finalTextBlocks) {
+                  fullResponse += block.text
                   controller.enqueue(
-                    encoder.encode(`data: ${JSON.stringify({ type: 'text', content: delta.text })}\n\n`)
+                    encoder.encode(`data: ${JSON.stringify({ type: 'text', content: block.text })}\n\n`)
+                  )
+                }
+
+                console.log('Final response sent, length:', fullResponse.length)
+              } else {
+                // No tool use needed - extract text from initial response
+                const textBlocks = initialResponse.content.filter(
+                  (block): block is Anthropic.TextBlock => block.type === 'text'
+                )
+
+                for (const block of textBlocks) {
+                  fullResponse += block.text
+                  controller.enqueue(
+                    encoder.encode(`data: ${JSON.stringify({ type: 'text', content: block.text })}\n\n`)
                   )
                 }
               }
-              if (event.type === 'message_delta') {
-                if (event.usage) {
-                  totalTokens += event.usage.output_tokens
+            } else {
+              // Without WebSearch: Stream directly for better performance
+              const response = await anthropic.messages.create({
+                model: selectedModel,
+                max_tokens: assistant.max_tokens || 4096,
+                system: systemPrompt,
+                messages: messageHistory,
+                stream: true,
+              })
+
+              for await (const event of response) {
+                if (event.type === 'content_block_delta') {
+                  const delta = event.delta
+                  if ('text' in delta) {
+                    fullResponse += delta.text
+                    controller.enqueue(
+                      encoder.encode(`data: ${JSON.stringify({ type: 'text', content: delta.text })}\n\n`)
+                    )
+                  }
+                }
+                if (event.type === 'message_delta') {
+                  if (event.usage) {
+                    totalTokens += event.usage.output_tokens
+                  }
                 }
               }
             }
@@ -585,9 +647,13 @@ async function trackChatUsage(
     }
 
     // Check for new achievements (fire and forget)
-    supabase.rpc('check_achievements', { user_uuid: userId }).catch(() => {
-      // Achievement check failed, continue silently
-    })
+    void (async () => {
+      try {
+        await supabase.rpc('check_achievements', { user_uuid: userId })
+      } catch {
+        // Achievement check failed, continue silently
+      }
+    })()
   } catch (error) {
     console.error('Error tracking chat usage:', error)
   }
