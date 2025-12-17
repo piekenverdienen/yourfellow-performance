@@ -4,13 +4,16 @@ import { createClient } from '@/lib/supabase/server'
 
 export const runtime = 'edge'
 
+type ImageModel = 'dall-e-3' | 'dall-e-2' | 'gpt-image-1'
+
 interface GenerateImageRequest {
   prompt: string
   conversationId?: string
   clientId?: string
   assistantSlug?: string
-  size?: '1024x1024' | '1792x1024' | '1024x1792'
-  quality?: 'standard' | 'hd'
+  model?: ImageModel
+  size?: '1024x1024' | '1792x1024' | '1024x1792' | '512x512' | '256x256'
+  quality?: 'standard' | 'hd' | 'low' | 'medium' | 'high'
   style?: 'vivid' | 'natural'
 }
 
@@ -41,10 +44,48 @@ export async function POST(request: NextRequest) {
       conversationId,
       clientId,
       assistantSlug,
-      size = '1024x1024',
-      quality = 'standard',
+      model = 'dall-e-3',
+      size: requestedSize,
+      quality: requestedQuality,
       style = 'vivid',
     } = body
+
+    // Model-specific defaults and validations
+    const getModelConfig = (modelId: ImageModel) => {
+      switch (modelId) {
+        case 'dall-e-2':
+          return {
+            model: 'dall-e-2' as const,
+            size: (requestedSize && ['256x256', '512x512', '1024x1024'].includes(requestedSize)
+              ? requestedSize : '1024x1024') as '256x256' | '512x512' | '1024x1024',
+            quality: undefined, // DALL-E 2 doesn't support quality
+            style: undefined, // DALL-E 2 doesn't support style
+            supportsN: true,
+          }
+        case 'gpt-image-1':
+          return {
+            model: 'gpt-image-1' as const,
+            size: (requestedSize && ['1024x1024', '1536x1024', '1024x1536'].includes(requestedSize)
+              ? requestedSize : '1024x1024') as '1024x1024' | '1536x1024' | '1024x1536',
+            quality: (requestedQuality && ['low', 'medium', 'high'].includes(requestedQuality)
+              ? requestedQuality : 'medium') as 'low' | 'medium' | 'high',
+            style: undefined, // GPT Image doesn't support style
+            supportsN: true,
+          }
+        case 'dall-e-3':
+        default:
+          return {
+            model: 'dall-e-3' as const,
+            size: (requestedSize && ['1024x1024', '1792x1024', '1024x1792'].includes(requestedSize)
+              ? requestedSize : '1024x1024') as '1024x1024' | '1792x1024' | '1024x1792',
+            quality: (requestedQuality === 'hd' ? 'hd' : 'standard') as 'standard' | 'hd',
+            style: style,
+            supportsN: false, // DALL-E 3 only supports n=1
+          }
+      }
+    }
+
+    const modelConfig = getModelConfig(model)
 
     if (!prompt || prompt.trim().length === 0) {
       return NextResponse.json(
@@ -58,16 +99,25 @@ export async function POST(request: NextRequest) {
       apiKey: process.env.OPENAI_API_KEY,
     })
 
-    // Generate image using DALL-E 3
-    const response = await openai.images.generate({
-      model: 'dall-e-3',
+    // Generate image using selected model
+    // Build request based on model capabilities
+    const imageRequest: Parameters<typeof openai.images.generate>[0] = {
+      model: modelConfig.model,
       prompt: prompt,
       n: 1,
-      size: size,
-      quality: quality,
-      style: style,
+      size: modelConfig.size as '256x256' | '512x512' | '1024x1024' | '1792x1024' | '1024x1792',
       response_format: 'url',
-    })
+    }
+
+    // Add optional parameters based on model support
+    if (modelConfig.quality !== undefined) {
+      imageRequest.quality = modelConfig.quality as 'standard' | 'hd'
+    }
+    if (modelConfig.style !== undefined) {
+      imageRequest.style = modelConfig.style
+    }
+
+    const response = await openai.images.generate(imageRequest)
 
     if (!response.data || response.data.length === 0) {
       return NextResponse.json(
@@ -156,11 +206,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Log usage
+    // Log usage with model info
     await supabase.from('usage').insert({
       user_id: user.id,
       tool: 'image-generation',
       action_type: 'image_generate',
+      model: modelConfig.model,
       total_tokens: 0, // Image generation doesn't use tokens in the same way
       client_id: clientId || null,
     })
@@ -187,6 +238,9 @@ export async function POST(request: NextRequest) {
         .eq('id', user.id)
     }
 
+    // Parse dimensions from model config size
+    const [width, height] = modelConfig.size.split('x').map(Number)
+
     return NextResponse.json({
       success: true,
       image: {
@@ -196,8 +250,9 @@ export async function POST(request: NextRequest) {
         isTemporary: false,
         prompt: prompt,
         revisedPrompt: revisedPrompt,
-        width: parseInt(size.split('x')[0]),
-        height: parseInt(size.split('x')[1]),
+        model: modelConfig.model,
+        width,
+        height,
       },
     })
   } catch (error) {

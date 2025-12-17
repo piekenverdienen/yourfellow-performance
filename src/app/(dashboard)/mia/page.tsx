@@ -35,6 +35,13 @@ const AVAILABLE_MODELS = [
   { id: 'gpt-4o-mini', name: 'GPT-4o Mini', provider: 'OpenAI' },
 ]
 
+// Available image generation models
+const IMAGE_MODELS = [
+  { id: 'dall-e-3', name: 'DALL-E 3', provider: 'OpenAI', description: 'Hoogste kwaliteit, meest creatief' },
+  { id: 'dall-e-2', name: 'DALL-E 2', provider: 'OpenAI', description: 'Sneller, goedkoper' },
+  { id: 'gpt-image-1', name: 'GPT Image', provider: 'OpenAI', description: 'Nieuwe model met editing' },
+]
+
 export default function MiaPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -54,6 +61,8 @@ export default function MiaPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-20250514')
   const [showModelSelector, setShowModelSelector] = useState(false)
+  const [selectedImageModel, setSelectedImageModel] = useState('dall-e-3')
+  const [showImageModelSelector, setShowImageModelSelector] = useState(false)
   const [isGeneratingImage, setIsGeneratingImage] = useState(false)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -205,7 +214,8 @@ export default function MiaPage() {
   // Handle image generation
   const handleImageGeneration = async (prompt: string): Promise<MessageAttachment | null> => {
     setIsGeneratingImage(true)
-    setStatusMessage('Afbeelding genereren...')
+    const modelName = IMAGE_MODELS.find(m => m.id === selectedImageModel)?.name || 'DALL-E 3'
+    setStatusMessage(`Afbeelding genereren met ${modelName}...`)
 
     try {
       const response = await fetch('/api/chat/generate-image', {
@@ -216,6 +226,7 @@ export default function MiaPage() {
           conversationId,
           clientId: selectedClientId,
           assistantSlug: 'mia',
+          model: selectedImageModel,
         }),
       })
 
@@ -574,40 +585,87 @@ export default function MiaPage() {
             )}
           </div>
 
-          {/* Model Selector */}
-          <div className="relative">
-            <button
-              onClick={() => setShowModelSelector(!showModelSelector)}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm bg-surface-100 hover:bg-surface-200 rounded-lg transition-colors"
-            >
-              <span className="text-surface-600">
-                {AVAILABLE_MODELS.find(m => m.id === selectedModel)?.name || 'Model'}
-              </span>
-              <ChevronDown className={cn(
-                "h-4 w-4 text-surface-400 transition-transform",
-                showModelSelector && "rotate-180"
-              )} />
-            </button>
-            {showModelSelector && (
-              <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-surface-200 py-1 z-10">
-                {AVAILABLE_MODELS.map(model => (
-                  <button
-                    key={model.id}
-                    onClick={() => {
-                      setSelectedModel(model.id)
-                      setShowModelSelector(false)
-                    }}
-                    className={cn(
-                      "w-full px-3 py-2 text-left text-sm hover:bg-surface-50 transition-colors",
-                      selectedModel === model.id && "bg-primary/10 text-primary"
-                    )}
-                  >
-                    <div className="font-medium">{model.name}</div>
-                    <div className="text-xs text-surface-500">{model.provider}</div>
-                  </button>
-                ))}
-              </div>
-            )}
+          {/* Model Selectors */}
+          <div className="flex items-center gap-2">
+            {/* Image Model Selector */}
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setShowImageModelSelector(!showImageModelSelector)
+                  setShowModelSelector(false)
+                }}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-surface-100 hover:bg-surface-200 rounded-lg transition-colors"
+              >
+                <Sparkles className="h-4 w-4 text-surface-500" />
+                <span className="text-surface-600">
+                  {IMAGE_MODELS.find(m => m.id === selectedImageModel)?.name || 'DALL-E 3'}
+                </span>
+                <ChevronDown className={cn(
+                  "h-4 w-4 text-surface-400 transition-transform",
+                  showImageModelSelector && "rotate-180"
+                )} />
+              </button>
+              {showImageModelSelector && (
+                <div className="absolute right-0 mt-1 w-56 bg-white rounded-lg shadow-lg border border-surface-200 py-1 z-10">
+                  {IMAGE_MODELS.map(model => (
+                    <button
+                      key={model.id}
+                      onClick={() => {
+                        setSelectedImageModel(model.id)
+                        setShowImageModelSelector(false)
+                      }}
+                      className={cn(
+                        "w-full px-3 py-2 text-left text-sm hover:bg-surface-50 transition-colors",
+                        selectedImageModel === model.id && "bg-primary/10 text-primary"
+                      )}
+                    >
+                      <div className="font-medium">{model.name}</div>
+                      <div className="text-xs text-surface-500">{model.description}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Text Model Selector */}
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setShowModelSelector(!showModelSelector)
+                  setShowImageModelSelector(false)
+                }}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-surface-100 hover:bg-surface-200 rounded-lg transition-colors"
+              >
+                <MessageSquare className="h-4 w-4 text-surface-500" />
+                <span className="text-surface-600">
+                  {AVAILABLE_MODELS.find(m => m.id === selectedModel)?.name || 'Model'}
+                </span>
+                <ChevronDown className={cn(
+                  "h-4 w-4 text-surface-400 transition-transform",
+                  showModelSelector && "rotate-180"
+                )} />
+              </button>
+              {showModelSelector && (
+                <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-surface-200 py-1 z-10">
+                  {AVAILABLE_MODELS.map(model => (
+                    <button
+                      key={model.id}
+                      onClick={() => {
+                        setSelectedModel(model.id)
+                        setShowModelSelector(false)
+                      }}
+                      className={cn(
+                        "w-full px-3 py-2 text-left text-sm hover:bg-surface-50 transition-colors",
+                        selectedModel === model.id && "bg-primary/10 text-primary"
+                      )}
+                    >
+                      <div className="font-medium">{model.name}</div>
+                      <div className="text-xs text-surface-500">{model.provider}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
