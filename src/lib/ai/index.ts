@@ -2,61 +2,73 @@
  * AI Module Exports
  *
  * Central export point for all AI-related functionality.
+ *
+ * MVP EXPORTS (use these):
+ * - AIGateway, getAIGateway - Main gateway class
+ * - AITask, AIGenerateRequest, AIResult - Core types
+ * - getModelForTask, calculateCost - Model utilities
+ *
+ * ROADMAP EXPORTS (don't use yet):
+ * - providers/* - Multi-provider support
+ * - evaluator.ts - Content quality scoring
+ * - supabase-ai-gateway.sql - Extended database schema
  */
 
-// Main Gateway
-export { AIGateway, getAIGateway, aiGateway } from './gateway'
+// ============================================
+// MVP EXPORTS
+// ============================================
 
-// Types
+// Main Gateway
+export { AIGateway, getAIGateway } from './gateway'
+
+// Core Types (minimal set for MVP)
 export type {
-  // Provider & Model
+  AITask,
+  AIGenerateRequest,
+  AIResult,
+  AIUsageInfo,
+} from './types'
+
+// Model utilities
+export {
+  getModelForTask,
+  calculateCost,
+} from './models'
+
+// ============================================
+// ROADMAP EXPORTS (for future use)
+// ============================================
+
+// Full type exports (when needed)
+export type {
   AIProvider,
   AICapability,
   ModelConfig,
-
-  // Tasks
-  AITask,
   TaskModelMapping,
-
-  // Templates
   PromptTemplate,
-  TemplateVariable,
-
-  // Client Context
   AIClientContext,
-
-  // Request & Response
-  AIGenerateRequest,
   AIRequestOptions,
-  AIResult,
-  AIUsageInfo,
   AIResultMetadata,
-
-  // Usage & Evaluation
   AIUsageLog,
   AIEvaluation,
   EvaluationCriteria,
-
-  // Provider Adapter
   AIProviderAdapter,
   ProviderGenerateParams,
   ProviderGenerateResult,
 } from './types'
 
-// Model Registry
+// Model Registry (when switching models dynamically)
 export {
   MODEL_REGISTRY,
   TASK_MODEL_MAPPING,
   getModel,
-  getModelForTask,
   getFallbackModelForTask,
   findModelsWithCapabilities,
-  calculateCost,
   getAvailableTasks,
   modelSupportsCapability,
 } from './models'
 
-// Providers
+// Providers (when using multiple providers)
 export {
   getProviderAdapter,
   isProviderAvailable,

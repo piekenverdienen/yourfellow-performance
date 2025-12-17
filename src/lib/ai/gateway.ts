@@ -1,45 +1,142 @@
 /**
- * AI Gateway Service
+ * AI Gateway Service - MVP Version
  *
- * Central service for all AI operations.
- * Handles model selection, template rendering, client context, and usage logging.
+ * Minimal viable gateway for AI operations.
+ * Focus: simple flow, one provider, basic logging.
+ *
+ * Flow: Request → Model Selection → Template → Provider → Response + Logging
+ *
+ * MVP SCOPE:
+ * ✓ Text generation only
+ * ✓ Anthropic provider (primary)
+ * ✓ Hardcoded fallback templates
+ * ✓ Client context injection
+ * ✓ Basic usage logging (existing 'usage' table)
+ *
+ * ROADMAP (not implemented):
+ * - Multi-provider fallback (see providers/)
+ * - Database templates with versioning (see supabase-ai-gateway.sql)
+ * - A/B testing
+ * - Evaluations (see evaluator.ts)
+ * - Image generation
  */
 
+import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
-import { getProviderAdapter, isProviderAvailable } from './providers'
-import { getModel, getModelForTask, getFallbackModelForTask, calculateCost } from './models'
+import { getModelForTask, calculateCost } from './models'
 import type {
   AIGenerateRequest,
   AIResult,
   AITask,
   AIClientContext,
-  PromptTemplate,
-  AIUsageLog,
-  ModelConfig,
 } from './types'
 
 // ============================================
-// Template Cache (in-memory, cleared on deploy)
+// Simple Template Type (MVP)
 // ============================================
 
-const templateCache = new Map<string, { template: PromptTemplate; cachedAt: number }>()
-const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+interface SimpleTemplate {
+  id: string
+  task: AITask
+  systemPrompt: string
+  userPromptTemplate: string
+  temperature: number
+  maxTokens: number
+  xpReward: number
+}
 
 // ============================================
-// Main Gateway Class
+// Hardcoded Templates (MVP)
+// ============================================
+// Later: move to database via supabase-ai-gateway.sql
+
+const TEMPLATES: Record<string, SimpleTemplate> = {
+  google_ads_copy: {
+    id: 'google-ads-copy-v1',
+    task: 'google_ads_copy',
+    systemPrompt: `Je bent een ervaren Google Ads copywriter gespecialiseerd in het schrijven van advertenties met hoge Quality Scores.
+
+TECHNISCHE EISEN:
+- Headlines: STRIKT max 30 karakters (inclusief spaties)
+- Descriptions: STRIKT max 90 karakters (inclusief spaties)
+- Tel karakters nauwkeurig! Overschrijd NOOIT de limieten.
+
+SCHRIJFREGELS:
+- Gebruik actieve, directe taal
+- Vermijd generieke zinnen zoals "Bestel nu" of "Klik hier"
+- Verwerk keywords natuurlijk in de tekst
+- Gebruik cijfers en specifieke voordelen waar mogelijk
+- Creëer urgentie zonder clickbait te zijn
+- Pas de tone of voice aan op de doelgroep
+
+QUALITY SCORE OPTIMALISATIE:
+- Als er landingspagina content is meegegeven: gebruik EXACT dezelfde woorden en termen
+- Dit verhoogt de Ad Relevance en Landing Page Experience scores
+
+OUTPUT FORMAT:
+Geef ALLEEN valide JSON terug in dit formaat (geen markdown codeblocks):
+{
+  "headlines": ["headline1", "headline2", ...],
+  "descriptions": ["description1", "description2", ...]
+}
+
+Genereer minimaal 15 unieke headlines en 4 unieke descriptions.`,
+    userPromptTemplate: `Product: {{product_name}}
+Beschrijving: {{product_description}}
+Doelgroep: {{target_audience}}
+Keywords: {{keywords}}
+Tone: {{tone}}
+{{landing_page_content}}`,
+    temperature: 0.7,
+    maxTokens: 2048,
+    xpReward: 10,
+  },
+  image_prompt: {
+    id: 'image-prompt-v1',
+    task: 'image_prompt',
+    systemPrompt: `Je bent een expert image prompt engineer. Je analyseert social media posts en schrijft visueel beschrijvende prompts voor AI image generators.
+
+REGELS:
+- Schrijf ALLEEN de image prompt, geen uitleg
+- Prompt moet in het ENGELS zijn
+- NOOIT tekst, woorden, letters of logo's beschrijven (AI kan dit niet)
+- Beschrijf: onderwerp, setting, belichting, stijl, kleuren, compositie, sfeer
+- Gebruik beschrijvende bijvoeglijke naamwoorden
+- Max 80 woorden`,
+    userPromptTemplate: `Platform: {{platform}}
+Post inhoud: {{content}}`,
+    temperature: 0.8,
+    maxTokens: 500,
+    xpReward: 5,
+  },
+}
+
+// ============================================
+// Main Gateway Class (MVP)
 // ============================================
 
 export class AIGateway {
+  private anthropic: Anthropic
+
+  constructor() {
+    if (!process.env.ANTHROPIC_API_KEY) {
+      throw new Error('ANTHROPIC_API_KEY is required')
+    }
+    this.anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+    })
+  }
+
   /**
    * Generate text using AI
    *
-   * This is the main entry point for all text generation.
-   * It handles:
-   * - Model selection based on task
-   * - Template fetching and rendering
-   * - Client context injection
-   * - Usage logging
-   * - Error handling with fallbacks
+   * Simple flow:
+   * 1. Get model for task
+   * 2. Get template
+   * 3. Build prompts (+ client context)
+   * 4. Call Anthropic
+   * 5. Log usage
+   * 6. Return result
    */
   async generateText<T = string>(request: AIGenerateRequest): Promise<AIResult<T>> {
     const startTime = Date.now()
@@ -47,26 +144,89 @@ export class AIGateway {
 
     try {
       // 1. Get model configuration
-      const model = request.options?.modelOverride
-        ? getModel(request.options.modelOverride)
-        : getModelForTask(request.task)
+      const model = getModelForTask(request.task)
 
-      if (!model) {
-        return this.errorResult('No model available for this task', requestId, startTime)
+      // 2. Get template (hardcoded for MVP)
+      const template = TEMPLATES[request.task]
+      if (!template) {
+        return this.errorResult(`No template for task: ${request.task}`, requestId, startTime)
       }
 
-      // Check if provider is available
-      if (!isProviderAvailable(model.provider)) {
-        // Try fallback
-        const fallback = getFallbackModelForTask(request.task)
-        if (!fallback || !isProviderAvailable(fallback.provider)) {
-          return this.errorResult('No AI provider available', requestId, startTime)
+      // 3. Build prompts
+      let systemPrompt = template.systemPrompt
+      const userPrompt = this.renderTemplate(template.userPromptTemplate, request.input)
+
+      // 4. Add client context if provided
+      if (request.clientId) {
+        const clientContext = await this.getClientContext(request.clientId)
+        if (clientContext) {
+          systemPrompt = this.injectClientContext(systemPrompt, clientContext)
         }
-        // Use fallback model
-        return this.executeGeneration(request, fallback, requestId, startTime)
       }
 
-      return this.executeGeneration(request, model, requestId, startTime)
+      // 5. Call Anthropic
+      const response = await this.anthropic.messages.create({
+        model: model.modelName,
+        max_tokens: request.options?.maxTokens || template.maxTokens,
+        temperature: request.options?.temperature ?? template.temperature,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      })
+
+      // Extract content
+      const textContent = response.content.find(block => block.type === 'text')
+      let content = textContent ? textContent.text : ''
+
+      // Strip markdown code blocks if present
+      if (content.startsWith('```')) {
+        content = content.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
+      }
+
+      const inputTokens = response.usage?.input_tokens || 0
+      const outputTokens = response.usage?.output_tokens || 0
+      const durationMs = Date.now() - startTime
+      const estimatedCost = calculateCost(model.id, inputTokens, outputTokens)
+
+      // 6. Log usage (fire and forget)
+      if (!request.options?.skipLogging && request.options?.userId) {
+        this.logUsage(
+          request.options.userId,
+          request.task,
+          inputTokens,
+          outputTokens,
+          template.xpReward,
+          request.clientId
+        ).catch(console.error)
+      }
+
+      // 7. Parse JSON if needed
+      let data: T
+      try {
+        data = JSON.parse(content) as T
+      } catch {
+        data = content as unknown as T
+      }
+
+      return {
+        success: true,
+        data,
+        usage: {
+          modelId: model.id,
+          provider: model.provider,
+          inputTokens,
+          outputTokens,
+          totalTokens: inputTokens + outputTokens,
+          estimatedCost,
+          durationMs,
+        },
+        metadata: {
+          templateId: template.id,
+          templateVersion: '1.0.0',
+          clientId: request.clientId,
+          requestId,
+          timestamp: new Date().toISOString(),
+        },
+      }
     } catch (error) {
       console.error('AI Gateway error:', error)
       return this.errorResult(
@@ -77,229 +237,10 @@ export class AIGateway {
     }
   }
 
-  /**
-   * Execute the actual generation with a specific model
-   */
-  private async executeGeneration<T = string>(
-    request: AIGenerateRequest,
-    model: ModelConfig,
-    requestId: string,
-    startTime: number
-  ): Promise<AIResult<T>> {
-    // 2. Get template
-    const template = await this.getTemplate(request.task, request.templateId)
-    if (!template) {
-      return this.errorResult(`No template found for task: ${request.task}`, requestId, startTime)
-    }
-
-    // 3. Build prompts
-    let systemPrompt = template.systemPrompt
-    const userPrompt = this.renderTemplate(template.userPromptTemplate, request.input)
-
-    // 4. Add client context if provided
-    if (request.clientId) {
-      const clientContext = await this.getClientContext(request.clientId)
-      if (clientContext) {
-        systemPrompt = this.injectClientContext(systemPrompt, clientContext)
-      }
-    }
-
-    // 5. Get provider adapter and execute
-    const adapter = getProviderAdapter(model.provider)
-
-    const result = await adapter.generateText({
-      model: model.modelName,
-      systemPrompt,
-      userPrompt,
-      maxTokens: request.options?.maxTokens || template.maxTokens,
-      temperature: request.options?.temperature ?? template.temperature,
-    })
-
-    const durationMs = Date.now() - startTime
-    const estimatedCost = calculateCost(model.id, result.inputTokens, result.outputTokens)
-
-    // 6. Log usage (fire and forget)
-    if (!request.options?.skipLogging) {
-      this.logUsage({
-        userId: request.options?.userId || '',
-        clientId: request.clientId,
-        templateId: template.id,
-        templateVersion: template.version,
-        modelId: model.id,
-        provider: model.provider,
-        task: request.task,
-        inputTokens: result.inputTokens,
-        outputTokens: result.outputTokens,
-        totalTokens: result.inputTokens + result.outputTokens,
-        estimatedCost,
-        durationMs,
-        success: true,
-      }).catch(console.error)
-    }
-
-    // 7. Parse result if output schema defined
-    let data: T
-    if (template.outputSchema) {
-      try {
-        data = JSON.parse(result.content) as T
-      } catch {
-        data = result.content as unknown as T
-      }
-    } else {
-      data = result.content as unknown as T
-    }
-
-    return {
-      success: true,
-      data,
-      usage: {
-        modelId: model.id,
-        provider: model.provider,
-        inputTokens: result.inputTokens,
-        outputTokens: result.outputTokens,
-        totalTokens: result.inputTokens + result.outputTokens,
-        estimatedCost,
-        durationMs,
-      },
-      metadata: {
-        templateId: template.id,
-        templateVersion: template.version,
-        clientId: request.clientId,
-        requestId,
-        timestamp: new Date().toISOString(),
-      },
-    }
-  }
-
   // ============================================
-  // Template Management
+  // Template Rendering
   // ============================================
 
-  /**
-   * Get template from database or cache
-   */
-  private async getTemplate(task: AITask, templateId?: string): Promise<PromptTemplate | null> {
-    const cacheKey = templateId || `task:${task}`
-
-    // Check cache
-    const cached = templateCache.get(cacheKey)
-    if (cached && Date.now() - cached.cachedAt < CACHE_TTL) {
-      return cached.template
-    }
-
-    // Fetch from database
-    try {
-      const supabase = await createClient()
-
-      let query = supabase
-        .from('ai_templates')
-        .select('*')
-        .eq('is_active', true)
-
-      if (templateId) {
-        query = query.eq('id', templateId)
-      } else {
-        query = query.eq('task', task)
-      }
-
-      const { data, error } = await query
-        .order('version', { ascending: false })
-        .limit(1)
-        .single()
-
-      if (error || !data) {
-        // Return fallback template
-        return this.getFallbackTemplate(task)
-      }
-
-      const template: PromptTemplate = {
-        id: data.id,
-        task: data.task,
-        version: data.version,
-        name: data.name,
-        description: data.description,
-        systemPrompt: data.system_prompt,
-        userPromptTemplate: data.user_prompt_template,
-        outputSchema: data.output_schema,
-        temperature: data.temperature,
-        maxTokens: data.max_tokens,
-        xpReward: data.xp_reward,
-        isActive: data.is_active,
-        createdAt: data.created_at,
-        updatedAt: data.updated_at,
-      }
-
-      // Cache it
-      templateCache.set(cacheKey, { template, cachedAt: Date.now() })
-
-      return template
-    } catch (error) {
-      console.error('Error fetching template:', error)
-      return this.getFallbackTemplate(task)
-    }
-  }
-
-  /**
-   * Fallback templates when database is unavailable
-   */
-  private getFallbackTemplate(task: AITask): PromptTemplate | null {
-    const fallbacks: Partial<Record<AITask, PromptTemplate>> = {
-      google_ads_copy: {
-        id: 'fallback-google-ads',
-        task: 'google_ads_copy',
-        version: '1.0.0',
-        name: 'Google Ads Copy',
-        systemPrompt: `Je bent een ervaren Google Ads copywriter. Schrijf advertentieteksten met hoge Quality Scores.
-
-TECHNISCHE EISEN:
-- Headlines: max 30 karakters
-- Descriptions: max 90 karakters
-
-OUTPUT: JSON met headlines[] en descriptions[]`,
-        userPromptTemplate: `Product: {{product_name}}
-Beschrijving: {{product_description}}
-Doelgroep: {{target_audience}}
-Keywords: {{keywords}}
-Tone: {{tone}}`,
-        outputSchema: {
-          type: 'object',
-          properties: {
-            headlines: { type: 'array', items: { type: 'string' } },
-            descriptions: { type: 'array', items: { type: 'string' } },
-          },
-        },
-        temperature: 0.7,
-        maxTokens: 2048,
-        xpReward: 10,
-        isActive: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
-      image_prompt: {
-        id: 'fallback-image-prompt',
-        task: 'image_prompt',
-        version: '1.0.0',
-        name: 'Image Prompt',
-        systemPrompt: `Je bent een expert image prompt engineer. Schrijf visueel beschrijvende prompts voor AI image generators.
-
-OUTPUT: Alleen de image prompt in het Engels, max 80 woorden.`,
-        userPromptTemplate: `Platform: {{platform}}
-Post inhoud: {{content}}`,
-        temperature: 0.8,
-        maxTokens: 500,
-        xpReward: 5,
-        isActive: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
-    }
-
-    return fallbacks[task] || null
-  }
-
-  /**
-   * Render template with variables
-   */
   private renderTemplate(template: string, variables: Record<string, unknown>): string {
     return template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
       const value = variables[key]
@@ -316,6 +257,7 @@ Post inhoud: {{content}}`,
 
   /**
    * Fetch client context from database
+   * Uses existing clients table and settings.context
    */
   private async getClientContext(clientId: string): Promise<AIClientContext | null> {
     try {
@@ -386,53 +328,33 @@ Post inhoud: {{content}}`,
   }
 
   // ============================================
-  // Usage Logging
+  // Usage Logging (MVP - uses existing 'usage' table)
   // ============================================
 
   /**
-   * Log usage to database
+   * Log usage to existing 'usage' table and update XP
+   * MVP: Uses existing table structure, no new migrations needed
    */
-  private async logUsage(log: Omit<AIUsageLog, 'id' | 'createdAt'>): Promise<void> {
+  private async logUsage(
+    userId: string,
+    task: string,
+    inputTokens: number,
+    outputTokens: number,
+    xpReward: number,
+    clientId?: string
+  ): Promise<void> {
     try {
       const supabase = await createClient()
 
-      await supabase.from('ai_usage_logs').insert({
-        user_id: log.userId || null,
-        client_id: log.clientId || null,
-        template_id: log.templateId,
-        template_version: log.templateVersion,
-        model_id: log.modelId,
-        provider: log.provider,
-        task: log.task,
-        input_tokens: log.inputTokens,
-        output_tokens: log.outputTokens,
-        total_tokens: log.totalTokens,
-        estimated_cost: log.estimatedCost,
-        duration_ms: log.durationMs,
-        success: log.success,
-        error_message: log.errorMessage || null,
-        metadata: log.metadata || null,
+      // Insert into existing usage table
+      await supabase.from('usage').insert({
+        user_id: userId,
+        tool: task,
+        prompt_tokens: inputTokens,
+        completion_tokens: outputTokens,
+        total_tokens: inputTokens + outputTokens,
+        client_id: clientId || null,
       })
-
-      // Also update XP if userId provided
-      if (log.userId && log.success) {
-        await this.addXPReward(log.userId, log.task)
-      }
-    } catch (error) {
-      console.error('Error logging usage:', error)
-    }
-  }
-
-  /**
-   * Add XP reward to user
-   */
-  private async addXPReward(userId: string, task: AITask): Promise<void> {
-    try {
-      const supabase = await createClient()
-
-      // Get XP reward from template
-      const template = await this.getTemplate(task)
-      const xpReward = template?.xpReward || 5
 
       // Update user XP
       const { data: profile } = await supabase
@@ -455,7 +377,7 @@ Post inhoud: {{content}}`,
           .eq('id', userId)
       }
     } catch (error) {
-      console.error('Error adding XP:', error)
+      console.error('Error logging usage:', error)
     }
   }
 
