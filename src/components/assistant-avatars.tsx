@@ -98,54 +98,26 @@ export function SamAvatar({ className, size = 'md' }: AvatarProps) {
   )
 }
 
-// Mia - Marketing consultant with confident, approachable vibe
+// Mia - Marketing consultant with profile photo
+// Place a photo at /public/mia-avatar.png to display it
 export function MiaAvatar({ className, size = 'md' }: AvatarProps) {
+  // Use profile photo - place image at /public/mia-avatar.png
   return (
-    <div className={cn(sizes[size], 'rounded-full overflow-hidden flex-shrink-0', className)}>
-      <svg viewBox="0 0 100 100" className="w-full h-full">
-        {/* Background gradient - cyan matching her brand color */}
-        <defs>
-          <linearGradient id="miaGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#00FFCC" />
-            <stop offset="100%" stopColor="#00B8A9" />
-          </linearGradient>
-        </defs>
-        <circle cx="50" cy="50" r="50" fill="url(#miaGrad)" />
-
-        {/* Face */}
-        <circle cx="50" cy="52" r="28" fill="#FFE4D0" />
-
-        {/* Hair - professional, medium length */}
-        <path d="M22 50 Q18 30 35 22 Q45 18 50 18 Q55 18 65 22 Q82 30 78 50
-                 Q78 40 68 32 Q58 26 50 26 Q42 26 32 32 Q22 40 22 50" fill="#3D2314" />
-        {/* Side hair strands */}
-        <path d="M22 50 Q18 42 22 35" fill="none" stroke="#3D2314" strokeWidth="5" strokeLinecap="round" />
-        <path d="M78 50 Q82 42 78 35" fill="none" stroke="#3D2314" strokeWidth="5" strokeLinecap="round" />
-
-        {/* Eyes - friendly and focused */}
-        <ellipse cx="40" cy="50" rx="4" ry="5" fill="#2D2D2D" />
-        <ellipse cx="60" cy="50" rx="4" ry="5" fill="#2D2D2D" />
-        <circle cx="41" cy="49" r="1.5" fill="white" />
-        <circle cx="61" cy="49" r="1.5" fill="white" />
-
-        {/* Eyebrows - confident */}
-        <path d="M35 43 Q40 41 45 43" fill="none" stroke="#3D2314" strokeWidth="1.5" strokeLinecap="round" />
-        <path d="M55 43 Q60 41 65 43" fill="none" stroke="#3D2314" strokeWidth="1.5" strokeLinecap="round" />
-
-        {/* Warm, confident smile */}
-        <path d="M40 64 Q50 72 60 64" fill="none" stroke="#D4776C" strokeWidth="2.5" strokeLinecap="round" />
-
-        {/* Small earrings - professional touch */}
-        <circle cx="23" cy="55" r="2" fill="#FFD700" />
-        <circle cx="77" cy="55" r="2" fill="#FFD700" />
-
-        {/* Subtle chart icon - representing analytics */}
-        <g transform="translate(70, 18)" opacity="0.4">
-          <rect x="0" y="8" width="4" height="12" fill="white" />
-          <rect x="6" y="4" width="4" height="16" fill="white" />
-          <rect x="12" y="0" width="4" height="20" fill="white" />
-        </g>
-      </svg>
+    <div className={cn(sizes[size], 'rounded-full overflow-hidden flex-shrink-0 ring-2 ring-primary/20', className)}>
+      <img
+        src="/mia-avatar.png"
+        alt="Mia"
+        className="w-full h-full object-cover"
+        onError={(e) => {
+          // Fallback to gradient with letter if image fails
+          const target = e.currentTarget
+          target.style.display = 'none'
+          const parent = target.parentElement
+          if (parent) {
+            parent.innerHTML = '<div class="w-full h-full bg-gradient-to-br from-[#00FFCC] to-[#00B8A9] flex items-center justify-center text-black font-bold text-lg">M</div>'
+          }
+        }}
+      />
     </div>
   )
 }
