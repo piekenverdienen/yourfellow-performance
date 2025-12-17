@@ -27,6 +27,21 @@ import { copyToClipboard, cn } from '@/lib/utils'
 import { useClientStore, useSelectedClient } from '@/stores/client-store'
 import type { ContentAdvisoryReport, RewriteSuggestion, FAQSuggestion } from '@/seo/types'
 
+// Extended query type from API
+interface QueryWithMentions {
+  query: string
+  page: string
+  clicks: number
+  impressions: number
+  ctr: number
+  position: number
+  mentions: number
+  inTitle: boolean
+  inH1: boolean
+  inH2: boolean
+  isQuestion: boolean
+}
+
 type AnalysisStep = 'idle' | 'fetching-page' | 'fetching-sc' | 'analyzing' | 'generating' | 'done' | 'error'
 
 export default function SEOAdvisorPage() {
@@ -45,8 +60,15 @@ export default function SEOAdvisorPage() {
   }, [clientScSettings])
   const [error, setError] = useState<string | null>(null)
   const [report, setReport] = useState<ContentAdvisoryReport | null>(null)
+  const [rawData, setRawData] = useState<{
+    queries: QueryWithMentions[]
+    pageContent: { title: string; metaDescription: string; h1: string[]; h2: string[]; wordCount: number }
+    totals: { impressions: number; clicks: number; averagePosition: number }
+  } | null>(null)
   const [expandedSuggestions, setExpandedSuggestions] = useState<Set<string>>(new Set())
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set())
+  const [showDataTable, setShowDataTable] = useState(true)
 
   const handleAnalyze = async () => {
     if (!pageUrl || !siteUrl) return
@@ -54,6 +76,7 @@ export default function SEOAdvisorPage() {
     setStep('fetching-page')
     setError(null)
     setReport(null)
+    setRawData(null)
 
     try {
       const response = await fetch('/api/seo/analyze', {
@@ -69,12 +92,38 @@ export default function SEOAdvisorPage() {
       }
 
       setReport(data.data)
+      setRawData(data.rawData)
       setStep('done')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Er ging iets mis')
       setStep('error')
     }
   }
+
+  // Filter logic
+  const toggleFilter = (filter: string) => {
+    const newFilters = new Set(activeFilters)
+    if (newFilters.has(filter)) {
+      newFilters.delete(filter)
+    } else {
+      newFilters.add(filter)
+    }
+    setActiveFilters(newFilters)
+  }
+
+  const filteredQueries = rawData?.queries.filter((q) => {
+    if (activeFilters.size === 0) return true
+
+    // Apply filters (OR logic - show if matches ANY active filter)
+    if (activeFilters.has('no-mentions') && q.mentions === 0) return true
+    if (activeFilters.has('page-2') && q.position >= 11 && q.position <= 20) return true
+    if (activeFilters.has('questions') && q.isQuestion) return true
+    if (activeFilters.has('high-impressions') && q.impressions >= 100) return true
+    if (activeFilters.has('no-clicks') && q.clicks === 0 && q.impressions >= 50) return true
+    if (activeFilters.has('top-10') && q.position <= 10) return true
+
+    return activeFilters.size === 0
+  }) || []
 
   const toggleSuggestion = (id: string) => {
     const newExpanded = new Set(expandedSuggestions)
@@ -359,6 +408,165 @@ export default function SEOAdvisorPage() {
                   </CardContent>
                 </Card>
               )}
+
+              {/* Raw Data Table */}
+              {rawData && rawData.queries.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <Search className="h-5 w-5" />
+                          Search Console Queries ({filteredQueries.length}/{rawData.queries.length})
+                        </CardTitle>
+                        <CardDescription>
+                          Klik op filters om specifieke kansen te vinden
+                        </CardDescription>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowDataTable(!showDataTable)}
+                      >
+                        {showDataTable ? 'Verberg' : 'Toon'} tabel
+                      </Button>
+                    </div>
+
+                    {/* Filter Buttons */}
+                    <div className="flex flex-wrap gap-2 mt-4">
+                      <FilterButton
+                        active={activeFilters.has('no-mentions')}
+                        onClick={() => toggleFilter('no-mentions')}
+                        count={rawData.queries.filter(q => q.mentions === 0).length}
+                      >
+                        No Mentions
+                      </FilterButton>
+                      <FilterButton
+                        active={activeFilters.has('page-2')}
+                        onClick={() => toggleFilter('page-2')}
+                        count={rawData.queries.filter(q => q.position >= 11 && q.position <= 20).length}
+                      >
+                        On Page 2
+                      </FilterButton>
+                      <FilterButton
+                        active={activeFilters.has('questions')}
+                        onClick={() => toggleFilter('questions')}
+                        count={rawData.queries.filter(q => q.isQuestion).length}
+                      >
+                        Questions
+                      </FilterButton>
+                      <FilterButton
+                        active={activeFilters.has('high-impressions')}
+                        onClick={() => toggleFilter('high-impressions')}
+                        count={rawData.queries.filter(q => q.impressions >= 100).length}
+                      >
+                        Impressions &gt; 100
+                      </FilterButton>
+                      <FilterButton
+                        active={activeFilters.has('no-clicks')}
+                        onClick={() => toggleFilter('no-clicks')}
+                        count={rawData.queries.filter(q => q.clicks === 0 && q.impressions >= 50).length}
+                      >
+                        No Clicks
+                      </FilterButton>
+                      <FilterButton
+                        active={activeFilters.has('top-10')}
+                        onClick={() => toggleFilter('top-10')}
+                        count={rawData.queries.filter(q => q.position <= 10).length}
+                      >
+                        Top 10
+                      </FilterButton>
+                      {activeFilters.size > 0 && (
+                        <button
+                          onClick={() => setActiveFilters(new Set())}
+                          className="text-sm text-surface-500 hover:text-surface-700 underline"
+                        >
+                          Reset filters
+                        </button>
+                      )}
+                    </div>
+                  </CardHeader>
+
+                  {showDataTable && (
+                    <CardContent className="p-0">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-surface-50 border-y border-surface-200">
+                            <tr>
+                              <th className="text-left py-3 px-4 font-medium text-surface-600">Query</th>
+                              <th className="text-center py-3 px-2 font-medium text-surface-600 w-20">Mentions</th>
+                              <th className="text-right py-3 px-2 font-medium text-surface-600 w-24">Impressies</th>
+                              <th className="text-right py-3 px-2 font-medium text-surface-600 w-20">Clicks</th>
+                              <th className="text-right py-3 px-2 font-medium text-surface-600 w-20">Positie</th>
+                              <th className="text-right py-3 px-4 font-medium text-surface-600 w-16">CTR</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-surface-100">
+                            {filteredQueries.slice(0, 50).map((q, i) => (
+                              <tr key={i} className="hover:bg-surface-50">
+                                <td className="py-2.5 px-4">
+                                  <div className="flex items-center gap-2">
+                                    <span className={cn(
+                                      "font-medium",
+                                      q.mentions === 0 && "text-orange-600"
+                                    )}>
+                                      {q.query}
+                                    </span>
+                                    {q.isQuestion && (
+                                      <Badge variant="outline" className="text-xs">?</Badge>
+                                    )}
+                                  </div>
+                                  <div className="flex gap-1 mt-0.5">
+                                    {q.inTitle && <Badge className="text-[10px] py-0 px-1 bg-green-100 text-green-700">Title</Badge>}
+                                    {q.inH1 && <Badge className="text-[10px] py-0 px-1 bg-blue-100 text-blue-700">H1</Badge>}
+                                    {q.inH2 && <Badge className="text-[10px] py-0 px-1 bg-purple-100 text-purple-700">H2</Badge>}
+                                  </div>
+                                </td>
+                                <td className="text-center py-2.5 px-2">
+                                  <span className={cn(
+                                    "inline-flex items-center justify-center w-8 h-6 rounded text-xs font-medium",
+                                    q.mentions === 0
+                                      ? "bg-orange-100 text-orange-700"
+                                      : q.mentions >= 3
+                                        ? "bg-green-100 text-green-700"
+                                        : "bg-surface-100 text-surface-600"
+                                  )}>
+                                    {q.mentions}
+                                  </span>
+                                </td>
+                                <td className="text-right py-2.5 px-2 text-surface-600">
+                                  {q.impressions.toLocaleString()}
+                                </td>
+                                <td className="text-right py-2.5 px-2 text-surface-600">
+                                  {q.clicks.toLocaleString()}
+                                </td>
+                                <td className="text-right py-2.5 px-2">
+                                  <span className={cn(
+                                    "font-medium",
+                                    q.position <= 3 ? "text-green-600" :
+                                    q.position <= 10 ? "text-blue-600" :
+                                    q.position <= 20 ? "text-orange-600" : "text-surface-500"
+                                  )}>
+                                    {q.position.toFixed(1)}
+                                  </span>
+                                </td>
+                                <td className="text-right py-2.5 px-4 text-surface-500">
+                                  {(q.ctr * 100).toFixed(1)}%
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {filteredQueries.length > 50 && (
+                          <div className="text-center py-3 text-sm text-surface-500 bg-surface-50 border-t border-surface-200">
+                            Toont eerste 50 van {filteredQueries.length} resultaten
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  )}
+                </Card>
+              )}
             </>
           )}
 
@@ -544,6 +752,38 @@ function SuggestionCard({
         </div>
       )}
     </div>
+  )
+}
+
+function FilterButton({
+  active,
+  onClick,
+  count,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  count: number
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors border',
+        active
+          ? 'bg-primary text-white border-primary'
+          : 'bg-white text-surface-600 border-surface-200 hover:border-surface-300 hover:bg-surface-50'
+      )}
+    >
+      {children}
+      <span className={cn(
+        'text-xs px-1.5 py-0.5 rounded-full',
+        active ? 'bg-white/20 text-white' : 'bg-surface-100 text-surface-500'
+      )}>
+        {count}
+      </span>
+    </button>
   )
 }
 

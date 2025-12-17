@@ -28,6 +28,7 @@ import {
   Flame,
   Zap,
   Bot,
+  TrendingUp,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useUser } from '@/hooks/use-user'
@@ -100,6 +101,7 @@ const navigation: NavItem[] = [
     icon: Search,
     color: 'text-teal-600 bg-teal-100',
     children: [
+      { name: 'Content Advisory', href: '/seo/advisor', icon: TrendingUp },
       { name: 'Content Schrijven', href: '/seo/content', icon: FileText },
       { name: 'Meta Tags', href: '/seo/meta', icon: Tags },
       { name: 'Schema Markup', href: '/seo/schema', icon: Code2 },

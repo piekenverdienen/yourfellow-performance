@@ -4,7 +4,66 @@ import { analyzePageContent } from '@/seo/page-analyzer'
 import { SearchConsoleClient } from '@/seo/search-console'
 import { analyzeKeywords, getHighSignalKeywords } from '@/seo/keyword-analyzer'
 import { SEOAdvisor, buildContentAdvisoryReport } from '@/seo/advisor'
-import type { ContentAdvisoryReport } from '@/seo/types'
+import type { ContentAdvisoryReport, SearchConsoleQuery, PageContent } from '@/seo/types'
+
+// Extended query with mentions count
+interface QueryWithMentions extends SearchConsoleQuery {
+  mentions: number
+  inTitle: boolean
+  inH1: boolean
+  inH2: boolean
+  isQuestion: boolean
+}
+
+// Count mentions of a query in page content
+function countMentions(query: string, content: PageContent): {
+  mentions: number
+  inTitle: boolean
+  inH1: boolean
+  inH2: boolean
+} {
+  const queryLower = query.toLowerCase()
+  const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2)
+
+  // Check full query match
+  const allText = [
+    content.title,
+    content.metaDescription,
+    ...content.h1,
+    ...content.h2,
+    content.mainText,
+  ].join(' ').toLowerCase()
+
+  // Count exact matches
+  const exactMatches = (allText.match(new RegExp(queryLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')) || []).length
+
+  // If no exact match, count partial word matches
+  let mentions = exactMatches
+  if (mentions === 0 && queryWords.length > 1) {
+    // Count how many query words appear
+    const wordMatches = queryWords.filter(word => allText.includes(word)).length
+    if (wordMatches >= queryWords.length * 0.5) {
+      mentions = 1 // Partial match
+    }
+  }
+
+  const titleLower = content.title.toLowerCase()
+  const h1Lower = content.h1.join(' ').toLowerCase()
+  const h2Lower = content.h2.join(' ').toLowerCase()
+
+  return {
+    mentions,
+    inTitle: titleLower.includes(queryLower) || queryWords.some(w => titleLower.includes(w)),
+    inH1: h1Lower.includes(queryLower) || queryWords.some(w => h1Lower.includes(w)),
+    inH2: h2Lower.includes(queryLower) || queryWords.some(w => h2Lower.includes(w)),
+  }
+}
+
+// Check if query is a question
+function isQuestionQuery(query: string): boolean {
+  const questionPatterns = /^(wat|hoe|waarom|wanneer|wie|welke|waar|hoeveel|what|how|why|when|who|which|where|can|is|are|do|does)/i
+  return questionPatterns.test(query) || query.includes('?')
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -53,6 +112,16 @@ export async function POST(request: NextRequest) {
     })
 
     console.log(`[SEO] Found ${searchData.queries.length} queries`)
+
+    // Step 2.5: Enrich queries with mentions data
+    const queriesWithMentions: QueryWithMentions[] = searchData.queries.map((q) => {
+      const mentionData = countMentions(q.query, pageContent)
+      return {
+        ...q,
+        ...mentionData,
+        isQuestion: isQuestionQuery(q.query),
+      }
+    })
 
     // Step 3: Analyze keywords
     console.log(`[SEO] Analyzing keywords...`)
@@ -142,6 +211,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: report,
+      // Include raw data for advanced filtering
+      rawData: {
+        queries: queriesWithMentions,
+        pageContent: {
+          title: pageContent.title,
+          metaDescription: pageContent.metaDescription,
+          h1: pageContent.h1,
+          h2: pageContent.h2,
+          wordCount: pageContent.wordCount,
+        },
+        totals: {
+          impressions: searchData.totalImpressions,
+          clicks: searchData.totalClicks,
+          averagePosition: searchData.averagePosition,
+        },
+      },
     })
   } catch (error) {
     console.error('[SEO] Analysis error:', error)
