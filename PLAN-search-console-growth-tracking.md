@@ -2,9 +2,12 @@
 
 ## Overzicht
 
-Dit plan beschrijft de implementatie van twee hoofdfeatures:
+Dit plan beschrijft de implementatie van de volgende features:
 1. **Discover Hidden Growth Opportunities** - Vind onderbenut queries waar je al impressies voor krijgt
 2. **Optimise & Track Performance** - Track impressies, clicks en mentions over tijd
+3. **Branded Keywords** - Monitor brand performance, filter branded vs non-branded queries
+4. **Topic Clusters** - Groepeer gerelateerde queries voor betere analyse
+5. **Content Groups** - Groepeer gerelateerde pagina's (blogs, landing pages, pSEO)
 
 ## Huidige Situatie
 
@@ -52,6 +55,7 @@ CREATE TABLE search_console_queries (
   is_question BOOLEAN DEFAULT FALSE,
   is_buyer_keyword BOOLEAN DEFAULT FALSE,
   is_comparison_keyword BOOLEAN DEFAULT FALSE,
+  is_branded BOOLEAN DEFAULT FALSE,       -- matched against branded_keywords
 
   -- Tracking
   is_watching BOOLEAN DEFAULT FALSE,
@@ -109,11 +113,109 @@ CREATE TABLE search_console_query_pages (
   UNIQUE(query_id, page_url)
 );
 
+-- 4. Branded Keywords per client
+CREATE TABLE branded_keywords (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+
+  keyword TEXT NOT NULL,           -- e.g., "aurelien", "aurelien-online"
+  match_type TEXT DEFAULT 'contains',  -- 'contains' (broad match), 'exact', 'starts_with'
+
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+
+  UNIQUE(client_id, keyword)
+);
+
+-- 5. Topic Clusters - groepeer gerelateerde queries
+CREATE TABLE topic_clusters (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+
+  name TEXT NOT NULL,              -- e.g., "Hielspoor", "Kniepijn"
+  description TEXT,
+  color TEXT DEFAULT '#6366f1',    -- voor UI
+
+  -- Matching rules (OR logic)
+  match_keywords TEXT[],           -- e.g., ['hielspoor', 'heel spur', 'fasciitis']
+  match_regex TEXT,                -- optioneel: regex pattern
+
+  -- Aggregated metrics (berekend)
+  query_count INTEGER DEFAULT 0,
+  total_impressions INTEGER DEFAULT 0,
+  total_clicks INTEGER DEFAULT 0,
+
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+
+  UNIQUE(client_id, name)
+);
+
+-- 6. Topic Cluster Query mapping (many-to-many)
+CREATE TABLE topic_cluster_queries (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  cluster_id UUID NOT NULL REFERENCES topic_clusters(id) ON DELETE CASCADE,
+  query_id UUID NOT NULL REFERENCES search_console_queries(id) ON DELETE CASCADE,
+
+  -- How it was matched
+  matched_by TEXT,                 -- 'keyword', 'regex', 'manual'
+
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+
+  UNIQUE(cluster_id, query_id)
+);
+
+-- 7. Content Groups - groepeer gerelateerde pagina's
+CREATE TABLE content_groups (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+
+  name TEXT NOT NULL,              -- e.g., "Blog Posts", "Landing Pages", "pSEO Pages"
+  description TEXT,
+  color TEXT DEFAULT '#10b981',
+
+  -- Matching rules (OR logic)
+  url_patterns TEXT[],             -- e.g., ['/blog/*', '/artikel/*']
+  url_regex TEXT,                  -- optioneel: regex pattern
+
+  -- Aggregated metrics
+  page_count INTEGER DEFAULT 0,
+  total_impressions INTEGER DEFAULT 0,
+  total_clicks INTEGER DEFAULT 0,
+
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+
+  UNIQUE(client_id, name)
+);
+
+-- 8. Content Group Page mapping
+CREATE TABLE content_group_pages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  group_id UUID NOT NULL REFERENCES content_groups(id) ON DELETE CASCADE,
+  page_url TEXT NOT NULL,
+
+  -- Page metrics
+  impressions INTEGER DEFAULT 0,
+  clicks INTEGER DEFAULT 0,
+
+  matched_by TEXT,                 -- 'pattern', 'regex', 'manual'
+
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+
+  UNIQUE(group_id, page_url)
+);
+
 -- Indexes
 CREATE INDEX idx_scq_client ON search_console_queries(client_id);
 CREATE INDEX idx_scq_watching ON search_console_queries(client_id, is_watching) WHERE is_watching = TRUE;
+CREATE INDEX idx_scq_branded ON search_console_queries(client_id, is_branded);
 CREATE INDEX idx_scqh_query ON search_console_query_history(query_id);
 CREATE INDEX idx_scqp_query ON search_console_query_pages(query_id);
+CREATE INDEX idx_bk_client ON branded_keywords(client_id);
+CREATE INDEX idx_tc_client ON topic_clusters(client_id);
+CREATE INDEX idx_tcq_cluster ON topic_cluster_queries(cluster_id);
+CREATE INDEX idx_cg_client ON content_groups(client_id);
+CREATE INDEX idx_cgp_group ON content_group_pages(group_id);
 ```
 
 **Files aan te maken:**
@@ -276,7 +378,131 @@ Gebruikt `is_watching` kolom in `search_console_queries`
 
 ---
 
-### Fase 7: Growth Opportunities Dashboard
+### Fase 7: Branded Keywords Settings
+
+**Route:** `/seo/settings` (tab: Branded Keywords)
+
+**Functionaliteit:**
+- Configureer branded keywords per client
+- Broad match / contains logic (e.g., "ikea" matches "ikea chair", "ikea table")
+- Add/remove keywords
+- Preview welke queries als branded worden gemarkeerd
+
+**UI Components:**
+```
+┌─────────────────────────────────────────────────────────┐
+│ Branded Keywords                              Help Guide │
+├─────────────────────────────────────────────────────────┤
+│ Set up branded keywords for bracefox.nl to monitor      │
+│ your brand's performance in search results.             │
+│                                                         │
+│ We use Broad Match / Contains for these keywords.       │
+│ If you add "bracefox", it will match "bracefox          │
+│ zooltjes" or "bracefox review".                         │
+│                                                         │
+│ ┌─────────────────┐  ┌─────────────────┐               │
+│ │ bracefox      ✕ │  │ brace fox     ✕ │  Remove All  │
+│ └─────────────────┘  └─────────────────┘               │
+│                                                         │
+│ [Enter a keyword...        ] [Add]                      │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Filter in Queries pagina:**
+- "Branded" filter - toon alleen branded queries
+- "Non-branded" filter - verberg branded queries (focus op organic growth)
+
+**Nieuwe files:**
+- `src/app/(dashboard)/seo/settings/page.tsx` - Settings pagina met tabs
+- `src/components/seo/branded-keywords-settings.tsx`
+
+---
+
+### Fase 8: Topic Clusters
+
+**Route:** `/seo/settings` (tab: Topic Clusters)
+
+**Functionaliteit:**
+- Maak topic clusters aan (bijv. "Hielspoor", "Kniepijn", "Inlegzolen")
+- Definieer match keywords per cluster
+- Automatische groupering van queries
+- Zie aggregated metrics per cluster
+
+**UI Components:**
+```
+┌─────────────────────────────────────────────────────────┐
+│ Topic Clusters                                Help Guide │
+├─────────────────────────────────────────────────────────┤
+│ Group related queries to analyze performance            │
+│ more efficiently than individual keywords.              │
+│                                                         │
+│ ┌───────────────────────────────────────────────────┐  │
+│ │ 🟣 Hielspoor                           [Edit] [✕] │  │
+│ │    Keywords: hielspoor, heel spur, fasciitis      │  │
+│ │    42 queries · 12.4K impressions · 234 clicks    │  │
+│ ├───────────────────────────────────────────────────┤  │
+│ │ 🟢 Kniepijn                            [Edit] [✕] │  │
+│ │    Keywords: kniepijn, knie pijn, vocht in knie   │  │
+│ │    28 queries · 8.2K impressions · 156 clicks     │  │
+│ └───────────────────────────────────────────────────┘  │
+│                                                         │
+│ [+ Create Topic Cluster]                                │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Nieuwe files:**
+- `src/components/seo/topic-clusters-settings.tsx`
+- `src/components/seo/topic-cluster-modal.tsx`
+- `src/services/topic-cluster-matcher.ts`
+
+---
+
+### Fase 9: Content Groups
+
+**Route:** `/seo/settings` (tab: Content Groups)
+
+**Functionaliteit:**
+- Groepeer pagina's op basis van URL patterns
+- Voorgedefinieerde groepen: Blog Posts, Landing Pages, pSEO Pages
+- Custom groepen mogelijk
+- Aggregated metrics per groep
+
+**UI Components:**
+```
+┌─────────────────────────────────────────────────────────┐
+│ Content Groups                                Help Guide │
+├─────────────────────────────────────────────────────────┤
+│ Grouping related pages allows you to analyze the        │
+│ performance of multiple pages much more efficiently.    │
+│                                                         │
+│ Common use cases: blog posts, landing pages, pSEO pages │
+│                                                         │
+│ ┌───────────────────────────────────────────────────┐  │
+│ │ 📝 Blog Posts                          [Edit] [✕] │  │
+│ │    Patterns: /blog/*, /artikel/*                  │  │
+│ │    86 pages · 45.2K impressions · 1.2K clicks     │  │
+│ ├───────────────────────────────────────────────────┤  │
+│ │ 🎯 Landing Pages                       [Edit] [✕] │  │
+│ │    Patterns: /diensten/*, /producten/*            │  │
+│ │    12 pages · 18.4K impressions · 892 clicks      │  │
+│ ├───────────────────────────────────────────────────┤  │
+│ │ 🔄 pSEO Pages                          [Edit] [✕] │  │
+│ │    Patterns: /locatie/*, /stad/*                  │  │
+│ │    234 pages · 32.1K impressions · 456 clicks     │  │
+│ └───────────────────────────────────────────────────┘  │
+│                                                         │
+│ [+ Create Content Group]                                │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Nieuwe files:**
+- `src/components/seo/content-groups-settings.tsx`
+- `src/components/seo/content-group-modal.tsx`
+- `src/services/content-group-matcher.ts`
+
+---
+
+### Fase 10: Growth Opportunities Dashboard
 
 **Route:** `/seo/opportunities`
 
@@ -312,19 +538,33 @@ src/
 │   ├── (dashboard)/
 │   │   └── seo/
 │   │       ├── queries/
-│   │       │   └── page.tsx          # Site-level queries view
+│   │       │   └── page.tsx              # Site-level queries view
+│   │       ├── pages/
+│   │       │   └── page.tsx              # Site-level pages view
+│   │       ├── settings/
+│   │       │   └── page.tsx              # Settings (branded, clusters, groups)
 │   │       └── opportunities/
-│   │           └── page.tsx          # Growth opportunities
+│   │           └── page.tsx              # Growth opportunities
 │   └── api/
 │       └── search-console/
 │           ├── queries/
-│           │   ├── route.ts          # GET queries, POST filters
+│           │   ├── route.ts              # GET queries, POST filters
 │           │   └── [id]/
-│           │       ├── route.ts      # PATCH update query
+│           │       ├── route.ts          # PATCH update query
 │           │       └── history/
-│           │           └── route.ts  # GET historical data
+│           │           └── route.ts      # GET historical data
+│           ├── branded-keywords/
+│           │   └── route.ts              # CRUD branded keywords
+│           ├── topic-clusters/
+│           │   ├── route.ts              # CRUD topic clusters
+│           │   └── [id]/
+│           │       └── route.ts          # GET/PATCH/DELETE cluster
+│           ├── content-groups/
+│           │   ├── route.ts              # CRUD content groups
+│           │   └── [id]/
+│           │       └── route.ts          # GET/PATCH/DELETE group
 │           └── sync/
-│               └── route.ts          # POST trigger sync
+│               └── route.ts              # POST trigger sync
 ├── components/
 │   └── seo/
 │       ├── query-filters.tsx
@@ -332,10 +572,17 @@ src/
 │       ├── query-detail-drawer.tsx
 │       ├── query-metrics-chart.tsx
 │       ├── date-range-picker.tsx
-│       └── opportunity-card.tsx
+│       ├── opportunity-card.tsx
+│       ├── branded-keywords-settings.tsx
+│       ├── topic-clusters-settings.tsx
+│       ├── topic-cluster-modal.tsx
+│       ├── content-groups-settings.tsx
+│       └── content-group-modal.tsx
 ├── services/
 │   ├── search-console-sync.ts
-│   └── opportunity-detector.ts
+│   ├── opportunity-detector.ts
+│   ├── topic-cluster-matcher.ts
+│   └── content-group-matcher.ts
 ├── types/
 │   └── search-console.ts
 └── lib/
@@ -349,27 +596,30 @@ src/
 ## Prioriteit & Volgorde
 
 ### Sprint 1: Foundation
-1. ✅ Database schema maken
-2. ✅ TypeScript types
-3. ✅ Sync service basis
-4. ✅ API endpoint voor queries ophalen
+1. Database schema maken (incl. branded, clusters, groups)
+2. TypeScript types
+3. Sync service basis
+4. API endpoints voor queries ophalen
 
 ### Sprint 2: Core UI
-5. ✅ Queries pagina met data tabel
-6. ✅ Filters implementeren
-7. ✅ Search functionaliteit
-8. ✅ Date range picker
+5. Queries pagina met data tabel
+6. Filters implementeren
+7. Search functionaliteit
+8. Date range picker
 
 ### Sprint 3: Features
-9. ✅ Watching toggle
-10. ✅ Query detail drawer
-11. ✅ Historical chart
-12. ✅ Export functionaliteit
+9. Watching toggle
+10. Query detail drawer
+11. Historical chart
+12. Export functionaliteit
 
-### Sprint 4: Intelligence
-13. ✅ Query classificatie (buyer, comparison)
-14. ✅ Opportunity detection
-15. ✅ Opportunities dashboard
+### Sprint 4: Settings & Intelligence
+13. Branded Keywords settings pagina
+14. Topic Clusters settings pagina
+15. Content Groups settings pagina
+16. Query classificatie (buyer, comparison, branded)
+17. Opportunity detection
+18. Opportunities dashboard
 
 ---
 
@@ -401,11 +651,14 @@ src/
 | Database schema | Medium | 1 |
 | TypeScript types | Low | 1 |
 | Sync service | High | 2 |
-| API endpoints | Medium | 4 |
+| API endpoints | Medium | 8 |
 | Queries pagina | High | 3 |
 | Filters | Medium | 1 |
 | Query detail | Medium | 2 |
 | Charts | Medium | 1 |
+| Branded Keywords | Medium | 2 |
+| Topic Clusters | High | 3 |
+| Content Groups | High | 3 |
 | Opportunities | High | 3 |
 
 ---
