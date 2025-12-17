@@ -161,16 +161,27 @@ export default function KnowledgePage() {
 
       if (insertError) throw insertError
 
-      // 3. Extract text content via API
+      // 3. Extract text content via API (with timeout - don't block upload)
       setUploadProgress('Tekst extraheren...')
-      const extractResponse = await fetch('/api/knowledge/extract', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ documentId: doc.id }),
-      })
+      try {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
 
-      if (!extractResponse.ok) {
-        console.warn('Text extraction failed, document saved without content')
+        const extractResponse = await fetch('/api/knowledge/extract', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ documentId: doc.id }),
+          signal: controller.signal,
+        })
+
+        clearTimeout(timeoutId)
+
+        if (!extractResponse.ok) {
+          console.warn('Text extraction failed, document saved without content')
+        }
+      } catch (extractError) {
+        // Extraction timeout or failed - document is still saved
+        console.warn('Text extraction timed out or failed:', extractError)
       }
 
       // Reset form
