@@ -89,6 +89,16 @@ export default function SEOAdvisorPage() {
   const report = analysis.report
   const rawData = analysis.rawData
 
+  // Debug: log when analysis changes
+  useEffect(() => {
+    console.log('[SEO Advisor] Analysis state changed:', {
+      hasReport: !!report,
+      hasRawData: !!rawData,
+      step,
+      analyzedAt: analysis.analyzedAt
+    })
+  }, [report, rawData, step, analysis.analyzedAt])
+
   // Pre-fill site URL from client settings (only if no persisted URL)
   useEffect(() => {
     if (!analysis.siteUrl && clientScSettings?.enabled && clientScSettings?.siteUrl) {
@@ -110,21 +120,25 @@ export default function SEOAdvisorPage() {
       })
 
       const data = await response.json()
+      console.log('[SEO Advisor] API response:', { success: data.success, hasReport: !!data.data, hasRawData: !!data.rawData })
 
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'Analyse mislukt')
       }
 
       // Persist the analysis results
-      setAnalysis({
+      const newAnalysis = {
         report: data.data,
         rawData: data.rawData,
         pageUrl,
         siteUrl,
         analyzedAt: new Date().toISOString(),
-      })
+      }
+      console.log('[SEO Advisor] Setting analysis:', { hasReport: !!newAnalysis.report, pageUrl: newAnalysis.pageUrl })
+      setAnalysis(newAnalysis)
       setStep('done')
     } catch (err) {
+      console.error('[SEO Advisor] Error:', err)
       setError(err instanceof Error ? err.message : 'Er ging iets mis')
       setStep('error')
     }
@@ -637,6 +651,29 @@ export default function SEOAdvisorPage() {
                 </Card>
               )}
             </>
+          )}
+
+          {/* Loading complete but no report - debug state */}
+          {step === 'done' && !report && (
+            <Card className="border-yellow-200 bg-yellow-50">
+              <CardContent className="p-4 flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium text-yellow-800">Geen resultaten</p>
+                  <p className="text-sm text-yellow-600 mt-1">
+                    De analyse is voltooid maar er zijn geen resultaten. Check de browser console voor meer informatie.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2"
+                    onClick={handleClearAnalysis}
+                  >
+                    Opnieuw proberen
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           )}
 
           {/* Empty State */}
