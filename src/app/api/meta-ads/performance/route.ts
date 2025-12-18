@@ -300,13 +300,14 @@ async function getExtendedKPIs(
   current: { spend: number; impressions: number; reach: number; clicks: number; conversions: number; revenue: number }
   previous: { spend: number; impressions: number; reach: number; clicks: number; conversions: number; revenue: number }
 }> {
-  // Get current period totals
+  // Get current period totals - use campaign level for accurate totals
+  // (ad level misses spend from dynamic ads and other non-individual-ad spend)
   const { data: currentData } = await supabase
     .from('meta_insights_daily')
     .select('spend, impressions, reach, clicks, conversions, conversion_value')
     .eq('client_id', clientId)
     .eq('ad_account_id', adAccountId)
-    .eq('entity_type', 'ad') // Sum at ad level to avoid double counting
+    .eq('entity_type', 'campaign')
     .gte('date', currentStart)
     .lte('date', currentEnd)
 
@@ -316,7 +317,7 @@ async function getExtendedKPIs(
     .select('spend, impressions, reach, clicks, conversions, conversion_value')
     .eq('client_id', clientId)
     .eq('ad_account_id', adAccountId)
-    .eq('entity_type', 'ad')
+    .eq('entity_type', 'campaign')
     .gte('date', previousStart)
     .lte('date', previousEnd)
 
