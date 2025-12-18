@@ -305,6 +305,7 @@ export function MetaAdsSetup({
           {/* Advanced Settings */}
           <div>
             <button
+              type="button"
               onClick={() => setShowAdvanced(!showAdvanced)}
               className="text-sm text-[#1877F2] hover:text-[#1877F2]/80 flex items-center gap-1"
             >
