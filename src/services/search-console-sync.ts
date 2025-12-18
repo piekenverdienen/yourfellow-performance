@@ -525,23 +525,19 @@ export async function matchPagesToGroups(clientId: string): Promise<void> {
 
   if (!groups || groups.length === 0) return
 
-  // Get query IDs first
-  const { data: queryIds } = await supabase
-    .from('search_console_queries')
-    .select('id')
-    .eq('client_id', clientId)
-
-  console.log('🔍 matchPagesToGroups: Found query IDs:', queryIds?.length)
-
-  if (!queryIds || queryIds.length === 0) return
-
-  // Get all unique page URLs from query pages
-  const { data: pages } = await supabase
+  // Get all page URLs for this client using a join through queries
+  // Using RPC or direct query to avoid IN clause limit
+  const { data: pages, error: pagesError } = await supabase
     .from('search_console_query_pages')
-    .select('page_url, impressions, clicks')
-    .in('query_id', queryIds.map((q: { id: string }) => q.id))
+    .select(`
+      page_url,
+      impressions,
+      clicks,
+      search_console_queries!inner(client_id)
+    `)
+    .eq('search_console_queries.client_id', clientId)
 
-  console.log('🔍 matchPagesToGroups: Found pages:', pages?.length)
+  console.log('🔍 matchPagesToGroups: Found pages:', pages?.length, 'error:', pagesError?.message)
 
   if (!pages) return
 
