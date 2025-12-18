@@ -28,10 +28,19 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSelectedClient } from '@/stores/client-store'
+import { usePersistedState } from '@/hooks/use-persisted-form'
 import type { TopicCluster, ContentGroup } from '@/types/search-console'
 import type { TopicalClusterReport } from '@/seo/topical'
 
 type ViewMode = 'clusters' | 'groups'
+
+// Type for cached analyses
+interface CachedAnalyses {
+  [clusterId: string]: {
+    report: TopicalClusterReport
+    cachedAt: string
+  }
+}
 
 export default function ClustersPage() {
   const selectedClient = useSelectedClient()
@@ -43,6 +52,12 @@ export default function ClustersPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isRematching, setIsRematching] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Cached analyses in localStorage
+  const [cachedAnalyses, setCachedAnalyses] = usePersistedState<CachedAnalyses>(
+    `cluster-analyses-${clientId || 'default'}`,
+    {}
+  )
 
   // Analysis state
   const [selectedCluster, setSelectedCluster] = useState<TopicCluster | null>(null)
@@ -111,14 +126,24 @@ export default function ClustersPage() {
     }
   }
 
-  // Analyze cluster
-  const handleAnalyzeCluster = async (cluster: TopicCluster) => {
+  // Open cluster analysis (load from cache or run new)
+  const handleAnalyzeCluster = async (cluster: TopicCluster, forceRefresh = false) => {
     if (!clientId) return
 
     setSelectedCluster(cluster)
+    setAnalysisError(null)
+
+    // Check for cached analysis
+    const cached = cachedAnalyses[cluster.id]
+    if (cached && !forceRefresh) {
+      setAnalysisReport(cached.report)
+      setIsAnalyzing(false)
+      return
+    }
+
+    // Run new analysis
     setAnalysisReport(null)
     setIsAnalyzing(true)
-    setAnalysisError(null)
 
     try {
       const response = await fetch('/api/seo/clusters/analyze', {
@@ -131,6 +156,14 @@ export default function ClustersPage() {
 
       if (response.ok && data.success) {
         setAnalysisReport(data.data)
+        // Save to cache
+        setCachedAnalyses((prev) => ({
+          ...prev,
+          [cluster.id]: {
+            report: data.data,
+            cachedAt: new Date().toISOString(),
+          },
+        }))
       } else {
         setAnalysisError(data.error || 'Analyse mislukt')
       }
@@ -138,6 +171,23 @@ export default function ClustersPage() {
       setAnalysisError('Fout bij het analyseren van het cluster')
     } finally {
       setIsAnalyzing(false)
+    }
+  }
+
+  // Refresh analysis (ignore cache)
+  const handleRefreshAnalysis = () => {
+    if (selectedCluster) {
+      handleAnalyzeCluster(selectedCluster, true)
+    }
+  }
+
+  // Get cache info for a cluster
+  const getCacheInfo = (clusterId: string) => {
+    const cached = cachedAnalyses[clusterId]
+    if (!cached) return null
+    return {
+      cachedAt: new Date(cached.cachedAt),
+      hasCache: true,
     }
   }
 
@@ -231,7 +281,7 @@ export default function ClustersPage() {
           <p className="text-surface-500 mt-2">Data laden...</p>
         </div>
       ) : viewMode === 'clusters' ? (
-        <ClustersView clusters={clusters} onAnalyze={handleAnalyzeCluster} />
+        <ClustersView clusters={clusters} onAnalyze={handleAnalyzeCluster} getCacheInfo={getCacheInfo} />
       ) : (
         <GroupsView groups={groups} />
       )}
@@ -244,6 +294,8 @@ export default function ClustersPage() {
           isLoading={isAnalyzing}
           error={analysisError}
           onClose={closeAnalysis}
+          onRefresh={handleRefreshAnalysis}
+          cacheInfo={getCacheInfo(selectedCluster.id)}
         />
       )}
     </div>
@@ -254,9 +306,11 @@ export default function ClustersPage() {
 function ClustersView({
   clusters,
   onAnalyze,
+  getCacheInfo,
 }: {
   clusters: TopicCluster[]
   onAnalyze: (cluster: TopicCluster) => void
+  getCacheInfo: (clusterId: string) => { cachedAt: Date; hasCache: boolean } | null
 }) {
   if (clusters.length === 0) {
     return (
@@ -343,6 +397,7 @@ function ClustersView({
               const avgCtr = cluster.totalImpressions > 0
                 ? (cluster.totalClicks / cluster.totalImpressions) * 100
                 : 0
+              const cacheInfo = getCacheInfo(cluster.id)
 
               return (
                 <div
@@ -403,12 +458,12 @@ function ClustersView({
                       </div>
                       <Button
                         size="sm"
-                        variant="outline"
+                        variant={cacheInfo ? 'default' : 'outline'}
                         onClick={() => onAnalyze(cluster)}
-                        leftIcon={<Sparkles className="h-4 w-4" />}
+                        leftIcon={cacheInfo ? <CheckCircle2 className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
                         disabled={cluster.queryCount < 5}
                       >
-                        Analyseer
+                        {cacheInfo ? 'Bekijk' : 'Analyseer'}
                       </Button>
                     </div>
                   </div>
@@ -429,14 +484,32 @@ function ClusterAnalysisModal({
   isLoading,
   error,
   onClose,
+  onRefresh,
+  cacheInfo,
 }: {
   cluster: TopicCluster
   report: TopicalClusterReport | null
   isLoading: boolean
   error: string | null
   onClose: () => void
+  onRefresh: () => void
+  cacheInfo: { cachedAt: Date; hasCache: boolean } | null
 }) {
   const [activeTab, setActiveTab] = useState<'overview' | 'pillars' | 'gaps' | 'issues' | 'roadmap'>('overview')
+
+  // Format relative time
+  const formatRelativeTime = (date: Date) => {
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMs / 3600000)
+    const diffDays = Math.floor(diffMs / 86400000)
+
+    if (diffMins < 1) return 'zojuist'
+    if (diffMins < 60) return `${diffMins} min geleden`
+    if (diffHours < 24) return `${diffHours} uur geleden`
+    return `${diffDays} dagen geleden`
+  }
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -459,15 +532,32 @@ function ClusterAnalysisModal({
                 </h2>
                 <p className="text-sm text-surface-500">
                   {cluster.queryCount} queries • {formatNumber(cluster.totalImpressions)} impressies
+                  {cacheInfo && !isLoading && (
+                    <span className="ml-2 text-surface-400">
+                      • Gecached {formatRelativeTime(cacheInfo.cachedAt)}
+                    </span>
+                  )}
                 </p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 text-surface-400 hover:text-surface-600 rounded-lg hover:bg-surface-100"
-            >
-              <X className="h-5 w-5" />
-            </button>
+            <div className="flex items-center gap-2">
+              {report && !isLoading && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={onRefresh}
+                  leftIcon={<RefreshCw className="h-4 w-4" />}
+                >
+                  Vernieuw
+                </Button>
+              )}
+              <button
+                onClick={onClose}
+                className="p-2 text-surface-400 hover:text-surface-600 rounded-lg hover:bg-surface-100"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
           </div>
 
           {/* Content */}
