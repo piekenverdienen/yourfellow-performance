@@ -299,11 +299,32 @@ export interface SearchConsoleSettings {
   dateRangeDays?: number // Default: 28
 }
 
+// Meta Ads Settings per client
+export interface MetaAdsSettings {
+  enabled?: boolean
+  adAccountId?: string          // format: act_XXXXX
+  accessToken?: string          // encrypted/stored securely
+  businessId?: string           // Business Manager ID
+  pixelId?: string              // Meta Pixel ID for tracking
+  timezone?: string             // e.g., 'Europe/Amsterdam'
+  currency?: string             // e.g., 'EUR'
+  // Sync settings
+  syncEnabled?: boolean
+  lastSyncAt?: string           // ISO timestamp
+  // Thresholds for alerts
+  thresholds?: {
+    frequencyWarning?: number   // Default: 2.5
+    ctrDropWarning?: number     // Default: 30 (%)
+    minSpendForAlert?: number   // Default: 10 (EUR)
+  }
+}
+
 export interface ClientSettings {
   context?: ClientContext
   clickup?: ClickUpSettings
   ga4Monitoring?: GA4MonitoringSettings
   searchConsole?: SearchConsoleSettings
+  meta?: MetaAdsSettings
   [key: string]: unknown
 }
 

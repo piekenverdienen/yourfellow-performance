@@ -32,7 +32,8 @@ import { ClickUpTasks } from '@/components/clickup-tasks'
 import { ClickUpSetup } from '@/components/clickup-setup'
 import { GA4MonitoringSetup } from '@/components/ga4-monitoring-setup'
 import { SearchConsoleSetup } from '@/components/search-console-setup'
-import type { Client, ClientMemberRole, ClientContext, User, GA4MonitoringSettings, SearchConsoleSettings } from '@/types'
+import { MetaAdsSetup } from '@/components/meta-ads-setup'
+import type { Client, ClientMemberRole, ClientContext, User, GA4MonitoringSettings, SearchConsoleSettings, MetaAdsSettings } from '@/types'
 
 interface ClientMember {
   id: string
@@ -571,8 +572,9 @@ export default function ClientDetailPage() {
         </div>
       )}
 
-      {activeTab === 'settings' && isAdmin && (
-        <div className="space-y-6">
+      {/* Keep settings tab mounted to preserve form state when switching tabs */}
+      {isAdmin && (
+        <div className={`space-y-6 ${activeTab !== 'settings' ? 'hidden' : ''}`}>
           {/* ClickUp Integration */}
           <Card>
             <CardHeader>
@@ -652,6 +654,39 @@ export default function ClientDetailPage() {
                   const newSettings = {
                     ...client.settings,
                     searchConsole: scSettings,
+                  }
+                  const res = await fetch(`/api/clients/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ settings: newSettings }),
+                  })
+                  if (res.ok) {
+                    const data = await res.json()
+                    setClient(data.client)
+                    fetchClients() // Refresh global client list to sync settings
+                  } else {
+                    const error = await res.json()
+                    throw new Error(error.error || 'Fout bij opslaan')
+                  }
+                }}
+                disabled={saving}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Meta Ads */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Meta Ads (Facebook & Instagram)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <MetaAdsSetup
+                clientId={id}
+                currentSettings={client.settings?.meta}
+                onSave={async (metaSettings) => {
+                  const newSettings = {
+                    ...client.settings,
+                    meta: metaSettings,
                   }
                   const res = await fetch(`/api/clients/${id}`, {
                     method: 'PUT',
