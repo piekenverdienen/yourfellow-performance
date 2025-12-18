@@ -572,8 +572,9 @@ export default function ClientDetailPage() {
         </div>
       )}
 
-      {activeTab === 'settings' && isAdmin && (
-        <div className="space-y-6">
+      {/* Keep settings tab mounted to preserve form state when switching tabs */}
+      {isAdmin && (
+        <div className={`space-y-6 ${activeTab !== 'settings' ? 'hidden' : ''}`}>
           {/* ClickUp Integration */}
           <Card>
             <CardHeader>
