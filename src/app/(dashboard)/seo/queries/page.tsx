@@ -70,6 +70,14 @@ export default function QueriesPage() {
   const clientId = selectedClient?.id
   const siteUrl = selectedClient?.settings?.searchConsole?.siteUrl
 
+  // DEBUG: Log what client and siteUrl we're using
+  console.log('🔍 DEBUG QueriesPage:', {
+    clientName: selectedClient?.name,
+    clientId,
+    siteUrl,
+    allSettings: selectedClient?.settings,
+  })
+
   // State
   const [queries, setQueries] = useState<SearchConsoleQuery[]>([])
   const [aggregates, setAggregates] = useState<QueryAggregates | null>(null)
@@ -158,6 +166,13 @@ export default function QueriesPage() {
   // Sync data
   const handleSync = async () => {
     if (!clientId || !siteUrl) return
+
+    // DEBUG: Log what we're syncing
+    console.log('🚀 DEBUG handleSync:', {
+      clientName: selectedClient?.name,
+      clientId,
+      siteUrl,
+    })
 
     setIsSyncing(true)
     setSyncResult(null)
