@@ -29,6 +29,8 @@ import {
   Zap,
   Bot,
   TrendingUp,
+  SearchCheck,
+  SlidersHorizontal,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useUser } from '@/hooks/use-user'
@@ -102,9 +104,11 @@ const navigation: NavItem[] = [
     color: 'text-teal-600 bg-teal-100',
     children: [
       { name: 'Content Advisory', href: '/seo/advisor', icon: TrendingUp },
+      { name: 'Search Console', href: '/seo/queries', icon: SearchCheck },
       { name: 'Content Schrijven', href: '/seo/content', icon: FileText },
       { name: 'Meta Tags', href: '/seo/meta', icon: Tags },
       { name: 'Schema Markup', href: '/seo/schema', icon: Code2 },
+      { name: 'SEO Instellingen', href: '/seo/settings', icon: SlidersHorizontal },
     ]
   },
   {
