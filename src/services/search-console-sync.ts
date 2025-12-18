@@ -513,24 +513,31 @@ export async function matchQueriesToClusters(clientId: string): Promise<void> {
 export async function matchPagesToGroups(clientId: string): Promise<void> {
   const supabase = await createClient()
 
+  console.log('🔍 matchPagesToGroups: Starting for client', clientId)
+
   // Get all content groups for this client
   const { data: groups } = await supabase
     .from('content_groups')
     .select('*')
     .eq('client_id', clientId)
 
+  console.log('🔍 matchPagesToGroups: Found groups:', groups?.length, groups?.map(g => ({ name: g.name, patterns: g.url_patterns })))
+
   if (!groups || groups.length === 0) return
 
-  // Get all unique page URLs from query pages
-  const { data: pages } = await supabase
+  // Get all page URLs for this client using a join through queries
+  // Using RPC or direct query to avoid IN clause limit
+  const { data: pages, error: pagesError } = await supabase
     .from('search_console_query_pages')
-    .select('page_url, impressions, clicks')
-    .in('query_id', (
-      await supabase
-        .from('search_console_queries')
-        .select('id')
-        .eq('client_id', clientId)
-    ).data?.map((q: { id: string }) => q.id) || [])
+    .select(`
+      page_url,
+      impressions,
+      clicks,
+      search_console_queries!inner(client_id)
+    `)
+    .eq('search_console_queries.client_id', clientId)
+
+  console.log('🔍 matchPagesToGroups: Found pages:', pages?.length, 'error:', pagesError?.message)
 
   if (!pages) return
 
@@ -545,6 +552,8 @@ export async function matchPagesToGroups(clientId: string): Promise<void> {
       pageMap.set(p.page_url, { impressions: p.impressions, clicks: p.clicks })
     }
   }
+
+  console.log('🔍 matchPagesToGroups: Unique pages to match:', pageMap.size)
 
   // For each group, find matching pages
   for (const group of groups) {
@@ -562,7 +571,11 @@ export async function matchPagesToGroups(clientId: string): Promise<void> {
           .replace(/\?/g, '.')
         try {
           const regex = new RegExp(`^${regexPattern}$`)
-          return regex.test(urlPath)
+          const matches = regex.test(urlPath)
+          if (matches) {
+            console.log('🔍 matchPagesToGroups: MATCH!', { pattern, urlPath, regex: regex.toString() })
+          }
+          return matches
         } catch {
           return false
         }
@@ -586,9 +599,11 @@ export async function matchPagesToGroups(clientId: string): Promise<void> {
       }
     }
 
+    console.log('🔍 matchPagesToGroups: Group', group.name, 'matched', matchingPages.length, 'pages')
+
     // Upsert group-page mappings
     for (const match of matchingPages) {
-      await supabase
+      const { error } = await supabase
         .from('content_group_pages')
         .upsert({
           group_id: group.id,
@@ -599,9 +614,15 @@ export async function matchPagesToGroups(clientId: string): Promise<void> {
         }, {
           onConflict: 'group_id,page_url',
         })
+      if (error) {
+        console.error('🔍 matchPagesToGroups: Error upserting page:', error)
+      }
     }
 
     // Update group metrics
-    await supabase.rpc('update_content_group_metrics', { p_group_id: group.id })
+    const { error: rpcError } = await supabase.rpc('update_content_group_metrics', { p_group_id: group.id })
+    if (rpcError) {
+      console.error('🔍 matchPagesToGroups: Error updating metrics:', rpcError)
+    }
   }
 }

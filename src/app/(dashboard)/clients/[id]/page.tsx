@@ -595,6 +595,7 @@ export default function ClientDetailPage() {
                   if (res.ok) {
                     const data = await res.json()
                     setClient(data.client)
+                    fetchClients() // Refresh global client list to sync settings
                   } else {
                     const error = await res.json()
                     throw new Error(error.error || 'Fout bij opslaan')
@@ -627,6 +628,7 @@ export default function ClientDetailPage() {
                   if (res.ok) {
                     const data = await res.json()
                     setClient(data.client)
+                    fetchClients() // Refresh global client list to sync settings
                   } else {
                     const error = await res.json()
                     throw new Error(error.error || 'Fout bij opslaan')
@@ -659,6 +661,7 @@ export default function ClientDetailPage() {
                   if (res.ok) {
                     const data = await res.json()
                     setClient(data.client)
+                    fetchClients() // Refresh global client list to sync settings
                   } else {
                     const error = await res.json()
                     throw new Error(error.error || 'Fout bij opslaan')
