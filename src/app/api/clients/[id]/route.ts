@@ -77,8 +77,23 @@ export async function PUT(
     if (name !== undefined) updates.name = name.trim()
     if (description !== undefined) updates.description = description
     if (logo_url !== undefined) updates.logo_url = logo_url
-    if (settings !== undefined) updates.settings = settings
     if (is_active !== undefined) updates.is_active = is_active
+
+    // For settings, merge with existing settings to prevent data loss
+    if (settings !== undefined) {
+      // First fetch current settings from database
+      const { data: currentClient } = await supabase
+        .from('clients')
+        .select('settings')
+        .eq('id', id)
+        .single()
+
+      // Deep merge settings (new settings override existing)
+      updates.settings = {
+        ...(currentClient?.settings || {}),
+        ...settings,
+      }
+    }
 
     const { data: client, error } = await supabase
       .from('clients')
