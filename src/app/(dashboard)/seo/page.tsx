@@ -11,10 +11,29 @@ import {
   Search,
   Code2,
   TrendingUp,
+  Settings,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const tools = [
+  {
+    name: 'Queries',
+    description: 'Bekijk alle search queries, ontdek groeikansen en track performance over tijd.',
+    href: '/seo/queries',
+    icon: Search,
+    color: 'bg-cyan-500',
+    badge: 'Nieuw',
+    badgeVariant: 'secondary' as const,
+  },
+  {
+    name: 'Content Advisory',
+    description: 'Analyseer pagina\'s met Search Console data en krijg concrete optimalisatie-adviezen.',
+    href: '/seo/advisor',
+    icon: TrendingUp,
+    color: 'bg-orange-500',
+    badge: null,
+    badgeVariant: null,
+  },
   {
     name: 'Content Schrijven',
     description: 'Schrijf SEO-geoptimaliseerde artikelen en blogposts die ranken in Google.',
@@ -43,13 +62,13 @@ const tools = [
     badgeVariant: null,
   },
   {
-    name: 'Content Advisory',
-    description: 'Analyseer pagina\'s met Search Console data en krijg concrete optimalisatie-adviezen.',
-    href: '/seo/advisor',
-    icon: TrendingUp,
-    color: 'bg-orange-500',
-    badge: 'Nieuw',
-    badgeVariant: 'secondary' as const,
+    name: 'Instellingen',
+    description: 'Beheer branded keywords, topic clusters en content groups.',
+    href: '/seo/settings',
+    icon: Settings,
+    color: 'bg-slate-500',
+    badge: null,
+    badgeVariant: null,
   },
 ]
 

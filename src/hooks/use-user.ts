@@ -26,6 +26,12 @@ export function useUser(): UseUserReturn {
   const supabase = createClient()
 
   const fetchUser = async () => {
+    // Skip if supabase client is not available
+    if (!supabase) {
+      setLoading(false)
+      return
+    }
+
     try {
       setLoading(true)
       setError(null)
@@ -77,7 +83,7 @@ export function useUser(): UseUserReturn {
   }
 
   const updateProfile = async (updates: Partial<User>): Promise<{ error: Error | null }> => {
-    if (!supabaseUser) {
+    if (!supabase || !supabaseUser) {
       return { error: new Error('Not authenticated') }
     }
 
@@ -99,7 +105,9 @@ export function useUser(): UseUserReturn {
   }
 
   const signOut = async () => {
-    await supabase.auth.signOut()
+    if (supabase) {
+      await supabase.auth.signOut()
+    }
     setUser(null)
     setSupabaseUser(null)
     setStats(null)
@@ -107,6 +115,12 @@ export function useUser(): UseUserReturn {
   }
 
   useEffect(() => {
+    // Skip if supabase client is not available
+    if (!supabase) {
+      setLoading(false)
+      return
+    }
+
     fetchUser()
 
     // Listen for auth changes

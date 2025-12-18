@@ -5,13 +5,23 @@ import type { CookieOptions } from '@supabase/ssr'
 type CookieToSet = { name: string; value: string; options?: CookieOptions }
 
 export async function updateSession(request: NextRequest) {
+  // Check if env vars are available
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  // If env vars are missing, skip auth check and continue
+  if (!supabaseUrl || !supabaseKey) {
+    console.warn('Supabase env vars missing - skipping auth middleware')
+    return NextResponse.next({ request })
+  }
+
   let supabaseResponse = NextResponse.next({
     request,
   })
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseKey,
     {
       cookies: {
         getAll() {
