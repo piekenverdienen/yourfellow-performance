@@ -48,6 +48,7 @@ export type AITask =
   | 'chat'
   | 'workflow_agent'
   | 'content_evaluation'
+  | 'meta_ads_insights'
 
 export interface TaskModelMapping {
   task: AITask

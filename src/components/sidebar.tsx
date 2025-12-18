@@ -32,6 +32,9 @@ import {
   SearchCheck,
   SlidersHorizontal,
   Layers,
+  Facebook,
+  AlertTriangle,
+  BrainCircuit,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useUser } from '@/hooks/use-user'
@@ -86,6 +89,18 @@ const navigation: NavItem[] = [
       { name: 'Ad Teksten', href: '/google-ads/copy', icon: Type },
       { name: 'Feed Management', href: '/google-ads/feed', icon: Database },
       { name: 'Afbeeldingen', href: '/google-ads/images', icon: Image },
+    ]
+  },
+  {
+    name: 'Meta Ads',
+    href: '/meta-ads',
+    icon: Facebook,
+    color: 'text-[#1877F2] bg-blue-100',
+    children: [
+      { name: 'Dashboard', href: '/meta-ads', icon: LayoutDashboard },
+      { name: 'Performance', href: '/meta-ads/performance', icon: BarChart3 },
+      { name: 'Fatigue Alerts', href: '/meta-ads/fatigue', icon: AlertTriangle },
+      { name: 'AI Insights', href: '/meta-ads/insights', icon: BrainCircuit },
     ]
   },
   {
