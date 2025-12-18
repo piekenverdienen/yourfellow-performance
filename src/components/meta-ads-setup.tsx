@@ -236,6 +236,7 @@ export function MetaAdsSetup({
           {/* Test Connection */}
           <div className="flex items-center gap-3">
             <Button
+              type="button"
               variant="outline"
               onClick={testConnection}
               disabled={disabled || testing || !settings.adAccountId || !settings.accessToken}
@@ -483,6 +484,7 @@ export function MetaAdsSetup({
       {/* Save Button */}
       <div className="pt-4 border-t border-surface-100">
         <Button
+          type="button"
           onClick={handleSave}
           disabled={disabled || saving || (settings.enabled && !isValid)}
           className="bg-[#1877F2] hover:bg-[#1877F2]/90"
