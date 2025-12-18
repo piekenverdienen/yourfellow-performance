@@ -31,6 +31,7 @@ import {
   TrendingUp,
   SearchCheck,
   SlidersHorizontal,
+  Layers,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useUser } from '@/hooks/use-user'
@@ -105,6 +106,7 @@ const navigation: NavItem[] = [
     children: [
       { name: 'Content Advisory', href: '/seo/advisor', icon: TrendingUp },
       { name: 'Search Console', href: '/seo/queries', icon: SearchCheck },
+      { name: 'Topical Authority', href: '/seo/clusters', icon: Layers },
       { name: 'Content Schrijven', href: '/seo/content', icon: FileText },
       { name: 'Meta Tags', href: '/seo/meta', icon: Tags },
       { name: 'Schema Markup', href: '/seo/schema', icon: Code2 },
