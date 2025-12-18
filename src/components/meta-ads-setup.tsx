@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -55,12 +55,23 @@ export function MetaAdsSetup({
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [showToken, setShowToken] = useState(false)
 
+  // Track if we've initialized from props to prevent overwriting user input
+  const hasInitialized = useRef(false)
+
+  // Only initialize from props once, when clientId changes
   useEffect(() => {
-    if (currentSettings) {
+    // Reset initialization flag when clientId changes
+    hasInitialized.current = false
+  }, [clientId])
+
+  useEffect(() => {
+    // Only set settings from props if we haven't initialized yet
+    if (!hasInitialized.current && currentSettings) {
       setSettings({
         ...currentSettings,
         thresholds: { ...defaultThresholds, ...currentSettings.thresholds },
       })
+      hasInitialized.current = true
     }
   }, [currentSettings])
 
