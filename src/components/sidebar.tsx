@@ -104,13 +104,23 @@ const navigation: NavItem[] = [
     icon: Search,
     color: 'text-teal-600 bg-teal-100',
     children: [
-      { name: 'Content Advisory', href: '/seo/advisor', icon: TrendingUp },
-      { name: 'Search Console', href: '/seo/queries', icon: SearchCheck },
-      { name: 'Topical Authority', href: '/seo/clusters', icon: Layers },
-      { name: 'Content Schrijven', href: '/seo/content', icon: FileText },
+      // Dashboard
+      { name: 'Dashboard', href: '/seo', icon: LayoutDashboard },
+      // Content sectie
+      { name: '_section_Content', href: '', icon: FileText },
+      { name: 'Content Advisor', href: '/seo/advisor', icon: TrendingUp },
+      { name: 'Content Creatie', href: '/seo/content', icon: Sparkles },
       { name: 'Meta Tags', href: '/seo/meta', icon: Tags },
+      // Techniek sectie
+      { name: '_section_Techniek', href: '', icon: Code2 },
+      { name: 'Search Console', href: '/seo/queries', icon: SearchCheck },
       { name: 'Schema Markup', href: '/seo/schema', icon: Code2 },
-      { name: 'SEO Instellingen', href: '/seo/settings', icon: SlidersHorizontal },
+      // Autoriteit sectie
+      { name: '_section_Autoriteit', href: '', icon: Layers },
+      { name: 'Topical Authority', href: '/seo/clusters', icon: Layers },
+      // Instellingen
+      { name: '_section_', href: '', icon: Settings },
+      { name: 'Instellingen', href: '/seo/settings', icon: SlidersHorizontal },
     ]
   },
   {
@@ -224,9 +234,23 @@ export function Sidebar() {
                     </button>
                     {isExpanded && (
                       <div className="mt-1 ml-5 pl-4 border-l-2 border-surface-200 space-y-1">
-                        {item.children.map((child) => {
+                        {item.children.map((child, childIndex) => {
                           const ChildIcon = child.icon
                           const isChildItemActive = pathname === child.href
+
+                          // Section header
+                          if (child.name.startsWith('_section_')) {
+                            const sectionName = child.name.replace('_section_', '')
+                            if (!sectionName) return <div key={childIndex} className="pt-2" />
+                            return (
+                              <div key={childIndex} className="pt-3 pb-1 px-3">
+                                <span className="text-xs font-semibold text-surface-400 uppercase tracking-wider">
+                                  {sectionName}
+                                </span>
+                              </div>
+                            )
+                          }
+
                           return (
                             <Link
                               key={child.href}
