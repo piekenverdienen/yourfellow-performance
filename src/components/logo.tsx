@@ -21,7 +21,7 @@ export function Logo({
   return (
     <div className={cn('flex items-center', className)}>
       <Image
-        src="/yourfellow-logo.svg"
+        src="/yourfellow-logo.png.png"
         alt="YourFellow"
         width={sizes[size].width}
         height={sizes[size].height}
