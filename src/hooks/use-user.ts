@@ -25,7 +25,7 @@ export function useUser(): UseUserReturn {
 
   const supabase = createClient()
 
-  const fetchUser = async () => {
+  const fetchUser = async (isInitialLoad = false) => {
     // Skip if supabase client is not available
     if (!supabase) {
       setLoading(false)
@@ -33,7 +33,11 @@ export function useUser(): UseUserReturn {
     }
 
     try {
-      setLoading(true)
+      // Only show loading spinner on initial load, not on re-fetches
+      // This prevents unmounting children when auth state changes
+      if (isInitialLoad) {
+        setLoading(true)
+      }
       setError(null)
 
       // Get authenticated user
@@ -121,12 +125,12 @@ export function useUser(): UseUserReturn {
       return
     }
 
-    fetchUser()
+    fetchUser(true) // Initial load - show loading spinner
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
-        fetchUser()
+        fetchUser(false) // Re-fetch without showing loading spinner
       } else {
         setUser(null)
         setSupabaseUser(null)
