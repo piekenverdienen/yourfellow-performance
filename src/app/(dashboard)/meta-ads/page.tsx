@@ -56,7 +56,7 @@ const dateRanges = [
 ]
 
 export default function MetaAdsDashboard() {
-  const { selectedClientId } = useSelectedClientId()
+  const selectedClientId = useSelectedClientId()
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState<string | null>(null)
