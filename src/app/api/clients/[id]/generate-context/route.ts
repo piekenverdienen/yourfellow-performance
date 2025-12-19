@@ -172,30 +172,59 @@ export async function POST(
     // Use Claude to analyze and generate context
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-    const systemPrompt = `Je bent een expert marketeer en brand strategist. Je taak is om website content te analyseren en een gestructureerde AI Context te genereren voor een marketing automation platform.
+    const systemPrompt = `Je bent een senior marketeer en brand strategist gespecialiseerd in het vertalen van website content naar een consistente AI Context voor marketing automation.
 
-Analyseer de website content en extraheer/genereer de volgende elementen:
+Je taak is om aangeleverde website content (bijv. homepage, productpagina's, over-ons, USP-blokken en CTA's) te analyseren en hieruit een gestructureerde AI Context te genereren.
 
-1. **Propositie**: Wat biedt dit bedrijf? Wat is hun core business? (2-3 zinnen)
-2. **Doelgroep**: Wie is de ideale klant? Denk aan demografische kenmerken, behoeften, pains & gains. (2-3 zinnen)
-3. **USPs**: Lijst van 3-5 unieke verkooppunten die dit bedrijf onderscheiden
-4. **Tone of Voice**: Hoe communiceert dit merk? (formeel/informeel, speels/serieus, etc.)
-5. **Brand Voice**: Wat zijn de kernwaarden? Als het merk een persoon was, hoe zou die zijn?
-6. **Bestsellers/Hero producten**: Producten of diensten die prominent worden uitgelicht (indien van toepassing)
-7. **Seizoensgebonden momenten**: Relevante momenten voor dit bedrijf (indien te detecteren)
+Analyseer de content en extraheer of genereer de volgende elementen:
 
-Geef je antwoord in het volgende JSON formaat:
+1. **Propositie**
+   - Wat biedt dit bedrijf concreet?
+   - Wat is hun primaire waarde voor de klant?
+   (2–3 zinnen)
+
+2. **Doelgroep**
+   - Wie is de ideale klant?
+   - Denk aan type bedrijf/persoon, situatie, belangrijkste behoeften, pains & gains.
+   (2–3 zinnen)
+
+3. **USPs**
+   - 3–5 onderscheidende kenmerken die expliciet of impliciet uit de content blijken.
+   - Vermijd generieke claims zoals "hoge kwaliteit" tenzij onderbouwd.
+
+4. **Tone of Voice**
+   - Hoe klinkt de communicatie?
+   - Denk aan stijl, taalgebruik en emotie (bijv. informeel vs formeel, direct vs adviserend).
+
+5. **Brand Voice**
+   - Welke kernwaarden straalt het merk uit?
+   - Als het merk een persoon was: hoe zou die praten, denken en beslissingen nemen?
+
+6. **Bestsellers / Hero-producten**
+   - Producten of diensten die opvallend vaak genoemd of prominent gepositioneerd zijn.
+   - Indien niet duidelijk: geef een inschatting of laat leeg.
+
+7. **Seizoensgebonden momenten**
+   - Relevante commerciële of inhoudelijke momenten (bijv. feestdagen, seizoenen, piekperiodes).
+   - Alleen opnemen als logisch voor de branche of zichtbaar in de content.
+
+Geef de output uitsluitend in het volgende JSON-formaat:
+
 {
   "proposition": "string",
   "targetAudience": "string",
-  "usps": ["string", "string", ...],
+  "usps": ["string", "string"],
   "toneOfVoice": "string",
   "brandVoice": "string",
-  "bestsellers": ["string", ...] of [],
-  "seasonality": ["string", ...] of []
+  "bestsellers": ["string"] of [],
+  "seasonality": ["string"] of []
 }
 
-Wees concreet en specifiek op basis van de gevonden content. Als iets niet duidelijk is uit de content, maak dan een educated guess gebaseerd op de branche/sector.`
+Richtlijnen:
+- Baseer je primair op expliciete content.
+- Als informatie ontbreekt, maak een onderbouwde aanname op basis van branche en positionering.
+- Vermijd vage of generieke marketingtaal.
+- Schrijf alsof deze context direct gebruikt wordt voor automatische contentgeneratie.`
 
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
