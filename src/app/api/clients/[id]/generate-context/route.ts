@@ -81,7 +81,7 @@ export async function POST(
     const firecrawl = new Firecrawl({ apiKey: process.env.FIRECRAWL_API_KEY })
 
     // Scrape the main page first
-    const mainPageResult = await firecrawl.scrapeUrl(websiteUrl, {
+    const mainPageResult = await firecrawl.scrape(websiteUrl, {
       formats: ['markdown', 'links'],
     })
 
@@ -129,7 +129,7 @@ export async function POST(
     // Scrape additional pages in parallel
     const additionalScrapes = await Promise.allSettled(
       internalLinks.map(async (link: string) => {
-        const result = await firecrawl.scrapeUrl(link, {
+        const result = await firecrawl.scrape(link, {
           formats: ['markdown'],
         })
         if (result.success && result.markdown) {
