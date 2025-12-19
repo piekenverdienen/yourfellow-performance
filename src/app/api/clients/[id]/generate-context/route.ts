@@ -4,22 +4,10 @@ import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase/server'
 import type { ClientContext } from '@/types'
 
-interface CrawlPage {
-  url?: string
-  markdown?: string
-  metadata?: {
-    title?: string
-    description?: string
-    ogTitle?: string
-    ogDescription?: string
-  }
-}
-
-interface CrawlResult {
-  success: boolean
-  status?: string
-  data?: CrawlPage[]
-  error?: string
+interface ScrapedPage {
+  url: string
+  markdown: string
+  title: string
 }
 
 export async function POST(
@@ -92,31 +80,85 @@ export async function POST(
     // Initialize Firecrawl
     const firecrawl = new Firecrawl({ apiKey: process.env.FIRECRAWL_API_KEY })
 
-    // Crawl the website (multiple pages)
-    const crawlResult = await firecrawl.crawlUrl(websiteUrl, {
-      limit: Math.min(maxPages, 10), // Cap at 10 pages
-      scrapeOptions: {
-        formats: ['markdown'],
-      },
-    }) as CrawlResult
+    // Scrape the main page first
+    const mainPageResult = await firecrawl.scrapeUrl(websiteUrl, {
+      formats: ['markdown', 'links'],
+    })
 
-    if (!crawlResult.success || !crawlResult.data || crawlResult.data.length === 0) {
+    if (!mainPageResult.success || !mainPageResult.markdown) {
       return NextResponse.json(
-        { error: 'Kon website niet crawlen. Controleer de URL en probeer opnieuw.' },
+        { error: 'Kon website niet scrapen. Controleer de URL en probeer opnieuw.' },
         { status: 400 }
       )
     }
 
+    const scrapedPages: ScrapedPage[] = [{
+      url: websiteUrl,
+      markdown: mainPageResult.markdown,
+      title: mainPageResult.metadata?.title || 'Homepage',
+    }]
+
+    // Extract internal links and scrape additional pages
+    const baseUrl = new URL(websiteUrl)
+    const internalLinks = (mainPageResult.links || [])
+      .filter((link: string) => {
+        try {
+          const linkUrl = new URL(link, websiteUrl)
+          return linkUrl.hostname === baseUrl.hostname
+        } catch {
+          return false
+        }
+      })
+      .filter((link: string) => {
+        // Prioritize important pages
+        const lowerLink = link.toLowerCase()
+        return lowerLink.includes('about') ||
+               lowerLink.includes('over-ons') ||
+               lowerLink.includes('diensten') ||
+               lowerLink.includes('services') ||
+               lowerLink.includes('producten') ||
+               lowerLink.includes('products') ||
+               lowerLink.includes('contact') ||
+               lowerLink.includes('team') ||
+               lowerLink.includes('missie') ||
+               lowerLink.includes('visie') ||
+               lowerLink.includes('waarom')
+      })
+      .slice(0, Math.min(maxPages - 1, 4)) // Limit additional pages
+
+    // Scrape additional pages in parallel
+    const additionalScrapes = await Promise.allSettled(
+      internalLinks.map(async (link: string) => {
+        const result = await firecrawl.scrapeUrl(link, {
+          formats: ['markdown'],
+        })
+        if (result.success && result.markdown) {
+          return {
+            url: link,
+            markdown: result.markdown,
+            title: result.metadata?.title || link,
+          }
+        }
+        return null
+      })
+    )
+
+    // Add successful scrapes
+    additionalScrapes.forEach((result) => {
+      if (result.status === 'fulfilled' && result.value) {
+        scrapedPages.push(result.value)
+      }
+    })
+
     // Prepare content for Claude
-    const pagesContent = crawlResult.data.map((page: CrawlPage, index: number) => {
-      const title = page.metadata?.title || page.metadata?.ogTitle || `Pagina ${index + 1}`
-      const content = page.markdown || ''
+    const pagesContent = scrapedPages.map((page, index) => {
+      const content = page.markdown
       // Limit content per page to avoid token limits
       const truncatedContent = content.length > 8000
         ? content.substring(0, 8000) + '\n\n[... inhoud afgekapt ...]'
         : content
 
-      return `## ${title}\nURL: ${page.url || 'onbekend'}\n\n${truncatedContent}`
+      return `## ${page.title}\nURL: ${page.url}\n\n${truncatedContent}`
     }).join('\n\n---\n\n')
 
     // Use Claude to analyze and generate context
@@ -196,7 +238,7 @@ Wees concreet en specifiek op basis van de gevonden content. Als iets niet duide
     return NextResponse.json({
       success: true,
       context,
-      pagesAnalyzed: crawlResult.data.length,
+      pagesAnalyzed: scrapedPages.length,
       sourceUrl: websiteUrl,
     })
 
