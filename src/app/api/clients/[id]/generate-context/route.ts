@@ -108,7 +108,30 @@ export async function POST(
 
     // Extract internal links and scrape additional pages
     const baseUrl = new URL(websiteUrl)
-    const internalLinks = extractedLinks
+
+    // Pages to always exclude
+    const excludePatterns = [
+      'privacy', 'cookie', 'terms', 'voorwaarden', 'disclaimer',
+      'login', 'logout', 'register', 'account', 'cart', 'checkout',
+      'winkelwagen', 'afrekenen', 'wachtwoord', 'password',
+      'wp-content', 'wp-admin', 'wp-json', 'feed', 'rss',
+      '.pdf', '.jpg', '.png', '.gif', '.svg', '.webp',
+      'mailto:', 'tel:', '#', 'javascript:',
+    ]
+
+    // Priority keywords for important pages
+    const priorityKeywords = [
+      'about', 'over-ons', 'over', 'wie',
+      'diensten', 'services', 'aanbod', 'werkwijze',
+      'producten', 'products', 'oplossingen', 'solutions',
+      'contact', 'team', 'medewerkers',
+      'missie', 'visie', 'waarden', 'waarom', 'why',
+      'portfolio', 'cases', 'projecten', 'referenties',
+      'klanten', 'customers', 'partners',
+    ]
+
+    // Filter to internal links only, excluding unwanted pages
+    const allInternalLinks = extractedLinks
       .filter((link: string) => {
         try {
           const linkUrl = new URL(link, websiteUrl)
@@ -118,21 +141,27 @@ export async function POST(
         }
       })
       .filter((link: string) => {
-        // Prioritize important pages
         const lowerLink = link.toLowerCase()
-        return lowerLink.includes('about') ||
-               lowerLink.includes('over-ons') ||
-               lowerLink.includes('diensten') ||
-               lowerLink.includes('services') ||
-               lowerLink.includes('producten') ||
-               lowerLink.includes('products') ||
-               lowerLink.includes('contact') ||
-               lowerLink.includes('team') ||
-               lowerLink.includes('missie') ||
-               lowerLink.includes('visie') ||
-               lowerLink.includes('waarom')
+        return !excludePatterns.some(pattern => lowerLink.includes(pattern))
       })
-      .slice(0, Math.min(maxPages - 1, 4)) // Limit additional pages
+      // Remove duplicates
+      .filter((link: string, index: number, self: string[]) => self.indexOf(link) === index)
+
+    // First, get priority pages
+    const priorityLinks = allInternalLinks.filter((link: string) => {
+      const lowerLink = link.toLowerCase()
+      return priorityKeywords.some(keyword => lowerLink.includes(keyword))
+    })
+
+    // Then, fill with other internal links if needed
+    const otherLinks = allInternalLinks.filter((link: string) => {
+      const lowerLink = link.toLowerCase()
+      return !priorityKeywords.some(keyword => lowerLink.includes(keyword))
+    })
+
+    // Combine: priority first, then others, up to maxPages - 1
+    const internalLinks = [...priorityLinks, ...otherLinks]
+      .slice(0, maxPages - 1)
 
     // Scrape additional pages in parallel
     const additionalScrapes = await Promise.allSettled(
