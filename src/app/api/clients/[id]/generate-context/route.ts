@@ -82,10 +82,10 @@ export async function POST(
 
     // Scrape the main page first
     const mainPageResult = await firecrawl.scrape(websiteUrl, {
-      formats: ['markdown', 'links'],
+      formats: ['markdown'],
     })
 
-    if (!mainPageResult.success || !mainPageResult.markdown) {
+    if (!mainPageResult || !mainPageResult.markdown) {
       return NextResponse.json(
         { error: 'Kon website niet scrapen. Controleer de URL en probeer opnieuw.' },
         { status: 400 }
@@ -98,9 +98,17 @@ export async function POST(
       title: mainPageResult.metadata?.title || 'Homepage',
     }]
 
+    // Extract links from markdown content (since 'links' format may not be supported)
+    const linkRegex = /\[([^\]]*)\]\(([^)]+)\)/g
+    const extractedLinks: string[] = []
+    let match
+    while ((match = linkRegex.exec(mainPageResult.markdown)) !== null) {
+      extractedLinks.push(match[2])
+    }
+
     // Extract internal links and scrape additional pages
     const baseUrl = new URL(websiteUrl)
-    const internalLinks = (mainPageResult.links || [])
+    const internalLinks = extractedLinks
       .filter((link: string) => {
         try {
           const linkUrl = new URL(link, websiteUrl)
@@ -132,7 +140,7 @@ export async function POST(
         const result = await firecrawl.scrape(link, {
           formats: ['markdown'],
         })
-        if (result.success && result.markdown) {
+        if (result && result.markdown) {
           return {
             url: link,
             markdown: result.markdown,
