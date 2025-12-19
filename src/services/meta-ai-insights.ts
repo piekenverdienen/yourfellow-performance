@@ -21,6 +21,7 @@ interface InsightGenerationRequest {
   insightType: 'daily' | 'weekly' | 'monthly'
   periodStart: string
   periodEnd: string
+  forceRegenerate?: boolean
 }
 
 interface PerformanceData {
@@ -156,18 +157,20 @@ export class MetaAIInsightsService {
   async generateInsights(
     request: InsightGenerationRequest
   ): Promise<MetaAIInsight | null> {
-    const { clientId, adAccountId, insightType, periodStart, periodEnd } = request
+    const { clientId, adAccountId, insightType, periodStart, periodEnd, forceRegenerate } = request
 
     try {
-      // Check for cached insight
-      const cached = await this.getCachedInsight(
-        clientId,
-        adAccountId,
-        insightType,
-        periodStart,
-        periodEnd
-      )
-      if (cached) return cached
+      // Check for cached insight (skip if forceRegenerate)
+      if (!forceRegenerate) {
+        const cached = await this.getCachedInsight(
+          clientId,
+          adAccountId,
+          insightType,
+          periodStart,
+          periodEnd
+        )
+        if (cached) return cached
+      }
 
       // Gather performance data
       const data = await this.gatherPerformanceData(

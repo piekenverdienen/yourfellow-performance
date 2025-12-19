@@ -8,5 +8,11 @@
     "NEXT_PUBLIC_SUPABASE_URL": "@supabase-url",
     "NEXT_PUBLIC_SUPABASE_ANON_KEY": "@supabase-anon-key",
     "ANTHROPIC_API_KEY": "@anthropic-api-key"
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/meta-ads-sync",
+      "schedule": "0 6 * * *"
+    }
+  ]
 }

@@ -336,9 +336,12 @@ export class MetaAdsClient {
       'cpm',
       'frequency',
       // Conversions (if available)
+      'actions',
+      'action_values',
       'conversions',
       'conversion_values',
       'cost_per_conversion',
+      'purchase_roas',
       // Video metrics
       'video_p25_watched_actions',
       'video_p50_watched_actions',
@@ -432,9 +435,12 @@ interface MetaInsightRaw {
   cpc?: string
   cpm?: string
   frequency?: string
+  actions?: { action_type: string; value: string }[]
+  action_values?: { action_type: string; value: string }[]
   conversions?: { action_type: string; value: string }[]
   conversion_values?: { action_type: string; value: string }[]
   cost_per_conversion?: { action_type: string; value: string }[]
+  purchase_roas?: { action_type: string; value: string }[]
   video_p25_watched_actions?: { action_type: string; value: string }[]
   video_p50_watched_actions?: { action_type: string; value: string }[]
   video_p75_watched_actions?: { action_type: string; value: string }[]
@@ -472,19 +478,34 @@ export function parseMetaInsights(
       entityName = raw.campaign_name || 'Unknown Campaign'
     }
 
-    // Parse conversions (sum all action types)
-    const conversions = (raw.conversions || []).reduce(
-      (sum, c) => sum + parseFloat(c.value || '0'),
-      0
+    // Parse conversions - prefer 'purchase' action type, fallback to sum all
+    const purchaseActions = (raw.actions || []).filter(
+      a => a.action_type === 'purchase' || a.action_type === 'omni_purchase'
     )
-    const conversionValue = (raw.conversion_values || []).reduce(
-      (sum, c) => sum + parseFloat(c.value || '0'),
-      0
+    const purchaseValues = (raw.action_values || []).filter(
+      a => a.action_type === 'purchase' || a.action_type === 'omni_purchase'
     )
+
+    // Conversions: prefer purchase actions, fallback to conversions field
+    const conversions = purchaseActions.length > 0
+      ? purchaseActions.reduce((sum, c) => sum + parseFloat(c.value || '0'), 0)
+      : (raw.conversions || []).reduce((sum, c) => sum + parseFloat(c.value || '0'), 0)
+
+    // Conversion value: prefer purchase values, fallback to conversion_values
+    const conversionValue = purchaseValues.length > 0
+      ? purchaseValues.reduce((sum, c) => sum + parseFloat(c.value || '0'), 0)
+      : (raw.conversion_values || []).reduce((sum, c) => sum + parseFloat(c.value || '0'), 0)
+
     const costPerConversion = (raw.cost_per_conversion || []).reduce(
       (sum, c) => sum + parseFloat(c.value || '0'),
       0
     )
+
+    // ROAS: prefer purchase_roas from Meta, fallback to calculated
+    const purchaseRoas = (raw.purchase_roas || []).find(
+      r => r.action_type === 'omni_purchase' || r.action_type === 'purchase'
+    )
+    const roasFromMeta = purchaseRoas ? parseFloat(purchaseRoas.value || '0') : null
 
     // Parse video metrics
     const videoP25 = (raw.video_p25_watched_actions || []).reduce(
@@ -534,7 +555,7 @@ export function parseMetaInsights(
       conversions,
       conversion_value: conversionValue,
       cost_per_conversion: costPerConversion,
-      roas: spend > 0 ? conversionValue / spend : 0,
+      roas: roasFromMeta !== null ? roasFromMeta : (spend > 0 ? conversionValue / spend : 0),
 
       // Video
       video_views: videoP25, // P25 = started watching

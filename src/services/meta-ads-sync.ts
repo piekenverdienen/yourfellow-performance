@@ -366,10 +366,10 @@ export class MetaAdsSyncService {
 
     const { data, error } = await supabase
       .from('meta_insights_daily')
-      .select('spend, impressions, clicks, conversions, ctr, cpc, roas')
+      .select('spend, impressions, clicks, conversions, conversion_value, ctr, cpc, roas')
       .eq('client_id', clientId)
       .eq('ad_account_id', adAccountId)
-      .eq('entity_type', 'ad') // Sum at ad level to avoid double counting
+      .eq('entity_type', 'campaign') // Campaign level has accurate totals (ads miss dynamic ad spend)
       .gte('date', dateStart)
       .lte('date', dateEnd)
 
@@ -391,31 +391,30 @@ export class MetaAdsSyncService {
         impressions: acc.impressions + (row.impressions || 0),
         clicks: acc.clicks + (row.clicks || 0),
         conversions: acc.conversions + (row.conversions || 0),
-        ctr_sum: acc.ctr_sum + (row.ctr || 0),
-        cpc_sum: acc.cpc_sum + (row.cpc || 0),
-        roas_sum: acc.roas_sum + (row.roas || 0),
-        count: acc.count + 1,
+        conversion_value: acc.conversion_value + (row.conversion_value || 0),
       }),
       {
         spend: 0,
         impressions: 0,
         clicks: 0,
         conversions: 0,
-        ctr_sum: 0,
-        cpc_sum: 0,
-        roas_sum: 0,
-        count: 0,
+        conversion_value: 0,
       }
     )
+
+    // Calculate derived metrics from totals (more accurate than averaging)
+    const avgCtr = totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0
+    const avgCpc = totals.clicks > 0 ? totals.spend / totals.clicks : 0
+    const avgRoas = totals.spend > 0 ? totals.conversion_value / totals.spend : 0
 
     return {
       total_spend: totals.spend,
       total_impressions: totals.impressions,
       total_clicks: totals.clicks,
       total_conversions: totals.conversions,
-      avg_ctr: totals.count > 0 ? totals.ctr_sum / totals.count : 0,
-      avg_cpc: totals.count > 0 ? totals.cpc_sum / totals.count : 0,
-      avg_roas: totals.count > 0 ? totals.roas_sum / totals.count : 0,
+      avg_ctr: avgCtr,
+      avg_cpc: avgCpc,
+      avg_roas: avgRoas,
     }
   }
 
