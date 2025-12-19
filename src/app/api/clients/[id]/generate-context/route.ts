@@ -210,6 +210,12 @@ Wees concreet en specifiek op basis van de gevonden content. Als iets niet duide
           { status: 429 }
         )
       }
+
+      // Return more specific error for debugging
+      return NextResponse.json(
+        { error: `Fout: ${error.message}` },
+        { status: 500 }
+      )
     }
 
     return NextResponse.json(
