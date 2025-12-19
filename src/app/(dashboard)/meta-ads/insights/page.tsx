@@ -73,7 +73,7 @@ export default function MetaAdsInsightsPage() {
     }
   }
 
-  const generateInsights = async () => {
+  const generateInsights = async (forceRegenerate = false) => {
     if (!selectedClientId) return
 
     setGenerating(true)
@@ -86,6 +86,7 @@ export default function MetaAdsInsightsPage() {
         body: JSON.stringify({
           clientId: selectedClientId,
           insightType: selectedType,
+          forceRegenerate,
         }),
       })
 
@@ -158,7 +159,7 @@ export default function MetaAdsInsightsPage() {
           </select>
 
           <Button
-            onClick={generateInsights}
+            onClick={() => generateInsights(false)}
             disabled={generating}
             className="bg-purple-600 hover:bg-purple-700"
           >
@@ -168,6 +169,20 @@ export default function MetaAdsInsightsPage() {
               <Sparkles className="h-4 w-4 mr-2" />
             )}
             Genereer Analyse
+          </Button>
+
+          <Button
+            onClick={() => generateInsights(true)}
+            disabled={generating}
+            variant="outline"
+            className="border-purple-300 text-purple-700 hover:bg-purple-50"
+          >
+            {generating ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
+            Ververs Data
           </Button>
         </div>
       </div>
@@ -195,7 +210,7 @@ export default function MetaAdsInsightsPage() {
             Genereer je eerste AI-analyse om inzichten te krijgen in je Meta Ads performance.
           </p>
           <Button
-            onClick={generateInsights}
+            onClick={() => generateInsights(false)}
             disabled={generating}
             className="bg-purple-600 hover:bg-purple-700"
           >
