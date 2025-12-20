@@ -99,77 +99,116 @@ const defaultConfig: IngestConfig = {
 // Helper: Derive config from client AI Context
 // ============================================
 
-// Keywords that map to industry categories
-const INDUSTRY_KEYWORDS: Record<string, string[]> = {
-  ecommerce: ['e-commerce', 'ecommerce', 'webshop', 'online shop', 'verkoop', 'retail', 'winkel'],
-  saas: ['saas', 'software', 'platform', 'app', 'tool', 'tech', 'technology'],
-  marketing: ['marketing', 'reclame', 'advertising', 'branding', 'merk'],
-  finance: ['finance', 'financieel', 'bank', 'verzekering', 'beleggen', 'investment'],
-  healthcare: ['gezondheid', 'health', 'medical', 'zorg', 'wellness', 'fitness'],
-  education: ['onderwijs', 'education', 'cursus', 'training', 'leren', 'course'],
-  realestate: ['vastgoed', 'real estate', 'makelaardij', 'wonen', 'housing'],
-  hospitality: ['horeca', 'restaurant', 'hotel', 'catering', 'food'],
-  agency: ['bureau', 'agency', 'dienstverlening', 'consultancy'],
+// AUDIENCE-based keywords → subreddits where the TARGET AUDIENCE hangs out
+// Not where the business owner hangs out, but where their CUSTOMERS are
+const AUDIENCE_SUBREDDIT_MAP: Record<string, string[]> = {
+  // Sports & Fitness
+  cycling: ['cycling', 'Velo', 'bicycling', 'peloton'],
+  wielrennen: ['cycling', 'Velo', 'peloton', 'bicycling'],
+  fietsen: ['cycling', 'bicycling', 'bikecommuting'],
+  zwift: ['Zwift', 'cycling', 'Velo', 'pelotoncycle'],
+  triathlon: ['triathlon', 'Ironman', 'cycling', 'Swimming'],
+  hardlopen: ['running', 'AdvancedRunning', 'C25K'],
+  running: ['running', 'AdvancedRunning', 'trailrunning'],
+  fitness: ['Fitness', 'bodybuilding', 'weightlifting', 'GYM'],
+  gym: ['GYM', 'Fitness', 'bodybuilding', 'naturalbodybuilding'],
+  yoga: ['yoga', 'Fitness', 'flexibility', 'Meditation'],
+  crossfit: ['crossfit', 'Fitness', 'functionalfitness'],
+
+  // E-commerce audiences
+  webshop: ['ecommerce', 'shopify', 'Entrepreneur'],
+  'online shop': ['ecommerce', 'smallbusiness', 'Entrepreneur'],
+  ondernemer: ['Entrepreneur', 'smallbusiness', 'startups'],
+  entrepreneur: ['Entrepreneur', 'startups', 'smallbusiness'],
+  mkb: ['smallbusiness', 'Entrepreneur', 'business'],
+  retailer: ['retail', 'smallbusiness', 'ecommerce'],
+
+  // Tech audiences
+  developer: ['webdev', 'programming', 'learnprogramming'],
+  programmeur: ['webdev', 'programming', 'learnprogramming'],
+  designer: ['design', 'web_design', 'userexperience'],
+  marketeer: ['marketing', 'DigitalMarketing', 'socialmedia'],
+
+  // Lifestyle
+  ouders: ['Parenting', 'Mommit', 'daddit'],
+  parents: ['Parenting', 'Mommit', 'daddit'],
+  studenten: ['college', 'students', 'GetStudying'],
+  students: ['college', 'students', 'GetStudying'],
+
+  // Finance
+  beleggers: ['investing', 'stocks', 'FinancialPlanning'],
+  investors: ['investing', 'stocks', 'wallstreetbets'],
+
+  // Food & Lifestyle
+  foodies: ['food', 'Cooking', 'EatCheapAndHealthy'],
+  koken: ['Cooking', 'recipes', 'MealPrepSunday'],
+  vegan: ['vegan', 'PlantBasedDiet', 'veganrecipes'],
+
+  // Creative
+  fotografen: ['photography', 'photocritique', 'AskPhotography'],
+  photographers: ['photography', 'photocritique', 'AskPhotography'],
+  muzikanten: ['WeAreTheMusicMakers', 'musicians', 'Guitar'],
+  musicians: ['WeAreTheMusicMakers', 'musicians', 'Guitar'],
+
+  // Gaming
+  gamers: ['gaming', 'pcgaming', 'Games'],
+  esports: ['esports', 'CompetitiveGaming', 'leagueoflegends'],
+
+  // Home & Garden
+  huiseigenaren: ['homeowners', 'HomeImprovement', 'DIY'],
+  homeowners: ['homeowners', 'HomeImprovement', 'DIY'],
+  tuiniers: ['gardening', 'landscaping', 'vegetablegardening'],
 }
 
-// Subreddit suggestions per industry
-const INDUSTRY_SUBREDDITS: Record<string, string[]> = {
-  ecommerce: ['ecommerce', 'shopify', 'dropship', 'FulfillmentByAmazon', 'Entrepreneur'],
-  saas: ['SaaS', 'startups', 'Entrepreneur', 'microsaas', 'webdev'],
-  marketing: ['marketing', 'socialmedia', 'DigitalMarketing', 'SEO', 'PPC'],
-  finance: ['Finance', 'personalfinance', 'investing', 'FinancialPlanning'],
-  healthcare: ['healthcare', 'HealthIT', 'medicine', 'fitness'],
-  education: ['education', 'OnlineEducation', 'Teachers', 'edtech'],
-  realestate: ['realestate', 'RealEstate', 'REBubble', 'RealEstateInvesting'],
-  hospitality: ['restaurant', 'Hospitality', 'KitchenConfidential', 'foodbusiness'],
-  agency: ['agency', 'digital_marketing', 'Consulting', 'freelance'],
-  default: ['marketing', 'entrepreneur', 'smallbusiness', 'socialmedia'],
-}
+function deriveSubredditsFromAudience(context: ClientContext): string[] {
+  const subreddits = new Set<string>()
 
-function deriveIndustryFromContext(context: ClientContext): string {
-  // Combine relevant text fields for analysis
+  // Analyze target audience and proposition for audience keywords
   const textToAnalyze = [
-    context.proposition,
-    context.targetAudience,
+    context.targetAudience || '',
+    context.proposition || '',
     ...(context.usps || []),
   ].join(' ').toLowerCase()
 
-  // Find matching industry based on keywords
-  for (const [industry, keywords] of Object.entries(INDUSTRY_KEYWORDS)) {
-    for (const keyword of keywords) {
-      if (textToAnalyze.includes(keyword.toLowerCase())) {
-        return industry
-      }
+  // Find matching audience keywords
+  for (const [keyword, subs] of Object.entries(AUDIENCE_SUBREDDIT_MAP)) {
+    if (textToAnalyze.includes(keyword.toLowerCase())) {
+      subs.forEach(sub => subreddits.add(sub))
     }
   }
 
-  return 'marketing' // fallback
+  // If no matches found, return empty (user should configure manually)
+  if (subreddits.size === 0) {
+    return []
+  }
+
+  // Limit to 6 most relevant
+  return Array.from(subreddits).slice(0, 6)
 }
 
-function deriveSubredditsFromContext(context: ClientContext, industry: string): string {
-  // Start with industry-specific subreddits
-  const subreddits = new Set(INDUSTRY_SUBREDDITS[industry] || INDUSTRY_SUBREDDITS.default)
+function deriveIndustryFromContext(context: ClientContext): string {
+  // This is for the "industry" label - describes what the client does
+  // Used for grouping opportunities, not for finding subreddits
+  const textToAnalyze = [
+    context.proposition,
+    context.targetAudience,
+  ].join(' ').toLowerCase()
 
-  // Add general business subreddits
-  subreddits.add('Entrepreneur')
-  subreddits.add('smallbusiness')
-
-  // If we have active channels, add related subreddits
-  if (context.activeChannels?.includes('seo')) {
-    subreddits.add('SEO')
-    subreddits.add('bigseo')
+  // Simple industry detection for labeling purposes
+  if (textToAnalyze.includes('fitness') || textToAnalyze.includes('training') || textToAnalyze.includes('sport')) {
+    return 'fitness'
   }
-  if (context.activeChannels?.includes('google_ads')) {
-    subreddits.add('PPC')
-    subreddits.add('adwords')
+  if (textToAnalyze.includes('e-commerce') || textToAnalyze.includes('webshop') || textToAnalyze.includes('shop')) {
+    return 'ecommerce'
   }
-  if (context.activeChannels?.includes('meta')) {
-    subreddits.add('FacebookAds')
-    subreddits.add('socialmedia')
+  if (textToAnalyze.includes('saas') || textToAnalyze.includes('software') || textToAnalyze.includes('platform')) {
+    return 'software'
+  }
+  if (textToAnalyze.includes('marketing') || textToAnalyze.includes('bureau') || textToAnalyze.includes('agency')) {
+    return 'marketing'
   }
 
-  // Limit to 6 subreddits
-  return Array.from(subreddits).slice(0, 6).join(', ')
+  return 'general'
 }
 
 function deriveQueryFromContext(context: ClientContext): string {
@@ -190,7 +229,14 @@ function deriveConfigFromClientContext(context: ClientContext | undefined): Inge
   if (!context) return defaultConfig
 
   const industry = deriveIndustryFromContext(context)
-  const subreddits = deriveSubredditsFromContext(context, industry)
+  const audienceSubreddits = deriveSubredditsFromAudience(context)
+
+  // If we found audience-specific subreddits, use those
+  // Otherwise fall back to defaults (user should configure manually)
+  const subreddits = audienceSubreddits.length > 0
+    ? audienceSubreddits.join(', ')
+    : defaultConfig.subreddits
+
   const query = deriveQueryFromContext(context)
 
   return {
