@@ -205,6 +205,31 @@ export const TASK_MODEL_MAPPING: Record<AITask, TaskModelMapping> = {
     fallbackModelId: 'gpt-4o-mini',
     requiredCapabilities: ['text-generation'],
   },
+  // Canonical Content Brief tasks
+  canonical_brief: {
+    task: 'canonical_brief',
+    defaultModelId: 'claude-sonnet',  // Needs reasoning for brief synthesis
+    fallbackModelId: 'gpt-4o',
+    requiredCapabilities: ['text-generation'],
+  },
+  youtube_script_from_brief: {
+    task: 'youtube_script_from_brief',
+    defaultModelId: 'claude-sonnet',
+    fallbackModelId: 'gpt-4o',
+    requiredCapabilities: ['text-generation'],
+  },
+  blog_post_from_brief: {
+    task: 'blog_post_from_brief',
+    defaultModelId: 'claude-sonnet',
+    fallbackModelId: 'gpt-4o',
+    requiredCapabilities: ['text-generation'],
+  },
+  instagram_from_brief: {
+    task: 'instagram_from_brief',
+    defaultModelId: 'claude-sonnet',
+    fallbackModelId: 'gpt-4o',
+    requiredCapabilities: ['text-generation'],
+  },
 }
 
 // ============================================
