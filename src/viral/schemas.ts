@@ -20,6 +20,39 @@ export type BriefStatus = z.infer<typeof BriefStatusSchema>
 // The brief must be readable in < 60 seconds
 // Fixed 5 fields + evidence summary + no-go claims
 
+// Search Context Schema (for SEO-driven briefs)
+export const SearchContextSchema = z.object({
+  // What is the searcher looking for?
+  searcher_question: z.string().max(300).describe(
+    'What question or need does the searcher have? Written from their perspective.'
+  ),
+
+  // What's missing in current top results?
+  competitive_gap: z.string().max(300).describe(
+    'What is missing in the current top search results that we can provide?'
+  ),
+
+  // How do we differentiate?
+  our_differentiator: z.string().max(200).describe(
+    'One sentence on how we stand out from existing content.'
+  ),
+
+  // Primary query we're targeting
+  primary_query: z.string().describe('The main search query we are targeting'),
+
+  // Intent classification
+  intent: z.enum(['informational', 'commercial', 'transactional']).describe(
+    'What type of intent does the searcher have?'
+  ),
+
+  // What to avoid
+  avoid: z.array(z.string()).default([]).describe(
+    'Things to avoid in the content to maintain search relevance.'
+  ),
+})
+
+export type SearchContext = z.infer<typeof SearchContextSchema>
+
 export const CanonicalBriefSchema = z.object({
   // 1. Core tension: the conflict/frustration/curiosity driving engagement
   core_tension: z.string().min(10).max(500).describe(
@@ -49,6 +82,21 @@ export const CanonicalBriefSchema = z.object({
   // Guardrails: no-go claims derived from client context
   no_go_claims: z.array(z.string()).default([]).describe(
     'Claims we must NOT make based on client brand guidelines and compliance rules.'
+  ),
+
+  // NEW: Search context (optional, for SEO-driven content)
+  search_context: SearchContextSchema.optional().describe(
+    'Search positioning context - only included for content with search demand.'
+  ),
+
+  // NEW: Recommended channel based on scoring
+  recommended_channel: z.enum(['blog', 'youtube', 'instagram']).optional().describe(
+    'The recommended primary channel based on viral + search scoring.'
+  ),
+
+  // NEW: Channel recommendation rationale
+  channel_rationale: z.string().max(200).optional().describe(
+    'Brief explanation of why this channel was recommended.'
   ),
 })
 

@@ -13,5 +13,8 @@ export * from './opportunities'
 export * from './generate'
 export * from './briefs'
 
+// SEO Intelligence (V2)
+export * from './seo-intelligence'
+
 // Schemas
 export * from './schemas'

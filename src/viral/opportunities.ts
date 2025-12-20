@@ -3,12 +3,28 @@
  *
  * Transforms raw signals into ranked content opportunities.
  * Uses clustering, scoring, and optional AI synthesis.
+ *
+ * V2: Integrates SEO intelligence for demand-aware prioritization.
+ * - Strategic gates prevent bad content decisions
+ * - Channel-specific scoring (blog ≠ youtube ≠ instagram)
+ * - Search context flows through to briefs
  */
 
 import { createClient } from '@/lib/supabase/server'
 import { aiGateway } from '@/lib/ai/gateway'
 import type { NormalizedSignal, ViralSourceType } from './sources'
 import type { AITask } from '@/lib/ai/types'
+import {
+  buildSearchIntelligence,
+  evaluateStrategicGates,
+  calculateChannelScores,
+  buildSearchContext,
+  type SearchIntelligence,
+  type StrategicGates,
+  type ChannelScores,
+  type SearchContext,
+} from './seo-intelligence'
+import { SearchConsoleClient } from '@/seo/search-console/client'
 
 // ============================================
 // Types
@@ -24,6 +40,15 @@ export interface BuildOpportunitiesConfig {
   limit?: number
   days?: number
   useAI?: boolean
+  // V2: SEO integration options
+  seoOptions?: {
+    enabled: boolean
+    siteUrl?: string           // For GSC data lookup
+    enforceGates?: boolean     // Block opportunities that fail gates (default: true)
+    existingClusters?: string[] // Client's topical clusters
+    existingContent?: { url: string; title: string; keywords: string[] }[]
+    competitors?: string[]
+  }
 }
 
 export interface Opportunity {
@@ -40,6 +65,14 @@ export interface Opportunity {
   sourceSignalIds: string[]
   status: OpportunityStatus
   createdAt?: string
+  // V2: SEO intelligence
+  seoData?: {
+    searchIntelligence: SearchIntelligence
+    strategicGates: StrategicGates
+    channelScores: ChannelScores
+    searchContext: SearchContext | null
+    opportunityType: 'demand_capture' | 'demand_creation'
+  }
 }
 
 export interface ScoreBreakdown {
@@ -91,6 +124,8 @@ export async function buildOpportunities(
   const supabase = await createClient()
   const limit = config.limit || DEFAULT_LIMIT
   const days = config.days || DEFAULT_DAYS
+  const seoEnabled = config.seoOptions?.enabled ?? false
+  const enforceGates = config.seoOptions?.enforceGates ?? true
 
   // 1. Fetch recent signals for industry
   const { data: signals } = await supabase
@@ -122,6 +157,16 @@ export async function buildOpportunities(
     },
   }))
 
+  // 2b. Initialize GSC client if SEO is enabled
+  let gscClient: SearchConsoleClient | undefined
+  if (seoEnabled && config.seoOptions?.siteUrl) {
+    try {
+      gscClient = SearchConsoleClient.fromEnv()
+    } catch (error) {
+      console.warn('GSC client initialization failed:', error)
+    }
+  }
+
   // 3. Separate high-engagement signals (they stand alone) from others
   const standaloneSignals: SignalWithId[] = []
   const clusterableSignals: SignalWithId[] = []
@@ -135,7 +180,7 @@ export async function buildOpportunities(
     }
   }
 
-  // 4. Generate opportunities
+  // 4. Generate opportunities with SEO intelligence
   const opportunities: Opportunity[] = []
 
   // 4a. Create individual opportunities for high-engagement signals
@@ -146,14 +191,19 @@ export async function buildOpportunities(
       totalEngagement: signalWithId.signal.metrics.upvotes || 0,
     }
 
-    for (const channel of config.channels) {
-      const opportunity = createOpportunityFromCluster(
-        singleCluster,
-        config.industry,
-        channel,
-        config.clientId
-      )
-      opportunities.push(opportunity)
+    const clusterOpportunities = await createOpportunitiesFromClusterV2(
+      singleCluster,
+      config,
+      gscClient
+    )
+
+    // Apply gate filtering if enforced
+    for (const opp of clusterOpportunities) {
+      if (enforceGates && opp.seoData && !opp.seoData.strategicGates.allPassed) {
+        console.log(`Opportunity blocked: ${opp.topic} - ${opp.seoData.strategicGates.blockedBy}`)
+        continue
+      }
+      opportunities.push(opp)
     }
   }
 
@@ -163,15 +213,19 @@ export async function buildOpportunities(
   for (const cluster of clusters) {
     if (cluster.signals.length < CLUSTER_MIN_SIGNALS) continue
 
-    // Generate opportunity for each requested channel
-    for (const channel of config.channels) {
-      const opportunity = createOpportunityFromCluster(
-        cluster,
-        config.industry,
-        channel,
-        config.clientId
-      )
-      opportunities.push(opportunity)
+    const clusterOpportunities = await createOpportunitiesFromClusterV2(
+      cluster,
+      config,
+      gscClient
+    )
+
+    // Apply gate filtering if enforced
+    for (const opp of clusterOpportunities) {
+      if (enforceGates && opp.seoData && !opp.seoData.strategicGates.allPassed) {
+        console.log(`Opportunity blocked: ${opp.topic} - ${opp.seoData.strategicGates.blockedBy}`)
+        continue
+      }
+      opportunities.push(opp)
     }
   }
 
@@ -202,6 +256,15 @@ export async function buildOpportunities(
         score_breakdown: opp.scoreBreakdown,
         source_signal_ids: opp.sourceSignalIds,
         status: 'new',
+        // V2: Store SEO data
+        seo_data: opp.seoData ? {
+          opportunity_type: opp.seoData.opportunityType,
+          search_demand: opp.seoData.searchIntelligence.demandLevel,
+          primary_keyword: opp.seoData.searchIntelligence.primaryKeyword,
+          channel_scores: opp.seoData.channelScores,
+          gates_passed: opp.seoData.strategicGates.allPassed,
+          search_context: opp.seoData.searchContext,
+        } : null,
       })
       .select('id, created_at')
       .single()
@@ -216,6 +279,157 @@ export async function buildOpportunities(
   }
 
   return storedOpportunities
+}
+
+/**
+ * V2: Create opportunities with SEO intelligence
+ * Returns opportunities for each viable channel (not all requested channels)
+ */
+async function createOpportunitiesFromClusterV2(
+  cluster: SignalCluster,
+  config: BuildOpportunitiesConfig,
+  gscClient?: SearchConsoleClient
+): Promise<Opportunity[]> {
+  const seoEnabled = config.seoOptions?.enabled ?? false
+
+  // If SEO not enabled, fall back to original behavior
+  if (!seoEnabled) {
+    return config.channels.map(channel =>
+      createOpportunityFromCluster(cluster, config.industry, channel, config.clientId)
+    )
+  }
+
+  // Build search intelligence from cluster keywords
+  const searchIntelligence = await buildSearchIntelligence(
+    cluster.keywords,
+    config.seoOptions?.siteUrl,
+    gscClient
+  )
+
+  // Evaluate strategic gates
+  const strategicGates = evaluateStrategicGates({
+    topic: cluster.keywords.join(' '),
+    viralKeywords: cluster.keywords,
+    clientIndustry: config.industry,
+    clientContext: {
+      existingClusters: config.seoOptions?.existingClusters,
+      contentUrls: config.seoOptions?.existingContent,
+      competitors: config.seoOptions?.competitors,
+    },
+    searchIntelligence,
+  })
+
+  // Calculate viral score for channel scoring
+  const viralScoreBreakdown = calculateScore(cluster, config.industry)
+  const viralScore = Object.values(viralScoreBreakdown).reduce((sum, val) => sum + val, 0)
+
+  // Calculate channel-specific scores
+  const channelScores = calculateChannelScores({
+    viralScore,
+    viralMomentum: searchIntelligence.trendDirection,
+    totalEngagement: cluster.totalEngagement,
+    searchIntelligence,
+    strategicGates,
+  })
+
+  // Build search context for briefs
+  const topSignal = cluster.signals.reduce((best, current) =>
+    (current.signal.metrics.upvotes || 0) > (best.signal.metrics.upvotes || 0) ? current : best
+  )
+  const searchContext = buildSearchContext(searchIntelligence, {
+    topic: cluster.keywords.join(' '),
+    coreDiscussion: topSignal.signal.rawExcerpt || topSignal.signal.title,
+  })
+
+  // Create opportunities only for viable channels
+  const opportunities: Opportunity[] = []
+
+  for (const channel of config.channels) {
+    const channelScore = channelScores[channel]
+
+    // Skip non-viable channels
+    if (!channelScore?.viable) {
+      console.log(`Channel ${channel} not viable for topic: ${cluster.keywords.join(' ')}`)
+      continue
+    }
+
+    const baseOpportunity = createOpportunityFromCluster(
+      cluster,
+      config.industry,
+      channel,
+      config.clientId
+    )
+
+    // Override score with channel-specific score
+    const enhancedOpportunity: Opportunity = {
+      ...baseOpportunity,
+      score: channelScore.total,
+      reasoning: enhanceReasoning(baseOpportunity.reasoning, channelScore, searchIntelligence),
+      seoData: {
+        searchIntelligence,
+        strategicGates,
+        channelScores,
+        searchContext,
+        opportunityType: searchIntelligence.opportunityType,
+      },
+    }
+
+    opportunities.push(enhancedOpportunity)
+  }
+
+  // If no channels are viable but gates passed, create for recommended channel
+  if (opportunities.length === 0 && strategicGates.allPassed) {
+    const fallbackChannel = channelScores.recommendedChannel
+    const baseOpportunity = createOpportunityFromCluster(
+      cluster,
+      config.industry,
+      fallbackChannel,
+      config.clientId
+    )
+
+    opportunities.push({
+      ...baseOpportunity,
+      reasoning: `${baseOpportunity.reasoning} (Recommended: ${channelScores.recommendation})`,
+      seoData: {
+        searchIntelligence,
+        strategicGates,
+        channelScores,
+        searchContext,
+        opportunityType: searchIntelligence.opportunityType,
+      },
+    })
+  }
+
+  return opportunities
+}
+
+/**
+ * Enhance reasoning with SEO insights
+ */
+function enhanceReasoning(
+  baseReasoning: string,
+  channelScore: { total: number; rationale: string },
+  searchIntelligence: SearchIntelligence
+): string {
+  const parts = [baseReasoning]
+
+  if (searchIntelligence.hasData) {
+    if (searchIntelligence.demandLevel === 'high') {
+      parts.push(`High search demand (${searchIntelligence.totalImpressions.toLocaleString()} impressions)`)
+    } else if (searchIntelligence.demandLevel === 'medium') {
+      parts.push(`Moderate search demand detected`)
+    }
+
+    if (searchIntelligence.bestPosition && searchIntelligence.bestPosition <= 20) {
+      parts.push(`Already ranking #${searchIntelligence.bestPosition.toFixed(0)} - optimization opportunity`)
+    }
+  } else {
+    parts.push('Demand creation opportunity - viral-first strategy')
+  }
+
+  parts.push(channelScore.rationale)
+
+  return parts.join('. ')
 }
 
 // ============================================
