@@ -1616,12 +1616,12 @@ export default function ViralHubPage() {
                     ) : (
                       <div className="text-center py-6 bg-surface-50 rounded-lg">
                         <FileCheck className="h-8 w-8 mx-auto text-surface-300 mb-2" />
-                        <p className="text-surface-600 font-medium">Nog geen brief gegenereerd</p>
+                        <p className="text-surface-600 font-medium">Nog geen briefing gegenereerd</p>
                         <p className="text-surface-500 text-sm mb-4">
-                          Genereer eerst een brief, keur deze goed, en maak dan content
+                          Genereer eerst een briefing, keur deze goed, en maak dan content
                         </p>
                         <Button
-                          onClick={() => handleGenerateBriefFromOpportunity(selectedOpportunity)}
+                          onClick={() => handleGenerateBrief(selectedOpportunity)}
                           disabled={isGeneratingBrief}
                         >
                           {isGeneratingBrief ? (
@@ -1629,7 +1629,7 @@ export default function ViralHubPage() {
                           ) : (
                             <FileCheck className="h-4 w-4 mr-2" />
                           )}
-                          Genereer Brief
+                          Genereer Briefing
                         </Button>
                       </div>
                     )}
@@ -1665,12 +1665,12 @@ export default function ViralHubPage() {
                 {opportunityGenerations.length === 0 ? (
                   <Button
                     variant="primary"
-                    onClick={() => handleGenerateBriefFromOpportunity(selectedOpportunity)}
+                    onClick={() => handleGenerateBrief(selectedOpportunity)}
                     disabled={isGeneratingBrief}
                     isLoading={isGeneratingBrief}
                     leftIcon={!isGeneratingBrief ? <FileCheck className="h-4 w-4" /> : undefined}
                   >
-                    Genereer Brief
+                    Genereer Briefing
                   </Button>
                 ) : (
                   <Button
