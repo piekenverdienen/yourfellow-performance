@@ -24,6 +24,9 @@ import {
   type ChannelScores,
   type InternalSearchContext,
 } from './seo-intelligence'
+
+// PERFORMANCE: Batch size for database operations
+const BATCH_SIZE = 50
 import { SearchConsoleClient } from '@/seo/search-console/client'
 import { AhrefsClient } from '@/seo/ahrefs/client'
 
@@ -208,48 +211,41 @@ export async function buildOpportunities(
   console.log(`[Opportunities] Standalone: ${standaloneSignals.length}, Clusterable: ${clusterableSignals.length}`)
 
   // 4. Generate opportunities with SEO intelligence
-  const opportunities: Opportunity[] = []
+  // PERFORMANCE: Process standalone signals and clusters in parallel
 
-  // 4a. Create individual opportunities for high-engagement signals
-  for (const signalWithId of standaloneSignals) {
-    const singleCluster: SignalCluster = {
-      signals: [signalWithId],
-      keywords: Array.from(extractKeywords(signalWithId.signal.title)),
-      totalEngagement: signalWithId.signal.metrics.upvotes || 0,
-    }
-
-    const clusterOpportunities = await createOpportunitiesFromClusterV2(
-      singleCluster,
-      config,
-      gscClient,
-      ahrefsClient
-    )
-
-    // Apply gate filtering if enforced
-    for (const opp of clusterOpportunities) {
-      if (enforceGates && opp.seoData && !opp.seoData.strategicGates.allPassed) {
-        console.log(`Opportunity blocked: ${opp.topic} - ${opp.seoData.strategicGates.blockedBy}`)
-        continue
-      }
-      opportunities.push(opp)
-    }
-  }
+  // 4a. Prepare standalone signal clusters
+  const standaloneClusters: SignalCluster[] = standaloneSignals.map(signalWithId => ({
+    signals: [signalWithId],
+    keywords: Array.from(extractKeywords(signalWithId.signal.title)),
+    totalEngagement: signalWithId.signal.metrics.upvotes || 0,
+  }))
 
   // 4b. Cluster remaining low-engagement signals
   const clusters = clusterSignals(clusterableSignals)
+    .filter(cluster => cluster.signals.length >= CLUSTER_MIN_SIGNALS)
   console.log(`[Opportunities] Created ${clusters.length} clusters from clusterable signals`)
 
-  for (const cluster of clusters) {
-    if (cluster.signals.length < CLUSTER_MIN_SIGNALS) continue
+  // 4c. Combine all clusters and process in parallel
+  const allClusters = [...standaloneClusters, ...clusters]
+  console.log(`[Opportunities] Processing ${allClusters.length} total clusters in parallel`)
 
-    const clusterOpportunities = await createOpportunitiesFromClusterV2(
-      cluster,
-      config,
-      gscClient,
-      ahrefsClient
+  // Process in parallel batches to avoid overwhelming external APIs
+  const PARALLEL_BATCH = 5
+  const allOpportunitiesArrays: Opportunity[][] = []
+
+  for (let i = 0; i < allClusters.length; i += PARALLEL_BATCH) {
+    const batch = allClusters.slice(i, i + PARALLEL_BATCH)
+    const batchResults = await Promise.all(
+      batch.map(cluster =>
+        createOpportunitiesFromClusterV2(cluster, config, gscClient, ahrefsClient)
+      )
     )
+    allOpportunitiesArrays.push(...batchResults)
+  }
 
-    // Apply gate filtering if enforced
+  // Flatten and filter opportunities
+  const opportunities: Opportunity[] = []
+  for (const clusterOpportunities of allOpportunitiesArrays) {
     for (const opp of clusterOpportunities) {
       if (enforceGates && opp.seoData && !opp.seoData.strategicGates.allPassed) {
         console.log(`Opportunity blocked: ${opp.topic} - ${opp.seoData.strategicGates.blockedBy}`)
@@ -270,42 +266,48 @@ export async function buildOpportunities(
     await enhanceOpportunitiesWithAI(topOpportunities, config.industry)
   }
 
-  // 7. Store opportunities
-  const storedOpportunities: Opportunity[] = []
+  // 7. Store opportunities - PERFORMANCE: Batch insert
   console.log(`[Opportunities] Storing ${topOpportunities.length} opportunities...`)
 
-  for (const opp of topOpportunities) {
+  const recordsToInsert = topOpportunities.map(opp => ({
+    client_id: opp.clientId,
+    industry: opp.industry,
+    channel: opp.channel,
+    topic: opp.topic,
+    angle: opp.angle,
+    hook: opp.hook,
+    reasoning: opp.reasoning,
+    score: opp.score,
+    score_breakdown: opp.scoreBreakdown,
+    source_signal_ids: opp.sourceSignalIds,
+    status: 'new' as const,
+  }))
+
+  const storedOpportunities: Opportunity[] = []
+
+  // Batch insert in chunks of BATCH_SIZE
+  for (let i = 0; i < recordsToInsert.length; i += BATCH_SIZE) {
+    const batch = recordsToInsert.slice(i, i + BATCH_SIZE)
+    const originalBatch = topOpportunities.slice(i, i + BATCH_SIZE)
+
     const { data: inserted, error } = await supabase
       .from('viral_opportunities')
-      .insert({
-        client_id: opp.clientId,
-        industry: opp.industry,
-        channel: opp.channel,
-        topic: opp.topic,
-        angle: opp.angle,
-        hook: opp.hook,
-        reasoning: opp.reasoning,
-        score: opp.score,
-        score_breakdown: opp.scoreBreakdown,
-        source_signal_ids: opp.sourceSignalIds,
-        status: 'new',
-        // V2: Store SEO data (only if column exists)
-        // seo_data: opp.seoData ? { ... } : null,
-      })
+      .insert(batch)
       .select('id, created_at')
-      .single()
 
     if (error) {
-      console.error(`[Opportunities] Error storing opportunity "${opp.topic}":`, error.message)
+      console.error(`[Opportunities] Batch insert error:`, error.message)
       continue
     }
 
     if (inserted) {
-      storedOpportunities.push({
-        ...opp,
-        id: inserted.id,
-        createdAt: inserted.created_at,
-      })
+      for (let j = 0; j < inserted.length; j++) {
+        storedOpportunities.push({
+          ...originalBatch[j],
+          id: inserted[j].id,
+          createdAt: inserted[j].created_at,
+        })
+      }
     }
   }
 

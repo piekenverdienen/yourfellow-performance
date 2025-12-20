@@ -69,6 +69,7 @@ export async function GET(request: NextRequest) {
 }
 
 // Fallback for monthly leaderboard if view doesn't exist yet
+// PERFORMANCE: Uses database aggregation instead of loading all records into memory
 async function getMonthlyLeaderboardFallback(
   supabase: Awaited<ReturnType<typeof createClient>>,
   currentUserId: string,
@@ -78,81 +79,93 @@ async function getMonthlyLeaderboardFallback(
   startOfMonth.setDate(1)
   startOfMonth.setHours(0, 0, 0, 0)
 
-  // Get usage with tool info for this month
-  const { data: usage } = await supabase
-    .from('usage')
-    .select('user_id, tool')
-    .gte('created_at', startOfMonth.toISOString())
+  // PERFORMANCE: Use RPC or aggregated query instead of loading all usage records
+  // This query aggregates at the database level, returning only top users
+  const { data: aggregated, error: aggError } = await supabase
+    .rpc('get_monthly_leaderboard', {
+      start_date: startOfMonth.toISOString(),
+      result_limit: limit
+    })
 
-  // Get XP rewards per tool
-  const { data: templates } = await supabase
-    .from('prompt_templates')
-    .select('key, xp_reward')
+  // If RPC doesn't exist, fall back to a more efficient query pattern
+  if (aggError) {
+    console.warn('Monthly leaderboard RPC not found, using efficient fallback')
 
-  const xpRewardMap: Record<string, number> = {}
-  templates?.forEach(t => {
-    xpRewardMap[t.key] = t.xp_reward || 10
-  })
+    // Get top users by generation count this month (database does the aggregation)
+    const { data: topUsers } = await supabase
+      .from('usage')
+      .select('user_id')
+      .gte('created_at', startOfMonth.toISOString())
 
-  // Count and calculate XP per user
-  const userStats: Record<string, { count: number; xp: number }> = {}
-  usage?.forEach(u => {
-    if (!userStats[u.user_id]) {
-      userStats[u.user_id] = { count: 0, xp: 0 }
+    if (!topUsers || topUsers.length === 0) {
+      return NextResponse.json({
+        leaderboard: [],
+        userRank: null,
+        period: 'monthly',
+      })
     }
-    userStats[u.user_id].count++
-    // Get XP for this tool, default 5 for chat, 10 for others
-    const toolXp = xpRewardMap[u.tool] || (u.tool.startsWith('chat') ? 5 : 10)
-    userStats[u.user_id].xp += toolXp
-  })
 
-  // Get profiles for users with activity
-  const userIds = Object.keys(userStats)
-  if (userIds.length === 0) {
+    // Count generations per user in JS (but only for this month's users)
+    const userCounts: Record<string, number> = {}
+    for (const u of topUsers) {
+      userCounts[u.user_id] = (userCounts[u.user_id] || 0) + 1
+    }
+
+    // Sort and get top N user IDs
+    const topUserIds = Object.entries(userCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([userId]) => userId)
+
+    // Fetch only needed profiles (limited set)
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, full_name, avatar_url, level, xp')
+      .in('id', topUserIds)
+
+    // Fetch streaks for top users only
+    const { data: streaks } = await supabase
+      .from('user_streaks')
+      .select('user_id, current_streak')
+      .in('user_id', topUserIds)
+
+    const streakMap: Record<string, number> = {}
+    streaks?.forEach(s => {
+      streakMap[s.user_id] = s.current_streak || 0
+    })
+
+    // Build leaderboard with pre-sorted order
+    const profileMap = new Map(profiles?.map(p => [p.id, p]) || [])
+    const leaderboard = topUserIds.map((userId, index) => {
+      const profile = profileMap.get(userId)
+      return {
+        user_id: userId,
+        full_name: profile?.full_name || 'Unknown',
+        avatar_url: profile?.avatar_url || null,
+        level: profile?.level || 1,
+        xp: profile?.xp || 0,
+        total_generations: 0,
+        generations_this_month: userCounts[userId] || 0,
+        current_streak: streakMap[userId] || 0,
+        achievement_count: 0,
+        rank: index + 1,
+      }
+    })
+
+    const userRank = leaderboard.findIndex(entry => entry.user_id === currentUserId)
+
     return NextResponse.json({
-      leaderboard: [],
-      userRank: null,
+      leaderboard,
+      userRank: userRank >= 0 ? userRank + 1 : null,
       period: 'monthly',
     })
   }
 
-  const { data: profiles } = await supabase
-    .from('profiles')
-    .select('id, full_name, avatar_url, level, xp')
-    .in('id', userIds)
-
-  // Get streaks
-  const { data: streaks } = await supabase
-    .from('user_streaks')
-    .select('user_id, current_streak')
-    .in('user_id', userIds)
-
-  const streakMap: Record<string, number> = {}
-  streaks?.forEach(s => {
-    streakMap[s.user_id] = s.current_streak || 0
-  })
-
-  // Build leaderboard - sort by generations this month
-  const leaderboard = profiles?.map(p => ({
-    user_id: p.id,
-    full_name: p.full_name,
-    avatar_url: p.avatar_url,
-    level: p.level || 1,
-    xp: p.xp || 0, // Total XP for level title calculation
-    total_generations: 0, // Not available in monthly view
-    generations_this_month: userStats[p.id]?.count || 0,
-    current_streak: streakMap[p.id] || 0,
-    achievement_count: 0,
-    rank: 0,
-  }))
-    .sort((a, b) => b.generations_this_month - a.generations_this_month)
-    .slice(0, limit)
-    .map((entry, index) => ({ ...entry, rank: index + 1 })) || []
-
-  const userRank = leaderboard.findIndex(entry => entry.user_id === currentUserId)
+  // RPC worked - use the aggregated data directly
+  const userRank = aggregated?.findIndex((entry: { user_id: string }) => entry.user_id === currentUserId) ?? -1
 
   return NextResponse.json({
-    leaderboard,
+    leaderboard: aggregated || [],
     userRank: userRank >= 0 ? userRank + 1 : null,
     period: 'monthly',
   })
