@@ -1,5 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { cache, CACHE_TTL } from '@/lib/cache'
+
+// Type for leaderboard entries
+interface LeaderboardEntry {
+  user_id: string
+  full_name: string
+  avatar_url: string | null
+  level: number
+  xp: number
+  total_generations?: number
+  generations_this_month?: number
+  current_streak: number
+  achievement_count: number
+  rank: number
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,46 +30,61 @@ export async function GET(request: NextRequest) {
     const period = searchParams.get('period') || 'alltime' // 'alltime' or 'monthly'
     const limit = parseInt(searchParams.get('limit') || '50')
 
+    // PERFORMANCE: Cache leaderboard data (same for all users)
+    const cacheKey = `leaderboard:${period}:${limit}`
+
     if (period === 'monthly') {
-      // Monthly leaderboard - XP earned this month
-      const { data: leaderboard, error } = await supabase
-        .from('leaderboard_monthly')
-        .select('*')
-        .limit(limit)
+      const leaderboard = await cache.getOrFetch<LeaderboardEntry[]>(
+        cacheKey,
+        async () => {
+          const { data, error } = await supabase
+            .from('leaderboard_monthly')
+            .select('*')
+            .limit(limit)
 
-      if (error) {
-        console.error('Error fetching monthly leaderboard:', error)
-        // Fallback query if view doesn't exist
-        return await getMonthlyLeaderboardFallback(supabase, user.id, limit)
-      }
+          if (error) {
+            console.error('Error fetching monthly leaderboard:', error)
+            // Return fallback data
+            return await getMonthlyLeaderboardData(supabase, limit)
+          }
+          return data || []
+        },
+        CACHE_TTL.LEADERBOARD
+      )
 
-      // Find current user's position
-      const userRank = leaderboard?.findIndex(entry => entry.user_id === user.id) ?? -1
+      // Find current user's position (not cached - user-specific)
+      const userRank = leaderboard.findIndex(entry => entry.user_id === user.id)
 
       return NextResponse.json({
-        leaderboard: leaderboard || [],
+        leaderboard,
         userRank: userRank >= 0 ? userRank + 1 : null,
         period: 'monthly',
       })
     }
 
     // All-time leaderboard
-    const { data: leaderboard, error } = await supabase
-      .from('leaderboard_alltime')
-      .select('*')
-      .limit(limit)
+    const leaderboard = await cache.getOrFetch<LeaderboardEntry[]>(
+      cacheKey,
+      async () => {
+        const { data, error } = await supabase
+          .from('leaderboard_alltime')
+          .select('*')
+          .limit(limit)
 
-    if (error) {
-      console.error('Error fetching alltime leaderboard:', error)
-      // Fallback query if view doesn't exist
-      return await getAlltimeLeaderboardFallback(supabase, user.id, limit)
-    }
+        if (error) {
+          console.error('Error fetching alltime leaderboard:', error)
+          return await getAlltimeLeaderboardData(supabase, limit)
+        }
+        return data || []
+      },
+      CACHE_TTL.LEADERBOARD
+    )
 
-    // Find current user's position
-    const userRank = leaderboard?.findIndex(entry => entry.user_id === user.id) ?? -1
+    // Find current user's position (not cached - user-specific)
+    const userRank = leaderboard.findIndex(entry => entry.user_id === user.id)
 
     return NextResponse.json({
-      leaderboard: leaderboard || [],
+      leaderboard,
       userRank: userRank >= 0 ? userRank + 1 : null,
       period: 'alltime',
     })
@@ -68,102 +98,93 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Fallback for monthly leaderboard if view doesn't exist yet
-async function getMonthlyLeaderboardFallback(
+// Fallback for monthly leaderboard data (returns data for caching)
+// PERFORMANCE: Uses database aggregation instead of loading all records into memory
+async function getMonthlyLeaderboardData(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  currentUserId: string,
   limit: number
-) {
+): Promise<LeaderboardEntry[]> {
   const startOfMonth = new Date()
   startOfMonth.setDate(1)
   startOfMonth.setHours(0, 0, 0, 0)
 
-  // Get usage with tool info for this month
-  const { data: usage } = await supabase
-    .from('usage')
-    .select('user_id, tool')
-    .gte('created_at', startOfMonth.toISOString())
+  // PERFORMANCE: Use RPC or aggregated query instead of loading all usage records
+  const { data: aggregated, error: aggError } = await supabase
+    .rpc('get_monthly_leaderboard', {
+      start_date: startOfMonth.toISOString(),
+      result_limit: limit
+    })
 
-  // Get XP rewards per tool
-  const { data: templates } = await supabase
-    .from('prompt_templates')
-    .select('key, xp_reward')
+  // If RPC doesn't exist, fall back to a more efficient query pattern
+  if (aggError) {
+    console.warn('Monthly leaderboard RPC not found, using efficient fallback')
 
-  const xpRewardMap: Record<string, number> = {}
-  templates?.forEach(t => {
-    xpRewardMap[t.key] = t.xp_reward || 10
-  })
+    const { data: topUsers } = await supabase
+      .from('usage')
+      .select('user_id')
+      .gte('created_at', startOfMonth.toISOString())
 
-  // Count and calculate XP per user
-  const userStats: Record<string, { count: number; xp: number }> = {}
-  usage?.forEach(u => {
-    if (!userStats[u.user_id]) {
-      userStats[u.user_id] = { count: 0, xp: 0 }
+    if (!topUsers || topUsers.length === 0) {
+      return []
     }
-    userStats[u.user_id].count++
-    // Get XP for this tool, default 5 for chat, 10 for others
-    const toolXp = xpRewardMap[u.tool] || (u.tool.startsWith('chat') ? 5 : 10)
-    userStats[u.user_id].xp += toolXp
-  })
 
-  // Get profiles for users with activity
-  const userIds = Object.keys(userStats)
-  if (userIds.length === 0) {
-    return NextResponse.json({
-      leaderboard: [],
-      userRank: null,
-      period: 'monthly',
+    // Count generations per user in JS (but only for this month's users)
+    const userCounts: Record<string, number> = {}
+    for (const u of topUsers) {
+      userCounts[u.user_id] = (userCounts[u.user_id] || 0) + 1
+    }
+
+    // Sort and get top N user IDs
+    const topUserIds = Object.entries(userCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([userId]) => userId)
+
+    // Fetch only needed profiles (limited set)
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, full_name, avatar_url, level, xp')
+      .in('id', topUserIds)
+
+    // Fetch streaks for top users only
+    const { data: streaks } = await supabase
+      .from('user_streaks')
+      .select('user_id, current_streak')
+      .in('user_id', topUserIds)
+
+    const streakMap: Record<string, number> = {}
+    streaks?.forEach(s => {
+      streakMap[s.user_id] = s.current_streak || 0
+    })
+
+    // Build leaderboard with pre-sorted order
+    const profileMap = new Map(profiles?.map(p => [p.id, p]) || [])
+    return topUserIds.map((userId, index) => {
+      const profile = profileMap.get(userId)
+      return {
+        user_id: userId,
+        full_name: profile?.full_name || 'Unknown',
+        avatar_url: profile?.avatar_url || null,
+        level: profile?.level || 1,
+        xp: profile?.xp || 0,
+        total_generations: 0,
+        generations_this_month: userCounts[userId] || 0,
+        current_streak: streakMap[userId] || 0,
+        achievement_count: 0,
+        rank: index + 1,
+      }
     })
   }
 
-  const { data: profiles } = await supabase
-    .from('profiles')
-    .select('id, full_name, avatar_url, level, xp')
-    .in('id', userIds)
-
-  // Get streaks
-  const { data: streaks } = await supabase
-    .from('user_streaks')
-    .select('user_id, current_streak')
-    .in('user_id', userIds)
-
-  const streakMap: Record<string, number> = {}
-  streaks?.forEach(s => {
-    streakMap[s.user_id] = s.current_streak || 0
-  })
-
-  // Build leaderboard - sort by generations this month
-  const leaderboard = profiles?.map(p => ({
-    user_id: p.id,
-    full_name: p.full_name,
-    avatar_url: p.avatar_url,
-    level: p.level || 1,
-    xp: p.xp || 0, // Total XP for level title calculation
-    total_generations: 0, // Not available in monthly view
-    generations_this_month: userStats[p.id]?.count || 0,
-    current_streak: streakMap[p.id] || 0,
-    achievement_count: 0,
-    rank: 0,
-  }))
-    .sort((a, b) => b.generations_this_month - a.generations_this_month)
-    .slice(0, limit)
-    .map((entry, index) => ({ ...entry, rank: index + 1 })) || []
-
-  const userRank = leaderboard.findIndex(entry => entry.user_id === currentUserId)
-
-  return NextResponse.json({
-    leaderboard,
-    userRank: userRank >= 0 ? userRank + 1 : null,
-    period: 'monthly',
-  })
+  // RPC worked - use the aggregated data directly
+  return aggregated || []
 }
 
-// Fallback for alltime leaderboard if view doesn't exist yet
-async function getAlltimeLeaderboardFallback(
+// Fallback for alltime leaderboard data (returns data for caching)
+async function getAlltimeLeaderboardData(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  currentUserId: string,
   limit: number
-) {
+): Promise<LeaderboardEntry[]> {
   const { data: profiles } = await supabase
     .from('profiles')
     .select('id, full_name, avatar_url, xp, level, total_generations')
@@ -171,7 +192,7 @@ async function getAlltimeLeaderboardFallback(
     .order('xp', { ascending: false })
     .limit(limit)
 
-  const leaderboard = profiles?.map((p, index) => ({
+  return profiles?.map((p, index) => ({
     user_id: p.id,
     full_name: p.full_name,
     avatar_url: p.avatar_url,
@@ -183,12 +204,4 @@ async function getAlltimeLeaderboardFallback(
     achievement_count: 0,
     rank: index + 1,
   })) || []
-
-  const userRank = leaderboard.findIndex(entry => entry.user_id === currentUserId)
-
-  return NextResponse.json({
-    leaderboard,
-    userRank: userRank >= 0 ? userRank + 1 : null,
-    period: 'alltime',
-  })
 }

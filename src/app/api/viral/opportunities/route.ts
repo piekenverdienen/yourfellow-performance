@@ -2,11 +2,13 @@
  * GET /api/viral/opportunities
  *
  * Retrieve stored viral opportunities.
+ * PERFORMANCE: Cached for 2 minutes to reduce database load
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getOpportunities, type ViralChannel, type OpportunityStatus } from '@/viral/opportunities'
+import { cache, CACHE_TTL } from '@/lib/cache'
 
 // ============================================
 // Route Handler
@@ -66,14 +68,21 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // 4. Get opportunities
-    const opportunities = await getOpportunities({
-      industry,
-      channel,
-      status,
-      clientId,
-      limit,
-    })
+    // 4. Get opportunities with caching
+    // PERFORMANCE: Cache based on filter parameters
+    const cacheKey = `opportunities:${clientId || 'all'}:${industry || 'all'}:${channel || 'all'}:${status || 'all'}:${limit}`
+
+    const opportunities = await cache.getOrFetch(
+      cacheKey,
+      () => getOpportunities({
+        industry,
+        channel,
+        status,
+        clientId,
+        limit,
+      }),
+      CACHE_TTL.OPPORTUNITIES
+    )
 
     return NextResponse.json({
       success: true,

@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { cn } from '@/lib/utils'
 
 interface AvatarProps {
@@ -102,22 +103,27 @@ export function SamAvatar({ className, size = 'md' }: AvatarProps) {
 // Mia - Marketing consultant with profile photo
 // Place a photo at /public/mia-avatar.png to display it
 export function MiaAvatar({ className, size = 'md' }: AvatarProps) {
+  const [imageError, setImageError] = useState(false)
+
   // Use profile photo - place image at /public/mia-avatar.png
+  if (imageError) {
+    // Fallback to gradient with letter if image fails
+    return (
+      <div className={cn(sizes[size], 'rounded-full overflow-hidden flex-shrink-0 ring-2 ring-primary/20', className)}>
+        <div className="w-full h-full bg-gradient-to-br from-[#00FFCC] to-[#00B8A9] flex items-center justify-center text-black font-bold text-lg">
+          M
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className={cn(sizes[size], 'rounded-full overflow-hidden flex-shrink-0 ring-2 ring-primary/20', className)}>
       <img
         src="/mia-avatar.png"
         alt="Mia"
         className="w-full h-full object-cover"
-        onError={(e) => {
-          // Fallback to gradient with letter if image fails
-          const target = e.currentTarget
-          target.style.display = 'none'
-          const parent = target.parentElement
-          if (parent) {
-            parent.innerHTML = '<div class="w-full h-full bg-gradient-to-br from-[#00FFCC] to-[#00B8A9] flex items-center justify-center text-black font-bold text-lg">M</div>'
-          }
-        }}
+        onError={() => setImageError(true)}
       />
     </div>
   )
