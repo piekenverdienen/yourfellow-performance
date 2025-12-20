@@ -7,7 +7,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
 import {
   Sparkles,
@@ -29,6 +29,12 @@ import {
   Zap,
   ChevronRight,
   AlertCircle,
+  FileCheck,
+  X,
+  RotateCcw,
+  Lightbulb,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react'
 import { cn, copyToClipboard, formatRelativeTime } from '@/lib/utils'
 
@@ -82,6 +88,54 @@ interface Generation {
   createdAt: string
 }
 
+// ============================================
+// Brief Types (NEW)
+// ============================================
+
+interface Brief {
+  id: string
+  clientId?: string
+  ideaId?: string
+  brief: {
+    core_tension: string
+    our_angle: string
+    key_claim: string
+    proof_points: string[]
+    why_now: string
+    no_go_claims?: string[]
+  }
+  evidence: {
+    signal_id: string
+    url: string
+    title: string
+    excerpt?: string
+    subreddit?: string
+    upvotes?: number
+    comments?: number
+  }[]
+  sourceDateRange?: {
+    from: string
+    to: string
+  }
+  status: 'draft' | 'approved' | 'rejected' | 'superseded'
+  approvedBy?: string
+  approvedAt?: string
+  rejectionReason?: string
+  createdAt: string
+  ideaTopic?: string
+  ideaAngle?: string
+  ideaScore?: number
+  generations?: BriefGeneration[]
+}
+
+interface BriefGeneration {
+  id: string
+  channel: 'youtube' | 'instagram' | 'blog'
+  output: Record<string, unknown>
+  version: number
+  createdAt: string
+}
+
 interface IngestConfig {
   industry: string
   subreddits: string
@@ -122,6 +176,35 @@ const STATUS_COLORS = {
   shortlisted: 'bg-yellow-100 text-yellow-800',
   generated: 'bg-green-100 text-green-800',
   archived: 'bg-gray-100 text-gray-600',
+}
+
+const STATUS_LABELS = {
+  new: 'Nieuw',
+  shortlisted: 'Favoriet',
+  generated: 'Gegenereerd',
+  archived: 'Gearchiveerd',
+}
+
+const SCORE_LABELS: Record<string, string> = {
+  engagement: 'Betrokkenheid',
+  freshness: 'Actualiteit',
+  relevance: 'Relevantie',
+  novelty: 'Nieuwheid',
+  seasonality: 'Seizoen',
+}
+
+const BRIEF_STATUS_COLORS = {
+  draft: 'bg-amber-100 text-amber-800',
+  approved: 'bg-green-100 text-green-800',
+  rejected: 'bg-red-100 text-red-800',
+  superseded: 'bg-gray-100 text-gray-600',
+}
+
+const BRIEF_STATUS_LABELS = {
+  draft: 'Concept',
+  approved: 'Goedgekeurd',
+  rejected: 'Afgekeurd',
+  superseded: 'Vervangen',
 }
 
 // ============================================
@@ -178,10 +261,22 @@ export default function ViralHubPage() {
   // AI suggestions are only fetched when user clicks the refresh button
   // (removed auto-fetch on client change)
 
+  // Main navigation tab
+  const [mainTab, setMainTab] = useState<'ideas' | 'briefs'>('ideas')
+
   const [opportunities, setOpportunities] = useState<Opportunity[]>([])
   const [selectedOpportunity, setSelectedOpportunity] = useState<Opportunity | null>(null)
   const [opportunitySignals, setOpportunitySignals] = useState<Signal[]>([])
   const [opportunityGenerations, setOpportunityGenerations] = useState<Generation[]>([])
+
+  // Brief state (NEW)
+  const [briefs, setBriefs] = useState<Brief[]>([])
+  const [selectedBrief, setSelectedBrief] = useState<Brief | null>(null)
+  const [isLoadingBriefs, setIsLoadingBriefs] = useState(false)
+  const [isGeneratingBrief, setIsGeneratingBrief] = useState(false)
+  const [isApprovingBrief, setIsApprovingBrief] = useState(false)
+  const [isGeneratingContent, setIsGeneratingContent] = useState(false)
+  const [briefStatusFilter, setBriefStatusFilter] = useState<'all' | 'draft' | 'approved' | 'rejected'>('all')
 
   const [isIngesting, setIsIngesting] = useState(false)
   const [isBuilding, setIsBuilding] = useState(false)
@@ -227,6 +322,37 @@ export default function ViralHubPage() {
   useEffect(() => {
     loadOpportunities()
   }, [loadOpportunities])
+
+  // Load briefs
+  const loadBriefs = useCallback(async () => {
+    setIsLoadingBriefs(true)
+    setError(null)
+
+    try {
+      const params = new URLSearchParams()
+      if (clientId) params.set('clientId', clientId)
+      params.set('limit', '50')
+
+      const response = await fetch(`/api/viral/briefs?${params}`)
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to load briefs')
+      }
+
+      setBriefs(data.data || [])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load briefs')
+    } finally {
+      setIsLoadingBriefs(false)
+    }
+  }, [clientId])
+
+  useEffect(() => {
+    if (mainTab === 'briefs') {
+      loadBriefs()
+    }
+  }, [mainTab, loadBriefs])
 
   // ============================================
   // Actions
@@ -399,6 +525,180 @@ export default function ViralHubPage() {
   }
 
   // ============================================
+  // Brief Actions (NEW)
+  // ============================================
+
+  const handleGenerateBrief = async (opportunity: Opportunity) => {
+    setIsGeneratingBrief(true)
+    setError(null)
+
+    try {
+      const response = await fetch('/api/viral/briefs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ideaId: opportunity.id,
+          clientId: clientId || undefined,
+          industry: config.industry,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to generate brief')
+      }
+
+      // Close the opportunity dialog
+      setSelectedOpportunity(null)
+
+      // Switch to briefs tab and reload
+      setMainTab('briefs')
+      await loadBriefs()
+
+      // Select the new brief to show it immediately
+      if (data.data) {
+        setSelectedBrief(data.data)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate brief')
+    } finally {
+      setIsGeneratingBrief(false)
+    }
+  }
+
+  const handleSelectBrief = async (brief: Brief) => {
+    setSelectedBrief(brief)
+
+    // Load full brief details with generations
+    try {
+      const response = await fetch(`/api/viral/briefs/${brief.id}`)
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        setSelectedBrief(data.data)
+      }
+    } catch (err) {
+      console.error('Failed to load brief details:', err)
+    }
+  }
+
+  const handleApproveBrief = async () => {
+    if (!selectedBrief) return
+
+    setIsApprovingBrief(true)
+    setError(null)
+
+    try {
+      const response = await fetch(`/api/viral/briefs/${selectedBrief.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'approve' }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to approve brief')
+      }
+
+      // Update selected brief
+      setSelectedBrief(data.data)
+      // Reload briefs list
+      await loadBriefs()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to approve brief')
+    } finally {
+      setIsApprovingBrief(false)
+    }
+  }
+
+  const handleRejectBrief = async (reason?: string) => {
+    if (!selectedBrief) return
+
+    setIsApprovingBrief(true)
+    setError(null)
+
+    try {
+      const response = await fetch(`/api/viral/briefs/${selectedBrief.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reject', reason }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to reject brief')
+      }
+
+      setSelectedBrief(data.data)
+      await loadBriefs()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reject brief')
+    } finally {
+      setIsApprovingBrief(false)
+    }
+  }
+
+  const handleRegenerateAngle = async (instruction?: string) => {
+    if (!selectedBrief) return
+
+    setIsGeneratingBrief(true)
+    setError(null)
+
+    try {
+      const response = await fetch(`/api/viral/briefs/${selectedBrief.id}/regenerate-angle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instruction }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to regenerate brief')
+      }
+
+      // Select the new brief
+      setSelectedBrief(data.data)
+      await loadBriefs()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to regenerate brief')
+    } finally {
+      setIsGeneratingBrief(false)
+    }
+  }
+
+  const handleGenerateContentFromBrief = async (channel: 'youtube' | 'instagram' | 'blog') => {
+    if (!selectedBrief || selectedBrief.status !== 'approved') return
+
+    setIsGeneratingContent(true)
+    setError(null)
+
+    try {
+      const response = await fetch(`/api/viral/briefs/${selectedBrief.id}/generate-content`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to generate content')
+      }
+
+      // Reload brief with new generation
+      await handleSelectBrief(selectedBrief)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate content')
+    } finally {
+      setIsGeneratingContent(false)
+    }
+  }
+
+  // ============================================
   // Render
   // ============================================
 
@@ -409,10 +709,10 @@ export default function ViralHubPage() {
         <div>
           <h1 className="text-2xl font-bold text-surface-900 flex items-center gap-2">
             <TrendingUp className="h-6 w-6 text-primary" />
-            Viral Hub
+            Content Hub
           </h1>
           <p className="text-surface-600 mt-1">
-            Ontdek trending topics en genereer content die scoort
+            Van trending signalen naar productie-klare content
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -436,6 +736,34 @@ export default function ViralHubPage() {
         </div>
       </div>
 
+      {/* Main Tab Navigation */}
+      <div className="flex gap-1 border-b">
+        <button
+          onClick={() => setMainTab('ideas')}
+          className={cn(
+            'px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-2',
+            mainTab === 'ideas'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-surface-600 hover:text-surface-900'
+          )}
+        >
+          <Lightbulb className="h-4 w-4" />
+          Ideas ({opportunities.length})
+        </button>
+        <button
+          onClick={() => setMainTab('briefs')}
+          className={cn(
+            'px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-2',
+            mainTab === 'briefs'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-surface-600 hover:text-surface-900'
+          )}
+        >
+          <FileCheck className="h-4 w-4" />
+          Briefs ({briefs.length})
+        </button>
+      </div>
+
       {/* Error Alert */}
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
@@ -450,6 +778,8 @@ export default function ViralHubPage() {
         </div>
       )}
 
+      {/* Ideas Tab Content */}
+      {mainTab === 'ideas' && (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Configuration Panel */}
         <div className="lg:col-span-1 space-y-4">
@@ -459,7 +789,7 @@ export default function ViralHubPage() {
                 <div>
                   <CardTitle className="text-lg flex items-center gap-2">
                     <Zap className="h-5 w-5 text-primary" />
-                    Signal Discovery
+                    Signalen Ophalen
                   </CardTitle>
                   <CardDescription>
                     {isLoadingSuggestion
@@ -552,7 +882,7 @@ export default function ViralHubPage() {
                   ) : (
                     <Download className="h-4 w-4 mr-2" />
                   )}
-                  Ingest
+                  Ophalen
                 </Button>
                 <Button
                   onClick={handleBuildOpportunities}
@@ -564,7 +894,7 @@ export default function ViralHubPage() {
                   ) : (
                     <Sparkles className="h-4 w-4 mr-2" />
                   )}
-                  Build
+                  Ideeën Genereren
                 </Button>
               </div>
 
@@ -582,7 +912,7 @@ export default function ViralHubPage() {
                       : 'text-amber-800'
                   )}>
                     {ingestResult.inserted > 0 || ingestResult.updated > 0
-                      ? 'Ingest succesvol!'
+                      ? 'Signalen opgehaald!'
                       : 'Geen nieuwe content gevonden'}
                   </p>
                   <p className={ingestResult.inserted > 0 || ingestResult.updated > 0 ? 'text-green-600' : 'text-amber-600'}>
@@ -628,7 +958,7 @@ export default function ViralHubPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-lg">Content Opportunities</CardTitle>
+                  <CardTitle className="text-lg">Content Ideeën</CardTitle>
                   <CardDescription>
                     Gesorteerd op score (hoogste eerst)
                   </CardDescription>
@@ -646,7 +976,7 @@ export default function ViralHubPage() {
               <div className="flex gap-1 mt-3 border-b">
                 {[
                   { value: 'all', label: 'Alle', count: opportunities.length },
-                  { value: 'shortlisted', label: '⭐ Shortlist', count: opportunities.filter(o => o.status === 'shortlisted').length },
+                  { value: 'shortlisted', label: '⭐ Favorieten', count: opportunities.filter(o => o.status === 'shortlisted').length },
                   { value: 'generated', label: '✓ Gegenereerd', count: opportunities.filter(o => o.status === 'generated').length },
                   { value: 'new', label: 'Nieuw', count: opportunities.filter(o => o.status === 'new').length },
                 ] .map(tab => (
@@ -673,9 +1003,9 @@ export default function ViralHubPage() {
               ) : opportunities.length === 0 ? (
                 <div className="text-center py-12">
                   <TrendingUp className="h-12 w-12 mx-auto text-surface-300 mb-4" />
-                  <p className="text-surface-600 font-medium">Geen opportunities gevonden</p>
+                  <p className="text-surface-600 font-medium">Geen ideeën gevonden</p>
                   <p className="text-surface-500 text-sm mt-1">
-                    Klik op &quot;Ingest&quot; en daarna &quot;Build&quot; om te starten
+                    Klik op &quot;Ophalen&quot; en daarna &quot;Ideeën Genereren&quot; om te starten
                   </p>
                 </div>
               ) : (
@@ -688,6 +1018,8 @@ export default function ViralHubPage() {
                         opportunity={opportunity}
                         onClick={() => handleSelectOpportunity(opportunity)}
                         onStatusChange={(status) => handleUpdateStatus(opportunity.id, status)}
+                        onGenerateBrief={() => handleGenerateBrief(opportunity)}
+                        isGeneratingBrief={isGeneratingBrief}
                       />
                     ))}
                   {opportunities.filter(o => statusFilter === 'all' || o.status === statusFilter).length === 0 && (
@@ -701,18 +1033,426 @@ export default function ViralHubPage() {
           </Card>
         </div>
       </div>
+      )}
+
+      {/* Briefs Tab Content */}
+      {mainTab === 'briefs' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Brief Stats */}
+          <div className="lg:col-span-1 space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <FileCheck className="h-5 w-5 text-primary" />
+                  Content Briefs
+                </CardTitle>
+                <CardDescription>
+                  Goedgekeurde briefs vormen de basis voor content
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="text-center p-3 bg-amber-50 rounded-lg">
+                    <p className="text-2xl font-bold text-amber-700">
+                      {briefs.filter(b => b.status === 'draft').length}
+                    </p>
+                    <p className="text-xs text-amber-600">Concept</p>
+                  </div>
+                  <div className="text-center p-3 bg-green-50 rounded-lg">
+                    <p className="text-2xl font-bold text-green-700">
+                      {briefs.filter(b => b.status === 'approved').length}
+                    </p>
+                    <p className="text-xs text-green-600">Goedgekeurd</p>
+                  </div>
+                </div>
+                <div className="mt-4 p-3 bg-surface-50 rounded-lg">
+                  <p className="text-xs text-surface-600 mb-2">Workflow:</p>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">Idea</span>
+                    <ChevronRight className="h-3 w-3 text-surface-400" />
+                    <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded">Brief</span>
+                    <ChevronRight className="h-3 w-3 text-surface-400" />
+                    <span className="px-2 py-1 bg-green-100 text-green-700 rounded">Approved</span>
+                    <ChevronRight className="h-3 w-3 text-surface-400" />
+                    <span className="px-2 py-1 bg-primary/10 text-primary rounded">Content</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Briefs List */}
+          <div className="lg:col-span-2">
+            <Card className="h-full">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg">Canonical Briefs</CardTitle>
+                    <CardDescription>
+                      Klik op een brief om te reviewen en goed te keuren
+                    </CardDescription>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={loadBriefs}
+                    disabled={isLoadingBriefs}
+                  >
+                    <RefreshCw className={cn('h-4 w-4', isLoadingBriefs && 'animate-spin')} />
+                  </Button>
+                </div>
+                {/* Status Filter Tabs */}
+                <div className="flex gap-1 mt-3 border-b">
+                  {[
+                    { value: 'all', label: 'Alle', count: briefs.length },
+                    { value: 'draft', label: 'Concept', count: briefs.filter(b => b.status === 'draft').length },
+                    { value: 'approved', label: 'Goedgekeurd', count: briefs.filter(b => b.status === 'approved').length },
+                    { value: 'rejected', label: 'Afgekeurd', count: briefs.filter(b => b.status === 'rejected').length },
+                  ].map(tab => (
+                    <button
+                      key={tab.value}
+                      onClick={() => setBriefStatusFilter(tab.value as typeof briefStatusFilter)}
+                      className={cn(
+                        'px-3 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
+                        briefStatusFilter === tab.value
+                          ? 'border-primary text-primary'
+                          : 'border-transparent text-surface-600 hover:text-surface-900'
+                      )}
+                    >
+                      {tab.label} ({tab.count})
+                    </button>
+                  ))}
+                </div>
+              </CardHeader>
+              <CardContent>
+                {isLoadingBriefs ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  </div>
+                ) : briefs.length === 0 ? (
+                  <div className="text-center py-12">
+                    <FileCheck className="h-12 w-12 mx-auto text-surface-300 mb-4" />
+                    <p className="text-surface-600 font-medium">Nog geen briefs</p>
+                    <p className="text-surface-500 text-sm mt-1">
+                      Ga naar Ideas en klik op &quot;Genereer Brief&quot; bij een opportunity
+                    </p>
+                    <Button
+                      variant="outline"
+                      className="mt-4"
+                      onClick={() => setMainTab('ideas')}
+                    >
+                      <Lightbulb className="h-4 w-4 mr-2" />
+                      Bekijk Ideas
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {briefs
+                      .filter(b => briefStatusFilter === 'all' || b.status === briefStatusFilter)
+                      .map((brief) => (
+                        <BriefCard
+                          key={brief.id}
+                          brief={brief}
+                          onClick={() => handleSelectBrief(brief)}
+                        />
+                      ))}
+                    {briefs.filter(b => briefStatusFilter === 'all' || b.status === briefStatusFilter).length === 0 && (
+                      <div className="text-center py-8 text-surface-500">
+                        Geen briefs met status &quot;{briefStatusFilter}&quot;
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* Brief Detail Dialog */}
+      <Dialog open={!!selectedBrief} onOpenChange={() => setSelectedBrief(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogClose onClose={() => setSelectedBrief(null)} />
+          {selectedBrief && (
+            <>
+              <DialogHeader>
+                <div className="flex items-start justify-between pr-8">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Badge className={BRIEF_STATUS_COLORS[selectedBrief.status]}>
+                        {BRIEF_STATUS_LABELS[selectedBrief.status]}
+                      </Badge>
+                      {selectedBrief.ideaTopic && (
+                        <Badge variant="outline" className="text-xs">
+                          Idea: {selectedBrief.ideaTopic}
+                        </Badge>
+                      )}
+                    </div>
+                    <DialogTitle className="text-xl">{selectedBrief.brief.key_claim}</DialogTitle>
+                    <DialogDescription className="mt-2">
+                      {selectedBrief.brief.core_tension}
+                    </DialogDescription>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              <div className="space-y-6 mt-4">
+                {/* Brief Content */}
+                <div className="space-y-4">
+                  <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
+                    <h4 className="font-medium text-primary mb-3 flex items-center gap-2">
+                      <FileCheck className="h-4 w-4" />
+                      Canonical Brief
+                    </h4>
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-xs font-medium text-surface-500 uppercase mb-1">Core Tension</p>
+                        <p className="text-sm text-surface-900">{selectedBrief.brief.core_tension}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-surface-500 uppercase mb-1">Our Angle</p>
+                        <p className="text-sm text-surface-900">{selectedBrief.brief.our_angle}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-surface-500 uppercase mb-1">Key Claim</p>
+                        <p className="text-sm text-surface-900 font-medium">{selectedBrief.brief.key_claim}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-surface-500 uppercase mb-1">Proof Points</p>
+                        <ul className="text-sm text-surface-900 list-disc list-inside">
+                          {selectedBrief.brief.proof_points.map((point, idx) => (
+                            <li key={idx}>{point}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-surface-500 uppercase mb-1">Why Now</p>
+                        <p className="text-sm text-surface-900">{selectedBrief.brief.why_now}</p>
+                      </div>
+                      {selectedBrief.brief.no_go_claims && selectedBrief.brief.no_go_claims.length > 0 && (
+                        <div>
+                          <p className="text-xs font-medium text-red-500 uppercase mb-1">No-Go Claims</p>
+                          <ul className="text-sm text-red-700 list-disc list-inside">
+                            {selectedBrief.brief.no_go_claims.map((claim, idx) => (
+                              <li key={idx}>{claim}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Evidence/Sources */}
+                  {selectedBrief.evidence.length > 0 && (
+                    <div>
+                      <h4 className="font-medium text-surface-900 mb-3">
+                        Bronnen ({selectedBrief.evidence.length})
+                      </h4>
+                      <div className="space-y-2">
+                        {selectedBrief.evidence.map((source, idx) => (
+                          <div
+                            key={idx}
+                            className="bg-surface-50 rounded-lg p-3 flex items-start gap-3"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-surface-900 truncate">
+                                {source.title}
+                              </p>
+                              {source.excerpt && (
+                                <p className="text-xs text-surface-600 mt-1 line-clamp-2">
+                                  {source.excerpt}
+                                </p>
+                              )}
+                              <div className="flex items-center gap-3 mt-1 text-xs text-surface-500">
+                                {source.upvotes && (
+                                  <span className="flex items-center gap-1">
+                                    <ArrowUp className="h-3 w-3" />
+                                    {source.upvotes.toLocaleString()}
+                                  </span>
+                                )}
+                                {source.comments && (
+                                  <span className="flex items-center gap-1">
+                                    <MessageSquare className="h-3 w-3" />
+                                    {source.comments.toLocaleString()}
+                                  </span>
+                                )}
+                                {source.subreddit && (
+                                  <span>r/{source.subreddit}</span>
+                                )}
+                              </div>
+                            </div>
+                            <a
+                              href={source.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary hover:text-primary-600"
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                            </a>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Generated Content from Brief */}
+                  {selectedBrief.generations && selectedBrief.generations.length > 0 && (
+                    <div>
+                      <h4 className="font-medium text-surface-900 mb-3">
+                        Gegenereerde Content ({selectedBrief.generations.length})
+                      </h4>
+                      <div className="border rounded-lg overflow-hidden">
+                        <div className="flex border-b bg-surface-50">
+                          {(['youtube', 'instagram', 'blog'] as const).map((tab) => {
+                            const hasContent = selectedBrief.generations?.some(g => g.channel === tab)
+                            const Icon = CHANNEL_ICONS[tab]
+                            return (
+                              <button
+                                key={tab}
+                                onClick={() => setActiveTab(tab)}
+                                className={cn(
+                                  'flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors',
+                                  activeTab === tab
+                                    ? 'bg-white border-b-2 border-primary text-primary'
+                                    : 'text-surface-600 hover:text-surface-900',
+                                  !hasContent && 'opacity-50'
+                                )}
+                              >
+                                <Icon className="h-4 w-4" />
+                                {CHANNEL_LABELS[tab]}
+                                {hasContent && (
+                                  <CheckCircle className="h-3 w-3 text-green-500" />
+                                )}
+                              </button>
+                            )
+                          })}
+                        </div>
+                        <div className="p-4">
+                          <BriefGeneratedContentView
+                            generations={selectedBrief.generations?.filter(g => g.channel === activeTab) || []}
+                            channel={activeTab}
+                            onCopy={handleCopy}
+                            copiedText={copiedText}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Generate Content Buttons (only for approved briefs) */}
+                  {selectedBrief.status === 'approved' && (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <h4 className="font-medium text-green-800 mb-3 flex items-center gap-2">
+                        <Sparkles className="h-4 w-4" />
+                        Content Genereren
+                      </h4>
+                      <p className="text-sm text-green-700 mb-3">
+                        Deze brief is goedgekeurd. Genereer content voor een kanaal:
+                      </p>
+                      <div className="flex gap-2">
+                        {(['youtube', 'instagram', 'blog'] as const).map((channel) => {
+                          const Icon = CHANNEL_ICONS[channel]
+                          const hasContent = selectedBrief.generations?.some(g => g.channel === channel)
+                          return (
+                            <Button
+                              key={channel}
+                              variant={hasContent ? 'outline' : 'default'}
+                              size="sm"
+                              onClick={() => handleGenerateContentFromBrief(channel)}
+                              disabled={isGeneratingContent}
+                            >
+                              {isGeneratingContent ? (
+                                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                              ) : (
+                                <Icon className="h-4 w-4 mr-1" />
+                              )}
+                              {CHANNEL_LABELS[channel]}
+                              {hasContent && ' (opnieuw)'}
+                            </Button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+              </div>
+
+              {/* Actions Footer */}
+              {selectedBrief.status === 'draft' && (
+                <DialogFooter className="flex-row justify-between">
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRegenerateAngle()}
+                      disabled={isGeneratingBrief}
+                      leftIcon={isGeneratingBrief ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                    >
+                      Andere invalshoek
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => handleRejectBrief('Niet geschikt')}
+                      disabled={isApprovingBrief}
+                      leftIcon={<XCircle className="h-4 w-4" />}
+                    >
+                      Afkeuren
+                    </Button>
+                  </div>
+                  <Button
+                    variant="primary"
+                    onClick={handleApproveBrief}
+                    disabled={isApprovingBrief}
+                    isLoading={isApprovingBrief}
+                    leftIcon={!isApprovingBrief ? <CheckCircle2 className="h-4 w-4" /> : undefined}
+                  >
+                    Goedkeuren
+                  </Button>
+                </DialogFooter>
+              )}
+              {selectedBrief.status === 'approved' && (
+                <DialogFooter>
+                  <Button
+                    variant="ghost"
+                    onClick={() => setSelectedBrief(null)}
+                  >
+                    Sluiten
+                  </Button>
+                </DialogFooter>
+              )}
+              {selectedBrief.status === 'rejected' && (
+                <DialogFooter className="flex-row justify-between">
+                  <div className="text-sm text-red-600 flex items-center">
+                    <XCircle className="h-4 w-4 mr-1" />
+                    Afgekeurd{selectedBrief.rejectionReason && `: ${selectedBrief.rejectionReason}`}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    onClick={() => setSelectedBrief(null)}
+                  >
+                    Sluiten
+                  </Button>
+                </DialogFooter>
+              )}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Opportunity Detail Dialog */}
       <Dialog open={!!selectedOpportunity} onOpenChange={() => setSelectedOpportunity(null)}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogClose onClose={() => setSelectedOpportunity(null)} />
           {selectedOpportunity && (
             <>
               <DialogHeader>
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between pr-8">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
                       <Badge className={STATUS_COLORS[selectedOpportunity.status]}>
-                        {selectedOpportunity.status}
+                        {STATUS_LABELS[selectedOpportunity.status]}
                       </Badge>
                       <Badge variant="outline" className="flex items-center gap-1">
                         {(() => {
@@ -763,9 +1503,9 @@ export default function ViralHubPage() {
                   </div>
                 </div>
 
-                {/* Score Breakdown */}
+                {/* Score Analyse */}
                 <div>
-                  <h4 className="font-medium text-surface-900 mb-3">Score Breakdown</h4>
+                  <h4 className="font-medium text-surface-900 mb-3">Score Analyse</h4>
                   <div className="grid grid-cols-5 gap-3">
                     {Object.entries(selectedOpportunity.scoreBreakdown).map(([key, value]) => (
                       <div key={key} className="text-center">
@@ -775,7 +1515,7 @@ export default function ViralHubPage() {
                             style={{ width: `${(value / 30) * 100}%` }}
                           />
                         </div>
-                        <p className="text-xs text-surface-600 capitalize">{key}</p>
+                        <p className="text-xs text-surface-600">{SCORE_LABELS[key] || key}</p>
                         <p className="text-sm font-medium">{value}</p>
                       </div>
                     ))}
@@ -878,66 +1618,72 @@ export default function ViralHubPage() {
                       </div>
                     ) : (
                       <div className="text-center py-6 bg-surface-50 rounded-lg">
-                        <Sparkles className="h-8 w-8 mx-auto text-surface-300 mb-2" />
-                        <p className="text-surface-600 font-medium">Nog geen content gegenereerd</p>
+                        <FileCheck className="h-8 w-8 mx-auto text-surface-300 mb-2" />
+                        <p className="text-surface-600 font-medium">Nog geen briefing gegenereerd</p>
                         <p className="text-surface-500 text-sm mb-4">
-                          Genereer content voor deze opportunity
+                          Genereer eerst een briefing, keur deze goed, en maak dan content
                         </p>
                         <Button
-                          onClick={() => handleGenerate([selectedOpportunity.channel])}
-                          disabled={isGenerating}
+                          onClick={() => handleGenerateBrief(selectedOpportunity)}
+                          disabled={isGeneratingBrief}
                         >
-                          {isGenerating ? (
+                          {isGeneratingBrief ? (
                             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                           ) : (
-                            <Sparkles className="h-4 w-4 mr-2" />
+                            <FileCheck className="h-4 w-4 mr-2" />
                           )}
-                          Genereer {CHANNEL_LABELS[selectedOpportunity.channel]} Content
+                          Genereer Briefing
                         </Button>
                       </div>
                     )}
                   </>
                 )}
 
-                {/* Actions */}
-                <div className="flex items-center justify-between pt-4 border-t">
-                  <div className="flex gap-2">
-                    {selectedOpportunity.status !== 'shortlisted' && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleUpdateStatus(selectedOpportunity.id, 'shortlisted')}
-                      >
-                        <Star className="h-4 w-4 mr-1" />
-                        Shortlist
-                      </Button>
-                    )}
-                    {selectedOpportunity.status !== 'archived' && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleUpdateStatus(selectedOpportunity.id, 'archived')}
-                      >
-                        <Archive className="h-4 w-4 mr-1" />
-                        Archiveer
-                      </Button>
-                    )}
-                  </div>
-                  {opportunityGenerations.length === 0 && (
+              </div>
+
+              {/* Actions Footer */}
+              <DialogFooter className="flex-row justify-between">
+                <div className="flex gap-2">
+                  {selectedOpportunity.status !== 'shortlisted' && (
                     <Button
-                      onClick={() => handleGenerate(['youtube', 'instagram', 'blog'])}
-                      disabled={isGenerating}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleUpdateStatus(selectedOpportunity.id, 'shortlisted')}
+                      leftIcon={<Star className="h-4 w-4" />}
                     >
-                      {isGenerating ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <Sparkles className="h-4 w-4 mr-2" />
-                      )}
-                      Genereer Alle Kanalen
+                      Favoriet
+                    </Button>
+                  )}
+                  {selectedOpportunity.status !== 'archived' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleUpdateStatus(selectedOpportunity.id, 'archived')}
+                      leftIcon={<Archive className="h-4 w-4" />}
+                    >
+                      Archiveer
                     </Button>
                   )}
                 </div>
-              </div>
+                {opportunityGenerations.length === 0 ? (
+                  <Button
+                    variant="primary"
+                    onClick={() => handleGenerateBrief(selectedOpportunity)}
+                    disabled={isGeneratingBrief}
+                    isLoading={isGeneratingBrief}
+                    leftIcon={!isGeneratingBrief ? <FileCheck className="h-4 w-4" /> : undefined}
+                  >
+                    Genereer Briefing
+                  </Button>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    onClick={() => setSelectedOpportunity(null)}
+                  >
+                    Sluiten
+                  </Button>
+                )}
+              </DialogFooter>
             </>
           )}
         </DialogContent>
@@ -954,10 +1700,14 @@ function OpportunityCard({
   opportunity,
   onClick,
   onStatusChange,
+  onGenerateBrief,
+  isGeneratingBrief,
 }: {
   opportunity: Opportunity
   onClick: () => void
   onStatusChange: (status: Opportunity['status']) => void
+  onGenerateBrief?: () => void
+  isGeneratingBrief?: boolean
 }) {
   const Icon = CHANNEL_ICONS[opportunity.channel]
 
@@ -970,7 +1720,7 @@ function OpportunityCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2">
             <Badge className={cn('text-xs', STATUS_COLORS[opportunity.status])}>
-              {opportunity.status}
+              {STATUS_LABELS[opportunity.status]}
             </Badge>
             <Badge variant="outline" className="text-xs flex items-center gap-1">
               <Icon className="h-3 w-3" />
@@ -990,6 +1740,26 @@ function OpportunityCard({
             </span>
             <span>{opportunity.sourceSignalIds.length} bronnen</span>
           </div>
+          {/* Generate Brief Button */}
+          {onGenerateBrief && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3"
+              onClick={(e) => {
+                e.stopPropagation()
+                onGenerateBrief()
+              }}
+              disabled={isGeneratingBrief}
+            >
+              {isGeneratingBrief ? (
+                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+              ) : (
+                <FileCheck className="h-3 w-3 mr-1" />
+              )}
+              Genereer Brief
+            </Button>
+          )}
         </div>
         <div className="flex flex-col items-center">
           <div className="relative">
@@ -1001,6 +1771,73 @@ function OpportunityCard({
               {opportunity.score}
             </span>
           </div>
+          <ChevronRight className="h-4 w-4 text-surface-400 mt-2" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function BriefCard({
+  brief,
+  onClick,
+}: {
+  brief: Brief
+  onClick: () => void
+}) {
+  return (
+    <div
+      className="bg-white border rounded-lg p-4 hover:border-primary/30 hover:shadow-sm transition-all cursor-pointer"
+      onClick={onClick}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-2">
+            <Badge className={cn('text-xs', BRIEF_STATUS_COLORS[brief.status])}>
+              {BRIEF_STATUS_LABELS[brief.status]}
+            </Badge>
+            {brief.generations && brief.generations.length > 0 && (
+              <Badge variant="outline" className="text-xs flex items-center gap-1">
+                <Sparkles className="h-3 w-3" />
+                {brief.generations.length} content
+              </Badge>
+            )}
+          </div>
+          <h3 className="font-medium text-surface-900 line-clamp-1">
+            {brief.brief.key_claim}
+          </h3>
+          <p className="text-sm text-surface-600 line-clamp-2 mt-1">
+            {brief.brief.core_tension}
+          </p>
+          <div className="flex items-center gap-4 mt-2 text-xs text-surface-500">
+            <span className="flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              {formatRelativeTime(brief.createdAt)}
+            </span>
+            <span>{brief.evidence.length} bronnen</span>
+            {brief.ideaTopic && (
+              <span className="truncate max-w-[150px]" title={brief.ideaTopic}>
+                Idea: {brief.ideaTopic}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="flex flex-col items-center justify-center">
+          {brief.status === 'draft' && (
+            <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+              <AlertCircle className="h-5 w-5 text-amber-600" />
+            </div>
+          )}
+          {brief.status === 'approved' && (
+            <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+              <CheckCircle2 className="h-5 w-5 text-green-600" />
+            </div>
+          )}
+          {brief.status === 'rejected' && (
+            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+              <XCircle className="h-5 w-5 text-red-600" />
+            </div>
+          )}
           <ChevronRight className="h-4 w-4 text-surface-400 mt-2" />
         </div>
       </div>
@@ -1217,6 +2054,333 @@ function GeneratedContentView({
                   )}
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-surface-50 rounded p-4">
+      <pre className="text-xs overflow-auto max-h-64">
+        {JSON.stringify(output, null, 2)}
+      </pre>
+    </div>
+  )
+}
+
+function BriefGeneratedContentView({
+  generations,
+  channel,
+  onCopy,
+  copiedText,
+}: {
+  generations: BriefGeneration[]
+  channel: 'youtube' | 'instagram' | 'blog'
+  onCopy: (text: string, label: string) => void
+  copiedText: string | null
+}) {
+  if (generations.length === 0) {
+    return (
+      <div className="text-center py-6 text-surface-500">
+        Geen content beschikbaar voor dit kanaal
+      </div>
+    )
+  }
+
+  const generation = generations[0]
+  const output = generation.output as Record<string, unknown>
+
+  if (channel === 'instagram') {
+    return (
+      <div className="space-y-4">
+        {typeof output.caption === 'string' && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h5 className="text-sm font-medium">Caption</h5>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onCopy(output.caption as string, 'brief-caption')}
+              >
+                {copiedText === 'brief-caption' ? (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+            <div className="bg-surface-50 rounded p-3 text-sm whitespace-pre-wrap">
+              {String(output.caption)}
+            </div>
+          </div>
+        )}
+        {Array.isArray(output.hooks) && (
+          <div>
+            <h5 className="text-sm font-medium mb-2">Hook Opties</h5>
+            <div className="space-y-2">
+              {(output.hooks as string[]).map((hook, idx) => (
+                <div key={idx} className="flex items-start gap-2 bg-surface-50 rounded p-3">
+                  <span className="text-xs font-bold text-primary">{idx + 1}</span>
+                  <p className="text-sm flex-1">{hook}</p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onCopy(hook, `brief-hook-${idx}`)}
+                  >
+                    {copiedText === `brief-hook-${idx}` ? (
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {Array.isArray(output.hashtags) && (
+          <div>
+            <h5 className="text-sm font-medium mb-2">Hashtags</h5>
+            <div className="flex flex-wrap gap-1">
+              {(output.hashtags as string[]).map((tag, idx) => (
+                <Badge key={idx} variant="secondary" className="text-xs">
+                  {tag}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (channel === 'youtube') {
+    return (
+      <div className="space-y-4">
+        {Array.isArray(output.titles) && (
+          <div>
+            <h5 className="text-sm font-medium mb-2">Title Opties</h5>
+            {(output.titles as string[]).map((title, idx) => (
+              <div key={idx} className="flex items-center gap-2 bg-surface-50 rounded p-2 mb-1">
+                <span className="text-xs font-bold text-primary">{idx + 1}</span>
+                <p className="text-sm flex-1">{title}</p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onCopy(title, `brief-title-${idx}`)}
+                >
+                  {copiedText === `brief-title-${idx}` ? (
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+        {typeof output.hook_script === 'string' && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h5 className="text-sm font-medium">Hook Script (eerste 30 sec)</h5>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onCopy(output.hook_script as string, 'brief-hook_script')}
+              >
+                {copiedText === 'brief-hook_script' ? (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+            <div className="bg-surface-50 rounded p-3 text-sm whitespace-pre-wrap">
+              {String(output.hook_script)}
+            </div>
+          </div>
+        )}
+        {typeof output.full_script === 'string' && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h5 className="text-sm font-medium">Volledig Script</h5>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onCopy(output.full_script as string, 'brief-full_script')}
+              >
+                {copiedText === 'brief-full_script' ? (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+            <div className="bg-surface-50 rounded p-3 text-sm whitespace-pre-wrap max-h-64 overflow-y-auto">
+              {String(output.full_script)}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (channel === 'blog') {
+    return (
+      <div className="space-y-4">
+        {/* SEO Title */}
+        {typeof output.seo_title === 'string' && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h5 className="text-sm font-medium">SEO Title</h5>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onCopy(output.seo_title as string, 'brief-seo-title')}
+              >
+                {copiedText === 'brief-seo-title' ? (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+            <div className="bg-surface-50 rounded p-3 text-sm font-medium">
+              {String(output.seo_title)}
+            </div>
+          </div>
+        )}
+        {/* Fallback for titles array */}
+        {!output.seo_title && Array.isArray(output.titles) && (
+          <div>
+            <h5 className="text-sm font-medium mb-2">Title Opties</h5>
+            {(output.titles as string[]).map((title, idx) => (
+              <div key={idx} className="flex items-center gap-2 bg-surface-50 rounded p-2 mb-1">
+                <span className="text-xs font-bold text-primary">{idx + 1}</span>
+                <p className="text-sm flex-1">{title}</p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onCopy(title, `brief-blog-title-${idx}`)}
+                >
+                  {copiedText === `brief-blog-title-${idx}` ? (
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+        {/* Meta Description */}
+        {typeof output.meta_description === 'string' && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h5 className="text-sm font-medium">Meta Description</h5>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onCopy(output.meta_description as string, 'brief-meta-desc')}
+              >
+                {copiedText === 'brief-meta-desc' ? (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+            <div className="bg-surface-50 rounded p-3 text-sm">
+              {String(output.meta_description)}
+            </div>
+          </div>
+        )}
+        {/* Keywords */}
+        {(output.primary_keyword || output.secondary_keywords) && (
+          <div>
+            <h5 className="text-sm font-medium mb-2">Keywords</h5>
+            <div className="flex flex-wrap gap-1">
+              {typeof output.primary_keyword === 'string' && (
+                <Badge className="bg-primary text-white">{output.primary_keyword}</Badge>
+              )}
+              {Array.isArray(output.secondary_keywords) && (output.secondary_keywords as string[]).map((kw, idx) => (
+                <Badge key={idx} variant="secondary">{kw}</Badge>
+              ))}
+            </div>
+          </div>
+        )}
+        {/* Outline */}
+        {Array.isArray(output.outline) && (
+          <div>
+            <h5 className="text-sm font-medium mb-2">Outline</h5>
+            <div className="space-y-2">
+              {(output.outline as Array<{ type: string; text: string; key_points?: string[] }>).map((section, idx) => (
+                <div key={idx} className="bg-surface-50 rounded p-3">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs">{section.type}</Badge>
+                    <span className="font-medium text-sm">{section.text}</span>
+                  </div>
+                  {section.key_points && (
+                    <ul className="mt-2 text-xs text-surface-600 space-y-1">
+                      {section.key_points.map((point, pidx) => (
+                        <li key={pidx}>• {point}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {/* Full Draft - THE ACTUAL BLOG CONTENT */}
+        {typeof output.full_draft === 'string' && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h5 className="text-sm font-medium">Volledige Blog Post</h5>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onCopy(output.full_draft as string, 'brief-full-draft')}
+              >
+                {copiedText === 'brief-full-draft' ? (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+            <div className="bg-surface-50 rounded p-4 text-sm whitespace-pre-wrap max-h-96 overflow-y-auto prose prose-sm max-w-none">
+              {String(output.full_draft)}
+            </div>
+          </div>
+        )}
+        {/* FAQ Section */}
+        {Array.isArray(output.faq) && (
+          <div>
+            <h5 className="text-sm font-medium mb-2">FAQ Sectie</h5>
+            <div className="space-y-2">
+              {(output.faq as Array<{ question: string; answer: string }>).map((item, idx) => (
+                <div key={idx} className="bg-surface-50 rounded p-3">
+                  <p className="font-medium text-sm">{item.question}</p>
+                  <p className="text-sm text-surface-600 mt-1">{item.answer}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {/* CTA */}
+        {output.cta && typeof output.cta === 'object' && (
+          <div>
+            <h5 className="text-sm font-medium mb-2">Call-to-Action</h5>
+            <div className="bg-primary/10 border border-primary/20 rounded p-3">
+              <p className="text-sm font-medium text-primary">
+                {(output.cta as { type?: string; copy?: string }).type}
+              </p>
+              <p className="text-sm mt-1">
+                {(output.cta as { type?: string; copy?: string }).copy}
+              </p>
             </div>
           </div>
         )}

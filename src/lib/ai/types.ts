@@ -56,6 +56,11 @@ export type AITask =
   | 'viral_blog_outline'
   | 'viral_blog_draft'
   | 'viral_config_suggestion'
+  // Canonical Content Brief tasks (new)
+  | 'canonical_brief'
+  | 'youtube_script_from_brief'
+  | 'blog_post_from_brief'
+  | 'instagram_from_brief'
 
 export interface TaskModelMapping {
   task: AITask
