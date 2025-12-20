@@ -128,13 +128,23 @@ export async function buildOpportunities(
   const enforceGates = config.seoOptions?.enforceGates ?? true
 
   // 1. Fetch recent signals for industry
-  const { data: signals } = await supabase
+  const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+  console.log(`[Opportunities] Fetching signals for industry="${config.industry}", since=${cutoffDate}`)
+
+  const { data: signals, error: fetchError } = await supabase
     .from('viral_signals')
     .select('*')
     .eq('industry', config.industry)
-    .gte('fetched_at', new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString())
+    .gte('fetched_at', cutoffDate)
     .order('fetched_at', { ascending: false })
     .limit(200)
+
+  if (fetchError) {
+    console.error('[Opportunities] Error fetching signals:', fetchError)
+    return []
+  }
+
+  console.log(`[Opportunities] Found ${signals?.length || 0} signals`)
 
   if (!signals || signals.length === 0) {
     return []
@@ -180,6 +190,8 @@ export async function buildOpportunities(
     }
   }
 
+  console.log(`[Opportunities] Standalone: ${standaloneSignals.length}, Clusterable: ${clusterableSignals.length}`)
+
   // 4. Generate opportunities with SEO intelligence
   const opportunities: Opportunity[] = []
 
@@ -209,6 +221,7 @@ export async function buildOpportunities(
 
   // 4b. Cluster remaining low-engagement signals
   const clusters = clusterSignals(clusterableSignals)
+  console.log(`[Opportunities] Created ${clusters.length} clusters from clusterable signals`)
 
   for (const cluster of clusters) {
     if (cluster.signals.length < CLUSTER_MIN_SIGNALS) continue
@@ -228,6 +241,8 @@ export async function buildOpportunities(
       opportunities.push(opp)
     }
   }
+
+  console.log(`[Opportunities] Total opportunities created: ${opportunities.length}`)
 
   // 5. Sort by score and limit
   opportunities.sort((a, b) => b.score - a.score)
