@@ -3,6 +3,8 @@
  *
  * Build opportunities from ingested signals.
  * Clusters signals, scores them, and stores opportunities.
+ *
+ * V2: Includes SEO intelligence for demand-aware prioritization.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -21,6 +23,14 @@ const BuildRequestSchema = z.object({
   limit: z.number().min(1).max(50).optional(),
   days: z.number().min(1).max(30).optional(),
   useAI: z.boolean().optional(),
+  // V2: SEO options
+  seoOptions: z.object({
+    enabled: z.boolean().optional(),
+    siteUrl: z.string().url().optional(),
+    enforceGates: z.boolean().optional(),
+    existingClusters: z.array(z.string()).optional(),
+    competitors: z.array(z.string()).optional(),
+  }).optional(),
 })
 
 // ============================================
@@ -68,9 +78,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { industry, clientId, channels, limit, days, useAI } = validation.data
+    const { industry, clientId, channels, limit, days, useAI, seoOptions } = validation.data
 
     // 4. Validate client access if clientId provided
+    let clientSiteUrl: string | undefined
+    let clientClusters: string[] | undefined
+    let clientCompetitors: string[] | undefined
+
     if (clientId) {
       const { data: hasAccess } = await supabase
         .rpc('has_client_access', { check_client_id: clientId, min_role: 'editor' })
@@ -81,9 +95,23 @@ export async function POST(request: NextRequest) {
           { status: 403 }
         )
       }
+
+      // Get client settings for SEO context
+      const { data: client } = await supabase
+        .from('clients')
+        .select('settings')
+        .eq('id', clientId)
+        .single()
+
+      if (client?.settings) {
+        const settings = client.settings as Record<string, unknown>
+        clientSiteUrl = settings.siteUrl as string | undefined
+        clientClusters = settings.topicalClusters as string[] | undefined
+        clientCompetitors = settings.competitors as string[] | undefined
+      }
     }
 
-    // 5. Build opportunities
+    // 5. Build opportunities with SEO intelligence
     const opportunities = await buildOpportunities({
       industry,
       clientId,
@@ -91,12 +119,29 @@ export async function POST(request: NextRequest) {
       limit: limit || 10,
       days: days || 7,
       useAI: useAI ?? false,
+      // V2: Enable SEO by default, use client settings or request overrides
+      seoOptions: {
+        enabled: seoOptions?.enabled ?? true, // Default: enabled
+        siteUrl: seoOptions?.siteUrl || clientSiteUrl,
+        enforceGates: seoOptions?.enforceGates ?? false, // Default: don't block, just inform
+        existingClusters: seoOptions?.existingClusters || clientClusters,
+        competitors: seoOptions?.competitors || clientCompetitors,
+      },
     })
+
+    // 6. Return opportunities with SEO insights summary
+    const seoSummary = opportunities.length > 0 ? {
+      demandCapture: opportunities.filter(o => o.seoData?.opportunityType === 'demand_capture').length,
+      demandCreation: opportunities.filter(o => o.seoData?.opportunityType === 'demand_creation').length,
+      withSearchData: opportunities.filter(o => o.seoData?.searchIntelligence.hasData).length,
+      gatesBlocked: opportunities.filter(o => o.seoData && !o.seoData.strategicGates.allPassed).length,
+    } : null
 
     return NextResponse.json({
       success: true,
       data: opportunities,
       count: opportunities.length,
+      seoSummary,
     })
 
   } catch (error) {
