@@ -49,6 +49,13 @@ export type AITask =
   | 'workflow_agent'
   | 'content_evaluation'
   | 'meta_ads_insights'
+  // Viral Hub tasks
+  | 'viral_topic_synthesis'
+  | 'viral_ig_package'
+  | 'viral_youtube_script'
+  | 'viral_blog_outline'
+  | 'viral_blog_draft'
+  | 'viral_config_suggestion'
 
 export interface TaskModelMapping {
   task: AITask
