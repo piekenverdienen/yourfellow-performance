@@ -140,7 +140,6 @@ export default function ViralHubPage() {
   const [aiSuggestion, setAiSuggestion] = useState<AISuggestion | null>(null)
   const [isLoadingSuggestion, setIsLoadingSuggestion] = useState(false)
   const [suggestionError, setSuggestionError] = useState<string | null>(null)
-  const [lastSuggestedClientId, setLastSuggestedClientId] = useState<string | null>(null)
 
   // Fetch AI suggestions when client changes
   const fetchAISuggestion = useCallback(async (forClientId: string) => {
@@ -169,8 +168,6 @@ export default function ViralHubPage() {
         subreddits: suggestion.subreddits.join(', '),
         query: suggestion.searchTerms[0] || '',
       })
-
-      setLastSuggestedClientId(forClientId)
     } catch (err) {
       setSuggestionError(err instanceof Error ? err.message : 'Failed to get AI suggestions')
     } finally {
@@ -178,12 +175,8 @@ export default function ViralHubPage() {
     }
   }, [setConfig])
 
-  // When client changes and has context, fetch AI suggestions
-  useEffect(() => {
-    if (clientId && hasContext && lastSuggestedClientId !== clientId) {
-      fetchAISuggestion(clientId)
-    }
-  }, [clientId, hasContext, lastSuggestedClientId, fetchAISuggestion])
+  // AI suggestions are only fetched when user clicks the refresh button
+  // (removed auto-fetch on client change)
 
   const [opportunities, setOpportunities] = useState<Opportunity[]>([])
   const [selectedOpportunity, setSelectedOpportunity] = useState<Opportunity | null>(null)
