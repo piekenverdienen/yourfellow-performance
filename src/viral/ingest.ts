@@ -189,6 +189,7 @@ async function storeSignal(
       created_at_external: signal.createdAtExternal?.toISOString(),
       metrics: signal.metrics,
       raw_excerpt: signal.rawExcerpt,
+      top_comments: signal.topComments || [],
       industry,
       is_processed: false,
     })

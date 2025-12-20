@@ -23,6 +23,12 @@ export interface ViralSourceConfig {
 // Signal Types (Normalized)
 // ============================================
 
+export interface TopComment {
+  author: string
+  text: string
+  score: number
+}
+
 export interface NormalizedSignal {
   sourceType: ViralSourceType
   externalId: string
@@ -33,6 +39,7 @@ export interface NormalizedSignal {
   createdAtExternal?: Date
   metrics: SignalMetrics
   rawExcerpt?: string  // Truncated for compliance
+  topComments?: TopComment[]  // Top 5-10 comments for context
   industry?: string
 }
 

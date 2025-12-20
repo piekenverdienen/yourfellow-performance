@@ -11,6 +11,7 @@ import type {
   FetchConfig,
   RedditListing,
   RedditPost,
+  TopComment,
 } from './types'
 
 // ============================================
@@ -21,6 +22,8 @@ const REDDIT_BASE_URL = 'https://old.reddit.com'
 // Use a more browser-like User-Agent - Reddit blocks bot-like agents
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 const MAX_EXCERPT_LENGTH = 500
+const MAX_COMMENT_LENGTH = 300
+const MAX_COMMENTS_PER_POST = 5
 const REQUEST_DELAY_MS = 1000  // Rate limiting: 1 request per second
 const MAX_RETRIES = 3
 
@@ -74,7 +77,13 @@ export class RedditProvider implements SignalSourceProvider {
             continue
           }
 
-          signals.push(this.normalizePost(post, config.industry))
+          // Fetch top comments for posts with significant engagement
+          let topComments: TopComment[] | undefined
+          if (post.num_comments >= 10) {
+            topComments = await this.fetchPostComments(cleanSubreddit, post.id)
+          }
+
+          signals.push(this.normalizePost(post, config.industry, topComments))
           added++
         }
         console.log(`[Reddit] r/${cleanSubreddit}: added ${added}, skipped ${skipped}`)
@@ -149,6 +158,76 @@ export class RedditProvider implements SignalSourceProvider {
     return this.fetchWithRetry(url.toString())
   }
 
+  /**
+   * Fetch top comments for a post
+   */
+  private async fetchPostComments(
+    subreddit: string,
+    postId: string
+  ): Promise<TopComment[]> {
+    try {
+      await this.respectRateLimit()
+
+      const url = new URL(`${REDDIT_BASE_URL}/r/${subreddit}/comments/${postId}.json`)
+      url.searchParams.set('limit', String(MAX_COMMENTS_PER_POST))
+      url.searchParams.set('depth', '1')
+      url.searchParams.set('sort', 'top')
+      url.searchParams.set('raw_json', '1')
+
+      const response = await fetch(url.toString(), {
+        headers: {
+          'User-Agent': USER_AGENT,
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,application/json;q=0.8,*/*;q=0.7',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Cache-Control': 'no-cache',
+        },
+      })
+
+      if (!response.ok) {
+        return []
+      }
+
+      // Reddit returns [post, comments] array
+      const data = await response.json() as unknown[]
+      if (!Array.isArray(data) || data.length < 2) {
+        return []
+      }
+
+      const commentsListing = data[1] as RedditListing
+      const comments: TopComment[] = []
+
+      for (const child of commentsListing.data.children) {
+        if (child.kind !== 't1') continue // Skip non-comment items
+        const commentData = child.data as {
+          author?: string
+          body?: string
+          score?: number
+        }
+
+        if (!commentData.body || commentData.body === '[deleted]') continue
+        if (!commentData.author || commentData.author === '[deleted]') continue
+
+        let text = commentData.body
+        if (text.length > MAX_COMMENT_LENGTH) {
+          text = text.substring(0, MAX_COMMENT_LENGTH) + '...'
+        }
+
+        comments.push({
+          author: commentData.author,
+          text,
+          score: commentData.score || 0,
+        })
+
+        if (comments.length >= MAX_COMMENTS_PER_POST) break
+      }
+
+      return comments
+    } catch (error) {
+      console.error(`[Reddit] Error fetching comments for ${postId}:`, error)
+      return []
+    }
+  }
+
   private async fetchWithRetry(url: string, attempt = 1): Promise<RedditPost[]> {
     try {
       const response = await fetch(url, {
@@ -215,7 +294,11 @@ export class RedditProvider implements SignalSourceProvider {
     return false
   }
 
-  private normalizePost(post: RedditPost, industry?: string): NormalizedSignal {
+  private normalizePost(
+    post: RedditPost,
+    industry?: string,
+    topComments?: TopComment[]
+  ): NormalizedSignal {
     // Truncate selftext for compliance
     let excerpt = post.selftext || ''
     if (excerpt.length > MAX_EXCERPT_LENGTH) {
@@ -242,6 +325,7 @@ export class RedditProvider implements SignalSourceProvider {
         velocity: Math.round(velocity * 100) / 100,
       },
       rawExcerpt: excerpt || undefined,
+      topComments: topComments && topComments.length > 0 ? topComments : undefined,
       industry,
     }
   }
