@@ -549,11 +549,14 @@ export default function ViralHubPage() {
         throw new Error(data.error || 'Failed to generate brief')
       }
 
+      // Close the opportunity dialog
+      setSelectedOpportunity(null)
+
       // Switch to briefs tab and reload
       setMainTab('briefs')
       await loadBriefs()
 
-      // Select the new brief
+      // Select the new brief to show it immediately
       if (data.data) {
         setSelectedBrief(data.data)
       }
