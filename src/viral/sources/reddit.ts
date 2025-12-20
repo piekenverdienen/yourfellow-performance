@@ -53,14 +53,15 @@ export class RedditProvider implements SignalSourceProvider {
     })
 
     for (const subreddit of subreddits) {
+      // Strip r/ prefix if present (AI may return subreddits with prefix)
+      const cleanSubreddit = subreddit.replace(/^r\//, '')
+
       try {
         // Rate limiting
         await this.respectRateLimit()
 
-        // Strip r/ prefix if present (AI may return subreddits with prefix)
-        const cleanSubreddit = subreddit.replace(/^r\//, '')
         console.log(`[Reddit] Fetching r/${cleanSubreddit}...`)
-        const posts = await this.fetchSubreddit(subreddit, sort, timeFilter, limit)
+        const posts = await this.fetchSubreddit(cleanSubreddit, sort, timeFilter, limit)
         console.log(`[Reddit] Received ${posts.length} posts from r/${cleanSubreddit}`)
 
         let added = 0
@@ -121,9 +122,7 @@ export class RedditProvider implements SignalSourceProvider {
     timeFilter: string,
     limit: number
   ): Promise<RedditPost[]> {
-    // Strip r/ prefix if present (AI may return subreddits with prefix)
-    const cleanSubreddit = subreddit.replace(/^r\//, '')
-    const url = new URL(`${REDDIT_BASE_URL}/r/${cleanSubreddit}/${sort}.json`)
+    const url = new URL(`${REDDIT_BASE_URL}/r/${subreddit}/${sort}.json`)
     url.searchParams.set('limit', String(limit))
     if (sort === 'top') {
       url.searchParams.set('t', timeFilter)
