@@ -7,7 +7,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
 import {
   Sparkles,
@@ -1154,10 +1154,11 @@ export default function ViralHubPage() {
       {/* Brief Detail Dialog */}
       <Dialog open={!!selectedBrief} onOpenChange={() => setSelectedBrief(null)}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogClose onClose={() => setSelectedBrief(null)} />
           {selectedBrief && (
             <>
               <DialogHeader>
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between pr-8">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
                       <Badge className={BRIEF_STATUS_COLORS[selectedBrief.status]}>
@@ -1357,58 +1358,66 @@ export default function ViralHubPage() {
                   )}
                 </div>
 
-                {/* Actions */}
-                <div className="flex items-center justify-between pt-4 border-t">
-                  <div className="flex gap-2">
-                    {selectedBrief.status === 'draft' && (
-                      <>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleRegenerateAngle()}
-                          disabled={isGeneratingBrief}
-                        >
-                          {isGeneratingBrief ? (
-                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                          ) : (
-                            <RotateCcw className="h-4 w-4 mr-1" />
-                          )}
-                          Andere invalshoek
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          onClick={() => handleRejectBrief('Niet geschikt')}
-                          disabled={isApprovingBrief}
-                        >
-                          <X className="h-4 w-4 mr-1" />
-                          Afkeuren
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                  {selectedBrief.status === 'draft' && (
-                    <Button
-                      onClick={handleApproveBrief}
-                      disabled={isApprovingBrief}
-                      className="bg-green-600 hover:bg-green-700"
-                    >
-                      {isApprovingBrief ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <CheckCircle2 className="h-4 w-4 mr-2" />
-                      )}
-                      Goedkeuren
-                    </Button>
-                  )}
-                  {selectedBrief.status === 'rejected' && (
-                    <div className="text-sm text-red-600">
-                      Afgekeurd{selectedBrief.rejectionReason && `: ${selectedBrief.rejectionReason}`}
-                    </div>
-                  )}
-                </div>
               </div>
+
+              {/* Actions Footer */}
+              {selectedBrief.status === 'draft' && (
+                <DialogFooter className="flex-row justify-between">
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRegenerateAngle()}
+                      disabled={isGeneratingBrief}
+                      leftIcon={isGeneratingBrief ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                    >
+                      Andere invalshoek
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => handleRejectBrief('Niet geschikt')}
+                      disabled={isApprovingBrief}
+                      leftIcon={<XCircle className="h-4 w-4" />}
+                    >
+                      Afkeuren
+                    </Button>
+                  </div>
+                  <Button
+                    variant="primary"
+                    onClick={handleApproveBrief}
+                    disabled={isApprovingBrief}
+                    isLoading={isApprovingBrief}
+                    leftIcon={!isApprovingBrief ? <CheckCircle2 className="h-4 w-4" /> : undefined}
+                  >
+                    Goedkeuren
+                  </Button>
+                </DialogFooter>
+              )}
+              {selectedBrief.status === 'approved' && (
+                <DialogFooter>
+                  <Button
+                    variant="ghost"
+                    onClick={() => setSelectedBrief(null)}
+                  >
+                    Sluiten
+                  </Button>
+                </DialogFooter>
+              )}
+              {selectedBrief.status === 'rejected' && (
+                <DialogFooter className="flex-row justify-between">
+                  <div className="text-sm text-red-600 flex items-center">
+                    <XCircle className="h-4 w-4 mr-1" />
+                    Afgekeurd{selectedBrief.rejectionReason && `: ${selectedBrief.rejectionReason}`}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    onClick={() => setSelectedBrief(null)}
+                  >
+                    Sluiten
+                  </Button>
+                </DialogFooter>
+              )}
             </>
           )}
         </DialogContent>
@@ -1417,10 +1426,11 @@ export default function ViralHubPage() {
       {/* Opportunity Detail Dialog */}
       <Dialog open={!!selectedOpportunity} onOpenChange={() => setSelectedOpportunity(null)}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogClose onClose={() => setSelectedOpportunity(null)} />
           {selectedOpportunity && (
             <>
               <DialogHeader>
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between pr-8">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
                       <Badge className={STATUS_COLORS[selectedOpportunity.status]}>
@@ -1611,45 +1621,51 @@ export default function ViralHubPage() {
                   </>
                 )}
 
-                {/* Actions */}
-                <div className="flex items-center justify-between pt-4 border-t">
-                  <div className="flex gap-2">
-                    {selectedOpportunity.status !== 'shortlisted' && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleUpdateStatus(selectedOpportunity.id, 'shortlisted')}
-                      >
-                        <Star className="h-4 w-4 mr-1" />
-                        Shortlist
-                      </Button>
-                    )}
-                    {selectedOpportunity.status !== 'archived' && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleUpdateStatus(selectedOpportunity.id, 'archived')}
-                      >
-                        <Archive className="h-4 w-4 mr-1" />
-                        Archiveer
-                      </Button>
-                    )}
-                  </div>
-                  {opportunityGenerations.length === 0 && (
+              </div>
+
+              {/* Actions Footer */}
+              <DialogFooter className="flex-row justify-between">
+                <div className="flex gap-2">
+                  {selectedOpportunity.status !== 'shortlisted' && (
                     <Button
-                      onClick={() => handleGenerate(['youtube', 'instagram', 'blog'])}
-                      disabled={isGenerating}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleUpdateStatus(selectedOpportunity.id, 'shortlisted')}
+                      leftIcon={<Star className="h-4 w-4" />}
                     >
-                      {isGenerating ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <Sparkles className="h-4 w-4 mr-2" />
-                      )}
-                      Genereer Alle Kanalen
+                      Shortlist
+                    </Button>
+                  )}
+                  {selectedOpportunity.status !== 'archived' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleUpdateStatus(selectedOpportunity.id, 'archived')}
+                      leftIcon={<Archive className="h-4 w-4" />}
+                    >
+                      Archiveer
                     </Button>
                   )}
                 </div>
-              </div>
+                {opportunityGenerations.length === 0 ? (
+                  <Button
+                    variant="primary"
+                    onClick={() => handleGenerate(['youtube', 'instagram', 'blog'])}
+                    disabled={isGenerating}
+                    isLoading={isGenerating}
+                    leftIcon={!isGenerating ? <Sparkles className="h-4 w-4" /> : undefined}
+                  >
+                    Genereer Alle Kanalen
+                  </Button>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    onClick={() => setSelectedOpportunity(null)}
+                  >
+                    Sluiten
+                  </Button>
+                )}
+              </DialogFooter>
             </>
           )}
         </DialogContent>
