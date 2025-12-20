@@ -243,18 +243,7 @@ CREATE POLICY "Users can read opportunities"
     auth.uid() IS NOT NULL
     AND (
       client_id IS NULL  -- Internal opportunities visible to all authenticated
-      OR EXISTS (
-        SELECT 1 FROM clients c
-        WHERE c.id = client_id
-        AND (
-          c.created_by = auth.uid()
-          OR EXISTS (
-            SELECT 1 FROM client_users cu
-            WHERE cu.client_id = c.id
-            AND cu.user_id = auth.uid()
-          )
-        )
-      )
+      OR has_client_access(client_id, 'viewer')
     )
   );
 
@@ -279,7 +268,7 @@ CREATE POLICY "Users can read generations"
       WHERE vo.id = opportunity_id
       AND (
         vo.client_id IS NULL
-        OR vo.created_by = auth.uid()
+        OR has_client_access(vo.client_id, 'viewer')
       )
     )
   );
