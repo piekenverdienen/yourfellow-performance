@@ -28,11 +28,12 @@ function getServiceSupabase() {
 export async function GET(request: NextRequest) {
   try {
     // Verify cron secret (Vercel sends this header)
+    // SECURITY: Always require CRON_SECRET in production
     const authHeader = request.headers.get('authorization')
     const cronSecret = process.env.CRON_SECRET
 
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-      console.error('Unauthorized cron request')
+    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+      console.error('Unauthorized cron request - missing or invalid CRON_SECRET')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 

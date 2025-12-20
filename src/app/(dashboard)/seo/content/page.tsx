@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
+import DOMPurify from 'dompurify'
 import { useSelectedClientId } from '@/stores/client-store'
 import { usePersistedState } from '@/hooks/use-persisted-form'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
@@ -278,12 +279,15 @@ Gebruik duidelijke headers (H2, H3), korte alineas en verwerk keywords natuurlij
                   <div
                     className="p-4 bg-surface-50 rounded-lg max-h-[600px] overflow-y-auto"
                     dangerouslySetInnerHTML={{
-                      __html: generatedContent
-                        .replace(/^## (.*$)/gim, '<h2 class="text-lg font-semibold mt-6 mb-3">$1</h2>')
-                        .replace(/^### (.*$)/gim, '<h3 class="text-base font-medium mt-4 mb-2">$1</h3>')
-                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                        .replace(/\n\n/g, '</p><p class="mb-3">')
-                        .replace(/^(.*)$/gim, '<p class="mb-3">$1</p>')
+                      __html: DOMPurify.sanitize(
+                        generatedContent
+                          .replace(/^## (.*$)/gim, '<h2 class="text-lg font-semibold mt-6 mb-3">$1</h2>')
+                          .replace(/^### (.*$)/gim, '<h3 class="text-base font-medium mt-4 mb-2">$1</h3>')
+                          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                          .replace(/\n\n/g, '</p><p class="mb-3">')
+                          .replace(/^(.*)$/gim, '<p class="mb-3">$1</p>'),
+                        { ALLOWED_TAGS: ['h2', 'h3', 'p', 'strong', 'em', 'ul', 'ol', 'li', 'br'] }
+                      )
                     }}
                   />
                 </div>
