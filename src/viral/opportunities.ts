@@ -76,7 +76,8 @@ const STOPWORDS = new Set([
   'no', 'not', 'any', 'all', 'some', 'about', 'out', 'up', 'down', 'into',
 ])
 
-const CLUSTER_MIN_SIGNALS = 2
+const CLUSTER_MIN_SIGNALS = 1  // Allow single-signal opportunities
+const HIGH_ENGAGEMENT_THRESHOLD = 100  // Signals with 100+ upvotes can stand alone
 const DEFAULT_LIMIT = 10
 const DEFAULT_DAYS = 7
 
@@ -121,11 +122,43 @@ export async function buildOpportunities(
     },
   }))
 
-  // 3. Cluster signals by topic
-  const clusters = clusterSignals(signalsWithIds)
+  // 3. Separate high-engagement signals (they stand alone) from others
+  const standaloneSignals: SignalWithId[] = []
+  const clusterableSignals: SignalWithId[] = []
 
-  // 4. Generate opportunities from clusters
+  for (const signalWithId of signalsWithIds) {
+    const upvotes = signalWithId.signal.metrics.upvotes || 0
+    if (upvotes >= HIGH_ENGAGEMENT_THRESHOLD) {
+      standaloneSignals.push(signalWithId)
+    } else {
+      clusterableSignals.push(signalWithId)
+    }
+  }
+
+  // 4. Generate opportunities
   const opportunities: Opportunity[] = []
+
+  // 4a. Create individual opportunities for high-engagement signals
+  for (const signalWithId of standaloneSignals) {
+    const singleCluster: SignalCluster = {
+      signals: [signalWithId],
+      keywords: Array.from(extractKeywords(signalWithId.signal.title)),
+      totalEngagement: signalWithId.signal.metrics.upvotes || 0,
+    }
+
+    for (const channel of config.channels) {
+      const opportunity = createOpportunityFromCluster(
+        singleCluster,
+        config.industry,
+        channel,
+        config.clientId
+      )
+      opportunities.push(opportunity)
+    }
+  }
+
+  // 4b. Cluster remaining low-engagement signals
+  const clusters = clusterSignals(clusterableSignals)
 
   for (const cluster of clusters) {
     if (cluster.signals.length < CLUSTER_MIN_SIGNALS) continue
@@ -302,6 +335,8 @@ function createOpportunityFromCluster(
 }
 
 function calculateScore(cluster: SignalCluster, industry: string): ScoreBreakdown {
+  const isSingleSignal = cluster.signals.length === 1
+
   // Engagement Score (0-30)
   const avgUpvotes = cluster.totalEngagement / cluster.signals.length
   const avgComments = cluster.signals.reduce(
@@ -332,9 +367,21 @@ function calculateScore(cluster: SignalCluster, industry: string): ScoreBreakdow
   }
   const relevanceScore = Math.min(25, keywordMatches * 8)
 
-  // Novelty Score (0-15) - Based on cluster diversity
-  const uniqueCommunities = new Set(cluster.signals.map(s => s.signal.community)).size
-  const noveltyScore = Math.min(15, uniqueCommunities * 5)
+  // Novelty Score (0-15)
+  // For single high-engagement signals: reward based on comment engagement ratio
+  // For clusters: reward diversity across communities
+  let noveltyScore: number
+  if (isSingleSignal) {
+    const signal = cluster.signals[0].signal
+    const upvotes = signal.metrics.upvotes || 0
+    const comments = signal.metrics.comments || 0
+    // High comment-to-upvote ratio indicates rich discussion potential
+    const commentRatio = upvotes > 0 ? comments / upvotes : 0
+    noveltyScore = Math.min(15, Math.round(commentRatio * 50) + 5)
+  } else {
+    const uniqueCommunities = new Set(cluster.signals.map(s => s.signal.community)).size
+    noveltyScore = Math.min(15, uniqueCommunities * 5)
+  }
 
   // Seasonality Score (0-10) - Simplified for MVP
   const seasonalityScore = 5  // Default mid-score
