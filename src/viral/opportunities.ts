@@ -255,6 +255,7 @@ export async function buildOpportunities(
 
   // 7. Store opportunities
   const storedOpportunities: Opportunity[] = []
+  console.log(`[Opportunities] Storing ${topOpportunities.length} opportunities...`)
 
   for (const opp of topOpportunities) {
     const { data: inserted, error } = await supabase
@@ -271,20 +272,18 @@ export async function buildOpportunities(
         score_breakdown: opp.scoreBreakdown,
         source_signal_ids: opp.sourceSignalIds,
         status: 'new',
-        // V2: Store SEO data
-        seo_data: opp.seoData ? {
-          opportunity_type: opp.seoData.opportunityType,
-          search_demand: opp.seoData.searchIntelligence.demandLevel,
-          primary_keyword: opp.seoData.searchIntelligence.primaryKeyword,
-          channel_scores: opp.seoData.channelScores,
-          gates_passed: opp.seoData.strategicGates.allPassed,
-          search_context: opp.seoData.searchContext,
-        } : null,
+        // V2: Store SEO data (only if column exists)
+        // seo_data: opp.seoData ? { ... } : null,
       })
       .select('id, created_at')
       .single()
 
-    if (!error && inserted) {
+    if (error) {
+      console.error(`[Opportunities] Error storing opportunity "${opp.topic}":`, error.message)
+      continue
+    }
+
+    if (inserted) {
       storedOpportunities.push({
         ...opp,
         id: inserted.id,
@@ -293,6 +292,7 @@ export async function buildOpportunities(
     }
   }
 
+  console.log(`[Opportunities] Successfully stored ${storedOpportunities.length} opportunities`)
   return storedOpportunities
 }
 
