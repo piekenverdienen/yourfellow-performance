@@ -80,9 +80,9 @@ export async function POST(
     // Initialize Firecrawl
     const firecrawl = new Firecrawl({ apiKey: process.env.FIRECRAWL_API_KEY })
 
-    // Scrape the main page first
+    // Scrape the main page first (with both markdown and html for link extraction)
     const mainPageResult = await firecrawl.scrape(websiteUrl, {
-      formats: ['markdown'],
+      formats: ['markdown', 'html'],
     })
 
     if (!mainPageResult || !mainPageResult.markdown) {
@@ -98,12 +98,22 @@ export async function POST(
       title: mainPageResult.metadata?.title || 'Homepage',
     }]
 
-    // Extract links from markdown content (since 'links' format may not be supported)
-    const linkRegex = /\[([^\]]*)\]\(([^)]+)\)/g
+    // Extract links from both markdown and HTML for better coverage
     const extractedLinks: string[] = []
+
+    // 1. Extract from markdown: [text](url)
+    const markdownLinkRegex = /\[([^\]]*)\]\(([^)]+)\)/g
     let match
-    while ((match = linkRegex.exec(mainPageResult.markdown)) !== null) {
+    while ((match = markdownLinkRegex.exec(mainPageResult.markdown)) !== null) {
       extractedLinks.push(match[2])
+    }
+
+    // 2. Extract from HTML: <a href="url">
+    if (mainPageResult.html) {
+      const htmlLinkRegex = /<a[^>]+href=["']([^"']+)["']/gi
+      while ((match = htmlLinkRegex.exec(mainPageResult.html)) !== null) {
+        extractedLinks.push(match[1])
+      }
     }
 
     // Extract internal links and scrape additional pages
