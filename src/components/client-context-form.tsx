@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { WebsiteAnalyzer } from '@/components/website-analyzer'
 import {
   Save,
   Loader2,
@@ -14,6 +15,7 @@ import {
   ShieldAlert,
   Zap,
   TrendingUp,
+  Sparkles,
 } from 'lucide-react'
 import type { ClientContext, ChannelType } from '@/types'
 
@@ -59,6 +61,7 @@ export function ClientContextForm({
   const [newMustHave, setNewMustHave] = useState('')
   const [newBestseller, setNewBestseller] = useState('')
   const [newSeasonality, setNewSeasonality] = useState('')
+  const [showAnalyzer, setShowAnalyzer] = useState(false)
 
   useEffect(() => {
     if (initialContext) {
@@ -124,8 +127,52 @@ export function ClientContextForm({
     }))
   }
 
+  const handleContextGenerated = (generatedContext: ClientContext) => {
+    // Merge generated context with existing, preserving doNots, mustHaves, and activeChannels
+    setContext((prev) => ({
+      ...generatedContext,
+      doNots: prev.doNots.length > 0 ? prev.doNots : generatedContext.doNots,
+      mustHaves: prev.mustHaves.length > 0 ? prev.mustHaves : generatedContext.mustHaves,
+      activeChannels: prev.activeChannels.length > 0 ? prev.activeChannels : generatedContext.activeChannels,
+    }))
+  }
+
   return (
     <div className="space-y-6">
+      {/* Website Analyzer Dialog */}
+      <WebsiteAnalyzer
+        clientId={clientId}
+        open={showAnalyzer}
+        onOpenChange={setShowAnalyzer}
+        onContextGenerated={handleContextGenerated}
+      />
+
+      {/* Generate from Website Button */}
+      {canEdit && (
+        <Card className="border-dashed border-2 border-primary/30 bg-primary/5">
+          <CardContent className="py-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-medium text-surface-900">
+                    Genereer AI Context van Website
+                  </h3>
+                  <p className="text-sm text-surface-600">
+                    Analyseer automatisch de website om de context in te vullen
+                  </p>
+                </div>
+              </div>
+              <Button onClick={() => setShowAnalyzer(true)}>
+                <Sparkles className="h-4 w-4 mr-2" />
+                Website Analyseren
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       {/* Propositie & Doelgroep */}
       <Card>
         <CardHeader>
