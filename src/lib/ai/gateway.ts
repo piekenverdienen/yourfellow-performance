@@ -828,9 +828,10 @@ TARGET WORD COUNT: {{word_count}}
 Genereer nu de complete blog post.
 BELANGRIJK:
 - Blijf binnen de claims en bewijzen uit de brief. Voeg geen nieuwe informatie toe.
-- Schrijf in de aangegeven tone of voice. Dit is ESSENTIEEL voor merkherkenning.`,
+- Schrijf in de aangegeven tone of voice. Dit is ESSENTIEEL voor merkherkenning.
+- De full_draft MOET minimaal 1500 woorden bevatten. Dit is CRUCIAAL - kort NOOIT de blogpost in.`,
     temperature: 0.6,
-    maxTokens: 5000,
+    maxTokens: 8000,
     xpReward: 20,
   },
 
