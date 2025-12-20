@@ -1615,21 +1615,21 @@ export default function ViralHubPage() {
                       </div>
                     ) : (
                       <div className="text-center py-6 bg-surface-50 rounded-lg">
-                        <Sparkles className="h-8 w-8 mx-auto text-surface-300 mb-2" />
-                        <p className="text-surface-600 font-medium">Nog geen content gegenereerd</p>
+                        <FileCheck className="h-8 w-8 mx-auto text-surface-300 mb-2" />
+                        <p className="text-surface-600 font-medium">Nog geen brief gegenereerd</p>
                         <p className="text-surface-500 text-sm mb-4">
-                          Genereer content voor deze opportunity
+                          Genereer eerst een brief, keur deze goed, en maak dan content
                         </p>
                         <Button
-                          onClick={() => handleGenerate([selectedOpportunity.channel])}
-                          disabled={isGenerating}
+                          onClick={() => handleGenerateBriefFromOpportunity(selectedOpportunity)}
+                          disabled={isGeneratingBrief}
                         >
-                          {isGenerating ? (
+                          {isGeneratingBrief ? (
                             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                           ) : (
-                            <Sparkles className="h-4 w-4 mr-2" />
+                            <FileCheck className="h-4 w-4 mr-2" />
                           )}
-                          Genereer {CHANNEL_LABELS[selectedOpportunity.channel]} Content
+                          Genereer Brief
                         </Button>
                       </div>
                     )}
@@ -1665,12 +1665,12 @@ export default function ViralHubPage() {
                 {opportunityGenerations.length === 0 ? (
                   <Button
                     variant="primary"
-                    onClick={() => handleGenerate(['youtube', 'instagram', 'blog'])}
-                    disabled={isGenerating}
-                    isLoading={isGenerating}
-                    leftIcon={!isGenerating ? <Sparkles className="h-4 w-4" /> : undefined}
+                    onClick={() => handleGenerateBriefFromOpportunity(selectedOpportunity)}
+                    disabled={isGeneratingBrief}
+                    isLoading={isGeneratingBrief}
+                    leftIcon={!isGeneratingBrief ? <FileCheck className="h-4 w-4" /> : undefined}
                   >
-                    Genereer Alle Kanalen
+                    Genereer Brief
                   </Button>
                 ) : (
                   <Button
