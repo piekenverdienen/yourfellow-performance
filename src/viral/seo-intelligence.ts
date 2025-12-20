@@ -490,32 +490,38 @@ export function calculateChannelScores(input: ChannelScoringInput): ChannelScore
 function calculateBlogScore(input: ChannelScoringInput): ChannelScore | null {
   const { searchIntelligence, viralScore, strategicGates } = input
 
-  // Blog requires search demand (with exception for very high viral)
-  const hasSearchDemand = searchIntelligence.demandLevel !== 'unknown' &&
-                          searchIntelligence.demandLevel !== 'low'
-  const hasExceptionalViral = input.totalEngagement > 10000 && input.viralMomentum === 'rising'
+  // Blog scoring depends on whether we have search data
+  const hasSearchData = searchIntelligence.hasData
+  const hasSearchDemand = searchIntelligence.demandLevel === 'high' ||
+                          searchIntelligence.demandLevel === 'medium'
+  const hasLowDemand = searchIntelligence.demandLevel === 'low'
+  const hasExceptionalViral = input.totalEngagement > 5000 // Lowered threshold
 
-  if (!hasSearchDemand && !hasExceptionalViral) {
+  // Case 1: We have search data and demand is low → block blog
+  if (hasSearchData && hasLowDemand && !hasExceptionalViral) {
     return {
       total: 0,
       breakdown: {},
       viable: false,
-      rationale: 'Insufficient search demand for blog - consider social channels',
+      rationale: 'Low search demand detected - consider social channels instead',
     }
   }
+
+  // Case 2: No search data available → allow blog but with lower confidence
+  // This is the "demand creation" scenario - we don't know if there's demand
+  const isUnknownDemand = !hasSearchData
 
   // Blog scoring: search-heavy (60% search, 25% viral validation, 15% strategic)
   const breakdown: Record<string, number> = {}
 
   // Search demand (0-35)
-  if (searchIntelligence.demandLevel === 'high') {
-    breakdown.searchDemand = 35
-  } else if (searchIntelligence.demandLevel === 'medium') {
-    breakdown.searchDemand = 25
-  } else if (searchIntelligence.demandLevel === 'low') {
-    breakdown.searchDemand = 10
+  if (hasSearchDemand) {
+    breakdown.searchDemand = searchIntelligence.demandLevel === 'high' ? 35 : 25
+  } else if (isUnknownDemand) {
+    // No GSC data - give moderate score, rely on viral validation
+    breakdown.searchDemand = 15
   } else {
-    breakdown.searchDemand = 0
+    breakdown.searchDemand = 5
   }
 
   // Position opportunity (0-25)
@@ -542,13 +548,23 @@ function calculateBlogScore(input: ChannelScoringInput): ChannelScore | null {
 
   const total = Object.values(breakdown).reduce((sum, val) => sum + val, 0)
 
+  // Build rationale based on data availability
+  let rationale: string
+  if (hasSearchDemand) {
+    rationale = total >= 60
+      ? `Strong blog opportunity - ${searchIntelligence.demandLevel} search demand confirmed`
+      : 'Moderate blog opportunity with search validation'
+  } else if (isUnknownDemand) {
+    rationale = 'Blog opportunity (no GSC data) - recommend adding siteUrl for search insights'
+  } else {
+    rationale = 'Blog allowed due to high viral engagement despite low search demand'
+  }
+
   return {
     total,
     breakdown,
     viable: true,
-    rationale: total >= 60
-      ? 'Strong blog opportunity with search demand'
-      : 'Moderate blog opportunity - ensure search intent match',
+    rationale,
   }
 }
 
