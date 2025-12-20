@@ -2196,7 +2196,30 @@ function BriefGeneratedContentView({
   if (channel === 'blog') {
     return (
       <div className="space-y-4">
-        {Array.isArray(output.titles) && (
+        {/* SEO Title */}
+        {typeof output.seo_title === 'string' && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h5 className="text-sm font-medium">SEO Title</h5>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onCopy(output.seo_title as string, 'brief-seo-title')}
+              >
+                {copiedText === 'brief-seo-title' ? (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+            <div className="bg-surface-50 rounded p-3 text-sm font-medium">
+              {String(output.seo_title)}
+            </div>
+          </div>
+        )}
+        {/* Fallback for titles array */}
+        {!output.seo_title && Array.isArray(output.titles) && (
           <div>
             <h5 className="text-sm font-medium mb-2">Title Opties</h5>
             {(output.titles as string[]).map((title, idx) => (
@@ -2218,14 +2241,43 @@ function BriefGeneratedContentView({
             ))}
           </div>
         )}
+        {/* Meta Description */}
         {typeof output.meta_description === 'string' && (
           <div>
-            <h5 className="text-sm font-medium mb-2">Meta Description</h5>
+            <div className="flex items-center justify-between mb-2">
+              <h5 className="text-sm font-medium">Meta Description</h5>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onCopy(output.meta_description as string, 'brief-meta-desc')}
+              >
+                {copiedText === 'brief-meta-desc' ? (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
             <div className="bg-surface-50 rounded p-3 text-sm">
               {String(output.meta_description)}
             </div>
           </div>
         )}
+        {/* Keywords */}
+        {(output.primary_keyword || output.secondary_keywords) && (
+          <div>
+            <h5 className="text-sm font-medium mb-2">Keywords</h5>
+            <div className="flex flex-wrap gap-1">
+              {typeof output.primary_keyword === 'string' && (
+                <Badge className="bg-primary text-white">{output.primary_keyword}</Badge>
+              )}
+              {Array.isArray(output.secondary_keywords) && (output.secondary_keywords as string[]).map((kw, idx) => (
+                <Badge key={idx} variant="secondary">{kw}</Badge>
+              ))}
+            </div>
+          </div>
+        )}
+        {/* Outline */}
         {Array.isArray(output.outline) && (
           <div>
             <h5 className="text-sm font-medium mb-2">Outline</h5>
@@ -2245,6 +2297,56 @@ function BriefGeneratedContentView({
                   )}
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+        {/* Full Draft - THE ACTUAL BLOG CONTENT */}
+        {typeof output.full_draft === 'string' && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h5 className="text-sm font-medium">Volledige Blog Post</h5>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onCopy(output.full_draft as string, 'brief-full-draft')}
+              >
+                {copiedText === 'brief-full-draft' ? (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+            <div className="bg-surface-50 rounded p-4 text-sm whitespace-pre-wrap max-h-96 overflow-y-auto prose prose-sm max-w-none">
+              {String(output.full_draft)}
+            </div>
+          </div>
+        )}
+        {/* FAQ Section */}
+        {Array.isArray(output.faq) && (
+          <div>
+            <h5 className="text-sm font-medium mb-2">FAQ Sectie</h5>
+            <div className="space-y-2">
+              {(output.faq as Array<{ question: string; answer: string }>).map((item, idx) => (
+                <div key={idx} className="bg-surface-50 rounded p-3">
+                  <p className="font-medium text-sm">{item.question}</p>
+                  <p className="text-sm text-surface-600 mt-1">{item.answer}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {/* CTA */}
+        {output.cta && typeof output.cta === 'object' && (
+          <div>
+            <h5 className="text-sm font-medium mb-2">Call-to-Action</h5>
+            <div className="bg-primary/10 border border-primary/20 rounded p-3">
+              <p className="text-sm font-medium text-primary">
+                {(output.cta as { type?: string; copy?: string }).type}
+              </p>
+              <p className="text-sm mt-1">
+                {(output.cta as { type?: string; copy?: string }).copy}
+              </p>
             </div>
           </div>
         )}
