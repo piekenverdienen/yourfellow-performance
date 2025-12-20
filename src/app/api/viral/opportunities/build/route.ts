@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { buildOpportunities, type ViralChannel } from '@/viral/opportunities'
+import { cache } from '@/lib/cache'
 import { z } from 'zod'
 
 // ============================================
@@ -129,7 +130,10 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // 6. Return opportunities with SEO insights summary
+    // 6. Invalidate opportunities cache after building new ones
+    cache.invalidatePattern('^opportunities:')
+
+    // 7. Return opportunities with SEO insights summary
     const seoSummary = opportunities.length > 0 ? {
       demandCapture: opportunities.filter(o => o.seoData?.opportunityType === 'demand_capture').length,
       demandCreation: opportunities.filter(o => o.seoData?.opportunityType === 'demand_creation').length,

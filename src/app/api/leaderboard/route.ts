@@ -1,5 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { cache, CACHE_TTL } from '@/lib/cache'
+
+// Type for leaderboard entries
+interface LeaderboardEntry {
+  user_id: string
+  full_name: string
+  avatar_url: string | null
+  level: number
+  xp: number
+  total_generations?: number
+  generations_this_month?: number
+  current_streak: number
+  achievement_count: number
+  rank: number
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,46 +30,61 @@ export async function GET(request: NextRequest) {
     const period = searchParams.get('period') || 'alltime' // 'alltime' or 'monthly'
     const limit = parseInt(searchParams.get('limit') || '50')
 
+    // PERFORMANCE: Cache leaderboard data (same for all users)
+    const cacheKey = `leaderboard:${period}:${limit}`
+
     if (period === 'monthly') {
-      // Monthly leaderboard - XP earned this month
-      const { data: leaderboard, error } = await supabase
-        .from('leaderboard_monthly')
-        .select('*')
-        .limit(limit)
+      const leaderboard = await cache.getOrFetch<LeaderboardEntry[]>(
+        cacheKey,
+        async () => {
+          const { data, error } = await supabase
+            .from('leaderboard_monthly')
+            .select('*')
+            .limit(limit)
 
-      if (error) {
-        console.error('Error fetching monthly leaderboard:', error)
-        // Fallback query if view doesn't exist
-        return await getMonthlyLeaderboardFallback(supabase, user.id, limit)
-      }
+          if (error) {
+            console.error('Error fetching monthly leaderboard:', error)
+            // Return fallback data
+            return await getMonthlyLeaderboardData(supabase, limit)
+          }
+          return data || []
+        },
+        CACHE_TTL.LEADERBOARD
+      )
 
-      // Find current user's position
-      const userRank = leaderboard?.findIndex(entry => entry.user_id === user.id) ?? -1
+      // Find current user's position (not cached - user-specific)
+      const userRank = leaderboard.findIndex(entry => entry.user_id === user.id)
 
       return NextResponse.json({
-        leaderboard: leaderboard || [],
+        leaderboard,
         userRank: userRank >= 0 ? userRank + 1 : null,
         period: 'monthly',
       })
     }
 
     // All-time leaderboard
-    const { data: leaderboard, error } = await supabase
-      .from('leaderboard_alltime')
-      .select('*')
-      .limit(limit)
+    const leaderboard = await cache.getOrFetch<LeaderboardEntry[]>(
+      cacheKey,
+      async () => {
+        const { data, error } = await supabase
+          .from('leaderboard_alltime')
+          .select('*')
+          .limit(limit)
 
-    if (error) {
-      console.error('Error fetching alltime leaderboard:', error)
-      // Fallback query if view doesn't exist
-      return await getAlltimeLeaderboardFallback(supabase, user.id, limit)
-    }
+        if (error) {
+          console.error('Error fetching alltime leaderboard:', error)
+          return await getAlltimeLeaderboardData(supabase, limit)
+        }
+        return data || []
+      },
+      CACHE_TTL.LEADERBOARD
+    )
 
-    // Find current user's position
-    const userRank = leaderboard?.findIndex(entry => entry.user_id === user.id) ?? -1
+    // Find current user's position (not cached - user-specific)
+    const userRank = leaderboard.findIndex(entry => entry.user_id === user.id)
 
     return NextResponse.json({
-      leaderboard: leaderboard || [],
+      leaderboard,
       userRank: userRank >= 0 ? userRank + 1 : null,
       period: 'alltime',
     })
@@ -68,19 +98,17 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Fallback for monthly leaderboard if view doesn't exist yet
+// Fallback for monthly leaderboard data (returns data for caching)
 // PERFORMANCE: Uses database aggregation instead of loading all records into memory
-async function getMonthlyLeaderboardFallback(
+async function getMonthlyLeaderboardData(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  currentUserId: string,
   limit: number
-) {
+): Promise<LeaderboardEntry[]> {
   const startOfMonth = new Date()
   startOfMonth.setDate(1)
   startOfMonth.setHours(0, 0, 0, 0)
 
   // PERFORMANCE: Use RPC or aggregated query instead of loading all usage records
-  // This query aggregates at the database level, returning only top users
   const { data: aggregated, error: aggError } = await supabase
     .rpc('get_monthly_leaderboard', {
       start_date: startOfMonth.toISOString(),
@@ -91,18 +119,13 @@ async function getMonthlyLeaderboardFallback(
   if (aggError) {
     console.warn('Monthly leaderboard RPC not found, using efficient fallback')
 
-    // Get top users by generation count this month (database does the aggregation)
     const { data: topUsers } = await supabase
       .from('usage')
       .select('user_id')
       .gte('created_at', startOfMonth.toISOString())
 
     if (!topUsers || topUsers.length === 0) {
-      return NextResponse.json({
-        leaderboard: [],
-        userRank: null,
-        period: 'monthly',
-      })
+      return []
     }
 
     // Count generations per user in JS (but only for this month's users)
@@ -136,7 +159,7 @@ async function getMonthlyLeaderboardFallback(
 
     // Build leaderboard with pre-sorted order
     const profileMap = new Map(profiles?.map(p => [p.id, p]) || [])
-    const leaderboard = topUserIds.map((userId, index) => {
+    return topUserIds.map((userId, index) => {
       const profile = profileMap.get(userId)
       return {
         user_id: userId,
@@ -151,32 +174,17 @@ async function getMonthlyLeaderboardFallback(
         rank: index + 1,
       }
     })
-
-    const userRank = leaderboard.findIndex(entry => entry.user_id === currentUserId)
-
-    return NextResponse.json({
-      leaderboard,
-      userRank: userRank >= 0 ? userRank + 1 : null,
-      period: 'monthly',
-    })
   }
 
   // RPC worked - use the aggregated data directly
-  const userRank = aggregated?.findIndex((entry: { user_id: string }) => entry.user_id === currentUserId) ?? -1
-
-  return NextResponse.json({
-    leaderboard: aggregated || [],
-    userRank: userRank >= 0 ? userRank + 1 : null,
-    period: 'monthly',
-  })
+  return aggregated || []
 }
 
-// Fallback for alltime leaderboard if view doesn't exist yet
-async function getAlltimeLeaderboardFallback(
+// Fallback for alltime leaderboard data (returns data for caching)
+async function getAlltimeLeaderboardData(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  currentUserId: string,
   limit: number
-) {
+): Promise<LeaderboardEntry[]> {
   const { data: profiles } = await supabase
     .from('profiles')
     .select('id, full_name, avatar_url, xp, level, total_generations')
@@ -184,7 +192,7 @@ async function getAlltimeLeaderboardFallback(
     .order('xp', { ascending: false })
     .limit(limit)
 
-  const leaderboard = profiles?.map((p, index) => ({
+  return profiles?.map((p, index) => ({
     user_id: p.id,
     full_name: p.full_name,
     avatar_url: p.avatar_url,
@@ -196,12 +204,4 @@ async function getAlltimeLeaderboardFallback(
     achievement_count: 0,
     rank: index + 1,
   })) || []
-
-  const userRank = leaderboard.findIndex(entry => entry.user_id === currentUserId)
-
-  return NextResponse.json({
-    leaderboard,
-    userRank: userRank >= 0 ? userRank + 1 : null,
-    period: 'alltime',
-  })
 }
