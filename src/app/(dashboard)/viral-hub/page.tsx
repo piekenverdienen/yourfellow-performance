@@ -178,6 +178,21 @@ const STATUS_COLORS = {
   archived: 'bg-gray-100 text-gray-600',
 }
 
+const STATUS_LABELS = {
+  new: 'Nieuw',
+  shortlisted: 'Favoriet',
+  generated: 'Gegenereerd',
+  archived: 'Gearchiveerd',
+}
+
+const SCORE_LABELS: Record<string, string> = {
+  engagement: 'Betrokkenheid',
+  freshness: 'Actualiteit',
+  relevance: 'Relevantie',
+  novelty: 'Nieuwheid',
+  seasonality: 'Seizoen',
+}
+
 const BRIEF_STATUS_COLORS = {
   draft: 'bg-amber-100 text-amber-800',
   approved: 'bg-green-100 text-green-800',
@@ -771,7 +786,7 @@ export default function ViralHubPage() {
                 <div>
                   <CardTitle className="text-lg flex items-center gap-2">
                     <Zap className="h-5 w-5 text-primary" />
-                    Signal Discovery
+                    Signalen Ophalen
                   </CardTitle>
                   <CardDescription>
                     {isLoadingSuggestion
@@ -864,7 +879,7 @@ export default function ViralHubPage() {
                   ) : (
                     <Download className="h-4 w-4 mr-2" />
                   )}
-                  Ingest
+                  Ophalen
                 </Button>
                 <Button
                   onClick={handleBuildOpportunities}
@@ -876,7 +891,7 @@ export default function ViralHubPage() {
                   ) : (
                     <Sparkles className="h-4 w-4 mr-2" />
                   )}
-                  Build
+                  Ideeën Genereren
                 </Button>
               </div>
 
@@ -894,7 +909,7 @@ export default function ViralHubPage() {
                       : 'text-amber-800'
                   )}>
                     {ingestResult.inserted > 0 || ingestResult.updated > 0
-                      ? 'Ingest succesvol!'
+                      ? 'Signalen opgehaald!'
                       : 'Geen nieuwe content gevonden'}
                   </p>
                   <p className={ingestResult.inserted > 0 || ingestResult.updated > 0 ? 'text-green-600' : 'text-amber-600'}>
@@ -940,7 +955,7 @@ export default function ViralHubPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-lg">Content Opportunities</CardTitle>
+                  <CardTitle className="text-lg">Content Ideeën</CardTitle>
                   <CardDescription>
                     Gesorteerd op score (hoogste eerst)
                   </CardDescription>
@@ -958,7 +973,7 @@ export default function ViralHubPage() {
               <div className="flex gap-1 mt-3 border-b">
                 {[
                   { value: 'all', label: 'Alle', count: opportunities.length },
-                  { value: 'shortlisted', label: '⭐ Shortlist', count: opportunities.filter(o => o.status === 'shortlisted').length },
+                  { value: 'shortlisted', label: '⭐ Favorieten', count: opportunities.filter(o => o.status === 'shortlisted').length },
                   { value: 'generated', label: '✓ Gegenereerd', count: opportunities.filter(o => o.status === 'generated').length },
                   { value: 'new', label: 'Nieuw', count: opportunities.filter(o => o.status === 'new').length },
                 ] .map(tab => (
@@ -985,9 +1000,9 @@ export default function ViralHubPage() {
               ) : opportunities.length === 0 ? (
                 <div className="text-center py-12">
                   <TrendingUp className="h-12 w-12 mx-auto text-surface-300 mb-4" />
-                  <p className="text-surface-600 font-medium">Geen opportunities gevonden</p>
+                  <p className="text-surface-600 font-medium">Geen ideeën gevonden</p>
                   <p className="text-surface-500 text-sm mt-1">
-                    Klik op &quot;Ingest&quot; en daarna &quot;Build&quot; om te starten
+                    Klik op &quot;Ophalen&quot; en daarna &quot;Ideeën Genereren&quot; om te starten
                   </p>
                 </div>
               ) : (
@@ -1434,7 +1449,7 @@ export default function ViralHubPage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
                       <Badge className={STATUS_COLORS[selectedOpportunity.status]}>
-                        {selectedOpportunity.status}
+                        {STATUS_LABELS[selectedOpportunity.status]}
                       </Badge>
                       <Badge variant="outline" className="flex items-center gap-1">
                         {(() => {
@@ -1485,9 +1500,9 @@ export default function ViralHubPage() {
                   </div>
                 </div>
 
-                {/* Score Breakdown */}
+                {/* Score Analyse */}
                 <div>
-                  <h4 className="font-medium text-surface-900 mb-3">Score Breakdown</h4>
+                  <h4 className="font-medium text-surface-900 mb-3">Score Analyse</h4>
                   <div className="grid grid-cols-5 gap-3">
                     {Object.entries(selectedOpportunity.scoreBreakdown).map(([key, value]) => (
                       <div key={key} className="text-center">
@@ -1497,7 +1512,7 @@ export default function ViralHubPage() {
                             style={{ width: `${(value / 30) * 100}%` }}
                           />
                         </div>
-                        <p className="text-xs text-surface-600 capitalize">{key}</p>
+                        <p className="text-xs text-surface-600">{SCORE_LABELS[key] || key}</p>
                         <p className="text-sm font-medium">{value}</p>
                       </div>
                     ))}
@@ -1633,7 +1648,7 @@ export default function ViralHubPage() {
                       onClick={() => handleUpdateStatus(selectedOpportunity.id, 'shortlisted')}
                       leftIcon={<Star className="h-4 w-4" />}
                     >
-                      Shortlist
+                      Favoriet
                     </Button>
                   )}
                   {selectedOpportunity.status !== 'archived' && (
@@ -1702,7 +1717,7 @@ function OpportunityCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2">
             <Badge className={cn('text-xs', STATUS_COLORS[opportunity.status])}>
-              {opportunity.status}
+              {STATUS_LABELS[opportunity.status]}
             </Badge>
             <Badge variant="outline" className="text-xs flex items-center gap-1">
               <Icon className="h-3 w-3" />
