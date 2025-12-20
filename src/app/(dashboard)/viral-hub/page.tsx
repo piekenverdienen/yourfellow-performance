@@ -706,10 +706,10 @@ export default function ViralHubPage() {
         <div>
           <h1 className="text-2xl font-bold text-surface-900 flex items-center gap-2">
             <TrendingUp className="h-6 w-6 text-primary" />
-            Viral Hub
+            Content Hub
           </h1>
           <p className="text-surface-600 mt-1">
-            Ontdek trending topics en genereer content die scoort
+            Van trending signalen naar productie-klare content
           </p>
         </div>
         <div className="flex items-center gap-2">

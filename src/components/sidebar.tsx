@@ -75,6 +75,12 @@ const navigation: NavItem[] = [
     color: 'text-violet-600 bg-violet-100'
   },
   {
+    name: 'Content Hub',
+    href: '/viral-hub',
+    icon: TrendingUp,
+    color: 'text-rose-600 bg-rose-100'
+  },
+  {
     name: 'Workflows',
     href: '/workflows',
     icon: GitBranch,
