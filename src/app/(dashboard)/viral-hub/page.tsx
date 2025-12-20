@@ -1,9 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useSelectedClient } from '@/stores/client-store'
 import { usePersistedState } from '@/hooks/use-persisted-form'
-import type { ClientContext } from '@/types'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -96,154 +95,14 @@ const defaultConfig: IngestConfig = {
 }
 
 // ============================================
-// Helper: Derive config from client AI Context
+// Types for AI Suggestions
 // ============================================
 
-// AUDIENCE-based keywords → subreddits where the TARGET AUDIENCE hangs out
-// Not where the business owner hangs out, but where their CUSTOMERS are
-const AUDIENCE_SUBREDDIT_MAP: Record<string, string[]> = {
-  // Sports & Fitness
-  cycling: ['cycling', 'Velo', 'bicycling', 'peloton'],
-  wielrennen: ['cycling', 'Velo', 'peloton', 'bicycling'],
-  fietsen: ['cycling', 'bicycling', 'bikecommuting'],
-  zwift: ['Zwift', 'cycling', 'Velo', 'pelotoncycle'],
-  triathlon: ['triathlon', 'Ironman', 'cycling', 'Swimming'],
-  hardlopen: ['running', 'AdvancedRunning', 'C25K'],
-  running: ['running', 'AdvancedRunning', 'trailrunning'],
-  fitness: ['Fitness', 'bodybuilding', 'weightlifting', 'GYM'],
-  gym: ['GYM', 'Fitness', 'bodybuilding', 'naturalbodybuilding'],
-  yoga: ['yoga', 'Fitness', 'flexibility', 'Meditation'],
-  crossfit: ['crossfit', 'Fitness', 'functionalfitness'],
-
-  // E-commerce audiences
-  webshop: ['ecommerce', 'shopify', 'Entrepreneur'],
-  'online shop': ['ecommerce', 'smallbusiness', 'Entrepreneur'],
-  ondernemer: ['Entrepreneur', 'smallbusiness', 'startups'],
-  entrepreneur: ['Entrepreneur', 'startups', 'smallbusiness'],
-  mkb: ['smallbusiness', 'Entrepreneur', 'business'],
-  retailer: ['retail', 'smallbusiness', 'ecommerce'],
-
-  // Tech audiences
-  developer: ['webdev', 'programming', 'learnprogramming'],
-  programmeur: ['webdev', 'programming', 'learnprogramming'],
-  designer: ['design', 'web_design', 'userexperience'],
-  marketeer: ['marketing', 'DigitalMarketing', 'socialmedia'],
-
-  // Lifestyle
-  ouders: ['Parenting', 'Mommit', 'daddit'],
-  parents: ['Parenting', 'Mommit', 'daddit'],
-  studenten: ['college', 'students', 'GetStudying'],
-  students: ['college', 'students', 'GetStudying'],
-
-  // Finance
-  beleggers: ['investing', 'stocks', 'FinancialPlanning'],
-  investors: ['investing', 'stocks', 'wallstreetbets'],
-
-  // Food & Lifestyle
-  foodies: ['food', 'Cooking', 'EatCheapAndHealthy'],
-  koken: ['Cooking', 'recipes', 'MealPrepSunday'],
-  vegan: ['vegan', 'PlantBasedDiet', 'veganrecipes'],
-
-  // Creative
-  fotografen: ['photography', 'photocritique', 'AskPhotography'],
-  photographers: ['photography', 'photocritique', 'AskPhotography'],
-  muzikanten: ['WeAreTheMusicMakers', 'musicians', 'Guitar'],
-  musicians: ['WeAreTheMusicMakers', 'musicians', 'Guitar'],
-
-  // Gaming
-  gamers: ['gaming', 'pcgaming', 'Games'],
-  esports: ['esports', 'CompetitiveGaming', 'leagueoflegends'],
-
-  // Home & Garden
-  huiseigenaren: ['homeowners', 'HomeImprovement', 'DIY'],
-  homeowners: ['homeowners', 'HomeImprovement', 'DIY'],
-  tuiniers: ['gardening', 'landscaping', 'vegetablegardening'],
-}
-
-function deriveSubredditsFromAudience(context: ClientContext): string[] {
-  const subreddits = new Set<string>()
-
-  // Analyze target audience and proposition for audience keywords
-  const textToAnalyze = [
-    context.targetAudience || '',
-    context.proposition || '',
-    ...(context.usps || []),
-  ].join(' ').toLowerCase()
-
-  // Find matching audience keywords
-  for (const [keyword, subs] of Object.entries(AUDIENCE_SUBREDDIT_MAP)) {
-    if (textToAnalyze.includes(keyword.toLowerCase())) {
-      subs.forEach(sub => subreddits.add(sub))
-    }
-  }
-
-  // If no matches found, return empty (user should configure manually)
-  if (subreddits.size === 0) {
-    return []
-  }
-
-  // Limit to 6 most relevant
-  return Array.from(subreddits).slice(0, 6)
-}
-
-function deriveIndustryFromContext(context: ClientContext): string {
-  // This is for the "industry" label - describes what the client does
-  // Used for grouping opportunities, not for finding subreddits
-  const textToAnalyze = [
-    context.proposition,
-    context.targetAudience,
-  ].join(' ').toLowerCase()
-
-  // Simple industry detection for labeling purposes
-  if (textToAnalyze.includes('fitness') || textToAnalyze.includes('training') || textToAnalyze.includes('sport')) {
-    return 'fitness'
-  }
-  if (textToAnalyze.includes('e-commerce') || textToAnalyze.includes('webshop') || textToAnalyze.includes('shop')) {
-    return 'ecommerce'
-  }
-  if (textToAnalyze.includes('saas') || textToAnalyze.includes('software') || textToAnalyze.includes('platform')) {
-    return 'software'
-  }
-  if (textToAnalyze.includes('marketing') || textToAnalyze.includes('bureau') || textToAnalyze.includes('agency')) {
-    return 'marketing'
-  }
-
-  return 'general'
-}
-
-function deriveQueryFromContext(context: ClientContext): string {
-  // Use the first USP or bestseller as a search query hint
-  if (context.bestsellers && context.bestsellers.length > 0) {
-    return context.bestsellers[0]
-  }
-  if (context.usps && context.usps.length > 0) {
-    // Extract key concept from first USP
-    const firstUsp = context.usps[0]
-    // Take first few words
-    return firstUsp.split(' ').slice(0, 3).join(' ')
-  }
-  return ''
-}
-
-function deriveConfigFromClientContext(context: ClientContext | undefined): IngestConfig {
-  if (!context) return defaultConfig
-
-  const industry = deriveIndustryFromContext(context)
-  const audienceSubreddits = deriveSubredditsFromAudience(context)
-
-  // If we found audience-specific subreddits, use those
-  // Otherwise fall back to defaults (user should configure manually)
-  const subreddits = audienceSubreddits.length > 0
-    ? audienceSubreddits.join(', ')
-    : defaultConfig.subreddits
-
-  const query = deriveQueryFromContext(context)
-
-  return {
-    industry,
-    subreddits,
-    query,
-  }
+interface AISuggestion {
+  subreddits: string[]
+  industry: string
+  searchTerms: string[]
+  reasoning: string
 }
 
 const CHANNEL_ICONS = {
@@ -272,27 +131,60 @@ const STATUS_COLORS = {
 export default function ViralHubPage() {
   const selectedClient = useSelectedClient()
   const clientId = selectedClient?.id || null
-  const clientContext = selectedClient?.settings?.context as ClientContext | undefined
-
-  // Derive initial config from client context
-  const contextDerivedConfig = useMemo(
-    () => deriveConfigFromClientContext(clientContext),
-    [clientContext]
-  )
+  const clientSettings = selectedClient?.settings as { context?: { proposition?: string; targetAudience?: string } } | undefined
+  const hasContext = !!(clientSettings?.context?.proposition || clientSettings?.context?.targetAudience)
 
   const [config, setConfig] = usePersistedState('viral-hub-config', defaultConfig)
-  const [hasAppliedClientContext, setHasAppliedClientContext] = useState<string | null>(null)
 
-  // When client changes and has context, update config
-  useEffect(() => {
-    if (clientId && clientContext && hasAppliedClientContext !== clientId) {
-      // Only auto-apply if client has context configured
-      if (clientContext.proposition || clientContext.targetAudience) {
-        setConfig(contextDerivedConfig)
-        setHasAppliedClientContext(clientId)
+  // AI Suggestion state
+  const [aiSuggestion, setAiSuggestion] = useState<AISuggestion | null>(null)
+  const [isLoadingSuggestion, setIsLoadingSuggestion] = useState(false)
+  const [suggestionError, setSuggestionError] = useState<string | null>(null)
+  const [lastSuggestedClientId, setLastSuggestedClientId] = useState<string | null>(null)
+
+  // Fetch AI suggestions when client changes
+  const fetchAISuggestion = useCallback(async (forClientId: string) => {
+    setIsLoadingSuggestion(true)
+    setSuggestionError(null)
+
+    try {
+      const response = await fetch('/api/viral/suggest-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: forClientId }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to get suggestions')
       }
+
+      const suggestion = data.data as AISuggestion
+      setAiSuggestion(suggestion)
+
+      // Auto-apply the suggestion
+      setConfig({
+        industry: suggestion.industry,
+        subreddits: suggestion.subreddits.join(', '),
+        query: suggestion.searchTerms[0] || '',
+      })
+
+      setLastSuggestedClientId(forClientId)
+    } catch (err) {
+      setSuggestionError(err instanceof Error ? err.message : 'Failed to get AI suggestions')
+    } finally {
+      setIsLoadingSuggestion(false)
     }
-  }, [clientId, clientContext, contextDerivedConfig, hasAppliedClientContext, setConfig])
+  }, [setConfig])
+
+  // When client changes and has context, fetch AI suggestions
+  useEffect(() => {
+    if (clientId && hasContext && lastSuggestedClientId !== clientId) {
+      fetchAISuggestion(clientId)
+    }
+  }, [clientId, hasContext, lastSuggestedClientId, fetchAISuggestion])
+
   const [opportunities, setOpportunities] = useState<Opportunity[]>([])
   const [selectedOpportunity, setSelectedOpportunity] = useState<Opportunity | null>(null)
   const [opportunitySignals, setOpportunitySignals] = useState<Signal[]>([])
@@ -519,15 +411,21 @@ export default function ViralHubPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {clientId && clientContext && (
-            <Badge variant="outline" className="text-green-700 border-green-300 bg-green-50">
-              <Sparkles className="h-3 w-3 mr-1" />
-              AI Context actief
+          {isLoadingSuggestion && (
+            <Badge variant="outline" className="text-blue-700 border-blue-300 bg-blue-50">
+              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+              AI analyseert klant...
             </Badge>
           )}
-          {clientId && !clientContext && (
+          {!isLoadingSuggestion && aiSuggestion && (
+            <Badge variant="outline" className="text-green-700 border-green-300 bg-green-50">
+              <Sparkles className="h-3 w-3 mr-1" />
+              AI Config geladen
+            </Badge>
+          )}
+          {clientId && !hasContext && (
             <Badge variant="secondary">
-              Client actief
+              Geen AI Context
             </Badge>
           )}
         </div>
@@ -559,27 +457,45 @@ export default function ViralHubPage() {
                     Signal Discovery
                   </CardTitle>
                   <CardDescription>
-                    {clientContext
-                      ? 'Instellingen afgeleid van AI Context'
-                      : 'Configureer welke trends je wilt ontdekken'}
+                    {isLoadingSuggestion
+                      ? 'AI analyseert de klant context...'
+                      : aiSuggestion
+                        ? 'Instellingen gegenereerd door AI'
+                        : 'Configureer welke trends je wilt ontdekken'}
                   </CardDescription>
                 </div>
-                {clientContext && (
+                {hasContext && clientId && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => {
-                      setConfig(contextDerivedConfig)
-                      setHasAppliedClientContext(clientId)
-                    }}
-                    title="Herstel naar AI Context"
+                    onClick={() => fetchAISuggestion(clientId)}
+                    disabled={isLoadingSuggestion}
+                    title="Herlaad AI suggesties"
                   >
-                    <RefreshCw className="h-4 w-4" />
+                    <RefreshCw className={cn('h-4 w-4', isLoadingSuggestion && 'animate-spin')} />
                   </Button>
                 )}
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* AI Reasoning */}
+              {aiSuggestion?.reasoning && (
+                <div className="bg-primary/5 border border-primary/20 rounded-lg p-3">
+                  <p className="text-xs font-medium text-primary mb-1 flex items-center gap-1">
+                    <Sparkles className="h-3 w-3" />
+                    AI Analyse
+                  </p>
+                  <p className="text-xs text-surface-600">{aiSuggestion.reasoning}</p>
+                </div>
+              )}
+
+              {/* Suggestion Error */}
+              {suggestionError && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <p className="text-xs text-amber-700">{suggestionError}</p>
+                </div>
+              )}
+
               <div>
                 <label className="text-sm font-medium text-surface-700 mb-1.5 block">
                   Industrie
@@ -588,6 +504,7 @@ export default function ViralHubPage() {
                   value={config.industry}
                   onChange={(e) => setConfig({ ...config, industry: e.target.value })}
                   placeholder="marketing, ecommerce, etc."
+                  disabled={isLoadingSuggestion}
                 />
               </div>
 
@@ -599,9 +516,10 @@ export default function ViralHubPage() {
                   value={config.subreddits}
                   onChange={(e) => setConfig({ ...config, subreddits: e.target.value })}
                   placeholder="marketing, entrepreneur, smallbusiness"
+                  disabled={isLoadingSuggestion}
                 />
                 <p className="text-xs text-surface-500 mt-1">
-                  Komma-gescheiden lijst
+                  Komma-gescheiden lijst van communities waar je doelgroep actief is
                 </p>
               </div>
 
@@ -613,6 +531,7 @@ export default function ViralHubPage() {
                   value={config.query}
                   onChange={(e) => setConfig({ ...config, query: e.target.value })}
                   placeholder="viral marketing tips"
+                  disabled={isLoadingSuggestion}
                 />
               </div>
 

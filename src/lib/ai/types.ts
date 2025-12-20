@@ -55,6 +55,7 @@ export type AITask =
   | 'viral_youtube_script'
   | 'viral_blog_outline'
   | 'viral_blog_draft'
+  | 'viral_config_suggestion'
 
 export interface TaskModelMapping {
   task: AITask

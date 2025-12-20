@@ -534,6 +534,61 @@ Target word count: {{word_count}}`,
     maxTokens: 5000,
     xpReward: 20,
   },
+
+  viral_config_suggestion: {
+    id: 'viral-config-suggestion-v1',
+    task: 'viral_config_suggestion',
+    systemPrompt: `Je bent een social media research expert die begrijpt waar verschillende doelgroepen online actief zijn.
+
+TAAK:
+Analyseer de klant context en bepaal:
+1. Welke Reddit communities (subreddits) relevant zijn voor hun DOELGROEP (niet voor het bedrijf zelf)
+2. Welke industrie/niche label past bij deze klant
+3. Relevante zoektermen voor trend discovery
+
+BELANGRIJK:
+- Focus op waar de KLANTEN van dit bedrijf actief zijn, niet waar de ondernemer zelf zou hangen
+- Bijvoorbeeld: Een Zwift training app → kijk naar wielren-communities, niet naar SaaS/startup communities
+- Een kinderkleding webshop → kijk naar ouder-communities, niet naar e-commerce communities
+
+SUBREDDIT SELECTIE:
+- Kies 4-6 actieve, relevante subreddits
+- Mix van groot (>100k members) en niche communities
+- Alleen echte, bestaande subreddits
+- Geen NSFW communities
+
+OUTPUT FORMAT:
+Geef ALLEEN valide JSON terug (geen markdown codeblocks):
+{
+  "subreddits": ["subreddit1", "subreddit2", "subreddit3", "subreddit4"],
+  "industry": "korte industrie label (1-2 woorden)",
+  "searchTerms": ["zoekterm1", "zoekterm2", "zoekterm3"],
+  "reasoning": "Korte uitleg waarom deze communities relevant zijn voor de doelgroep"
+}`,
+    userPromptTemplate: `KLANT CONTEXT:
+
+Bedrijfsnaam: {{client_name}}
+
+Propositie (wat ze doen):
+{{proposition}}
+
+Doelgroep (wie zijn hun klanten):
+{{target_audience}}
+
+USPs (unique selling points):
+{{usps}}
+
+Bestsellers/Populaire producten:
+{{bestsellers}}
+
+Tone of Voice:
+{{tone_of_voice}}
+
+Analyseer deze context en bepaal waar de DOELGROEP van dit bedrijf online actief is.`,
+    temperature: 0.5,
+    maxTokens: 500,
+    xpReward: 2,
+  },
 }
 
 // ============================================

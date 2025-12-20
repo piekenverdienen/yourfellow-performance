@@ -199,6 +199,12 @@ export const TASK_MODEL_MAPPING: Record<AITask, TaskModelMapping> = {
     fallbackModelId: 'gpt-4o',
     requiredCapabilities: ['text-generation'],
   },
+  viral_config_suggestion: {
+    task: 'viral_config_suggestion',
+    defaultModelId: 'claude-haiku',  // Fast & cheap for config suggestions
+    fallbackModelId: 'gpt-4o-mini',
+    requiredCapabilities: ['text-generation'],
+  },
 }
 
 // ============================================
