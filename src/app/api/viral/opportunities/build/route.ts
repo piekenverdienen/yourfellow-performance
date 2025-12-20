@@ -11,6 +11,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { buildOpportunities, type ViralChannel } from '@/viral/opportunities'
 import { cache } from '@/lib/cache'
+import { rateLimiter, RATE_LIMITS, getClientIdentifier, createRateLimitResponse } from '@/lib/rate-limit'
+import { auditLog, getRequestMetadata } from '@/lib/audit-log'
 import { z } from 'zod'
 
 // ============================================
@@ -51,7 +53,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 2. Check internal access
+    // 2. Rate limiting (heavy operation - max 5 per minute)
+    const clientId = getClientIdentifier(request, user.id)
+    const rateCheck = rateLimiter.check(
+      `build:${clientId}`,
+      RATE_LIMITS.HEAVY.maxRequests,
+      RATE_LIMITS.HEAVY.windowMs
+    )
+
+    if (!rateCheck.allowed) {
+      return createRateLimitResponse(rateCheck.resetIn)
+    }
+
+    // 3. Check internal access
     const isInternalOnly = process.env.VIRAL_HUB_INTERNAL_ONLY !== 'false'
     if (isInternalOnly) {
       const { data: profile } = await supabase
@@ -133,7 +147,24 @@ export async function POST(request: NextRequest) {
     // 6. Invalidate opportunities cache after building new ones
     cache.invalidatePattern('^opportunities:')
 
-    // 7. Return opportunities with SEO insights summary
+    // 7. Audit log - track who built opportunities
+    const { ipAddress, userAgent } = getRequestMetadata(request)
+    await auditLog({
+      action: 'client.update',
+      userId: user.id,
+      userEmail: user.email,
+      resourceType: 'opportunities',
+      resourceId: clientId,
+      details: {
+        count: opportunities.length,
+        channels,
+        industry,
+      },
+      ipAddress,
+      userAgent,
+    })
+
+    // 8. Return opportunities with SEO insights summary
     const seoSummary = opportunities.length > 0 ? {
       demandCapture: opportunities.filter(o => o.seoData?.opportunityType === 'demand_capture').length,
       demandCreation: opportunities.filter(o => o.seoData?.opportunityType === 'demand_creation').length,

@@ -35,6 +35,21 @@ const nextConfig = {
             key: 'Permissions-Policy',
             value: 'camera=(), microphone=(), geolocation=()',
           },
+          // Content Security Policy - beschermt tegen XSS en data injectie
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // Next.js needs these
+              "style-src 'self' 'unsafe-inline'", // React inline styles
+              "img-src 'self' data: blob: https://*.supabase.co",
+              "font-src 'self' data:",
+              "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+              "frame-ancestors 'none'",
+              "form-action 'self'",
+              "base-uri 'self'",
+            ].join('; '),
+          },
         ],
       },
     ]
