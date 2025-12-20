@@ -17,8 +17,9 @@ import type {
 // Constants
 // ============================================
 
-const REDDIT_BASE_URL = 'https://www.reddit.com'
-const USER_AGENT = 'YourFellow-Performance/1.0 (Trend Discovery Bot)'
+const REDDIT_BASE_URL = 'https://old.reddit.com'
+// Use a more browser-like User-Agent - Reddit blocks bot-like agents
+const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 const MAX_EXCERPT_LENGTH = 500
 const REQUEST_DELAY_MS = 1000  // Rate limiting: 1 request per second
 const MAX_RETRIES = 3
@@ -153,7 +154,11 @@ export class RedditProvider implements SignalSourceProvider {
       const response = await fetch(url, {
         headers: {
           'User-Agent': USER_AGENT,
-          'Accept': 'application/json',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,application/json;q=0.8,*/*;q=0.7',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
         },
       })
 
