@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { useSelectedClientId } from '@/stores/client-store'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useSelectedClient } from '@/stores/client-store'
 import { usePersistedState } from '@/hooks/use-persisted-form'
+import type { ClientContext } from '@/types'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -94,6 +95,111 @@ const defaultConfig: IngestConfig = {
   query: '',
 }
 
+// ============================================
+// Helper: Derive config from client AI Context
+// ============================================
+
+// Keywords that map to industry categories
+const INDUSTRY_KEYWORDS: Record<string, string[]> = {
+  ecommerce: ['e-commerce', 'ecommerce', 'webshop', 'online shop', 'verkoop', 'retail', 'winkel'],
+  saas: ['saas', 'software', 'platform', 'app', 'tool', 'tech', 'technology'],
+  marketing: ['marketing', 'reclame', 'advertising', 'branding', 'merk'],
+  finance: ['finance', 'financieel', 'bank', 'verzekering', 'beleggen', 'investment'],
+  healthcare: ['gezondheid', 'health', 'medical', 'zorg', 'wellness', 'fitness'],
+  education: ['onderwijs', 'education', 'cursus', 'training', 'leren', 'course'],
+  realestate: ['vastgoed', 'real estate', 'makelaardij', 'wonen', 'housing'],
+  hospitality: ['horeca', 'restaurant', 'hotel', 'catering', 'food'],
+  agency: ['bureau', 'agency', 'dienstverlening', 'consultancy'],
+}
+
+// Subreddit suggestions per industry
+const INDUSTRY_SUBREDDITS: Record<string, string[]> = {
+  ecommerce: ['ecommerce', 'shopify', 'dropship', 'FulfillmentByAmazon', 'Entrepreneur'],
+  saas: ['SaaS', 'startups', 'Entrepreneur', 'microsaas', 'webdev'],
+  marketing: ['marketing', 'socialmedia', 'DigitalMarketing', 'SEO', 'PPC'],
+  finance: ['Finance', 'personalfinance', 'investing', 'FinancialPlanning'],
+  healthcare: ['healthcare', 'HealthIT', 'medicine', 'fitness'],
+  education: ['education', 'OnlineEducation', 'Teachers', 'edtech'],
+  realestate: ['realestate', 'RealEstate', 'REBubble', 'RealEstateInvesting'],
+  hospitality: ['restaurant', 'Hospitality', 'KitchenConfidential', 'foodbusiness'],
+  agency: ['agency', 'digital_marketing', 'Consulting', 'freelance'],
+  default: ['marketing', 'entrepreneur', 'smallbusiness', 'socialmedia'],
+}
+
+function deriveIndustryFromContext(context: ClientContext): string {
+  // Combine relevant text fields for analysis
+  const textToAnalyze = [
+    context.proposition,
+    context.targetAudience,
+    ...(context.usps || []),
+  ].join(' ').toLowerCase()
+
+  // Find matching industry based on keywords
+  for (const [industry, keywords] of Object.entries(INDUSTRY_KEYWORDS)) {
+    for (const keyword of keywords) {
+      if (textToAnalyze.includes(keyword.toLowerCase())) {
+        return industry
+      }
+    }
+  }
+
+  return 'marketing' // fallback
+}
+
+function deriveSubredditsFromContext(context: ClientContext, industry: string): string {
+  // Start with industry-specific subreddits
+  const subreddits = new Set(INDUSTRY_SUBREDDITS[industry] || INDUSTRY_SUBREDDITS.default)
+
+  // Add general business subreddits
+  subreddits.add('Entrepreneur')
+  subreddits.add('smallbusiness')
+
+  // If we have active channels, add related subreddits
+  if (context.activeChannels?.includes('seo')) {
+    subreddits.add('SEO')
+    subreddits.add('bigseo')
+  }
+  if (context.activeChannels?.includes('google_ads')) {
+    subreddits.add('PPC')
+    subreddits.add('adwords')
+  }
+  if (context.activeChannels?.includes('meta')) {
+    subreddits.add('FacebookAds')
+    subreddits.add('socialmedia')
+  }
+
+  // Limit to 6 subreddits
+  return Array.from(subreddits).slice(0, 6).join(', ')
+}
+
+function deriveQueryFromContext(context: ClientContext): string {
+  // Use the first USP or bestseller as a search query hint
+  if (context.bestsellers && context.bestsellers.length > 0) {
+    return context.bestsellers[0]
+  }
+  if (context.usps && context.usps.length > 0) {
+    // Extract key concept from first USP
+    const firstUsp = context.usps[0]
+    // Take first few words
+    return firstUsp.split(' ').slice(0, 3).join(' ')
+  }
+  return ''
+}
+
+function deriveConfigFromClientContext(context: ClientContext | undefined): IngestConfig {
+  if (!context) return defaultConfig
+
+  const industry = deriveIndustryFromContext(context)
+  const subreddits = deriveSubredditsFromContext(context, industry)
+  const query = deriveQueryFromContext(context)
+
+  return {
+    industry,
+    subreddits,
+    query,
+  }
+}
+
 const CHANNEL_ICONS = {
   youtube: Youtube,
   instagram: Instagram,
@@ -118,8 +224,29 @@ const STATUS_COLORS = {
 // ============================================
 
 export default function ViralHubPage() {
-  const clientId = useSelectedClientId()
+  const selectedClient = useSelectedClient()
+  const clientId = selectedClient?.id || null
+  const clientContext = selectedClient?.settings?.context as ClientContext | undefined
+
+  // Derive initial config from client context
+  const contextDerivedConfig = useMemo(
+    () => deriveConfigFromClientContext(clientContext),
+    [clientContext]
+  )
+
   const [config, setConfig] = usePersistedState('viral-hub-config', defaultConfig)
+  const [hasAppliedClientContext, setHasAppliedClientContext] = useState<string | null>(null)
+
+  // When client changes and has context, update config
+  useEffect(() => {
+    if (clientId && clientContext && hasAppliedClientContext !== clientId) {
+      // Only auto-apply if client has context configured
+      if (clientContext.proposition || clientContext.targetAudience) {
+        setConfig(contextDerivedConfig)
+        setHasAppliedClientContext(clientId)
+      }
+    }
+  }, [clientId, clientContext, contextDerivedConfig, hasAppliedClientContext, setConfig])
   const [opportunities, setOpportunities] = useState<Opportunity[]>([])
   const [selectedOpportunity, setSelectedOpportunity] = useState<Opportunity | null>(null)
   const [opportunitySignals, setOpportunitySignals] = useState<Signal[]>([])
@@ -345,11 +472,19 @@ export default function ViralHubPage() {
             Ontdek trending topics en genereer content die scoort
           </p>
         </div>
-        {clientId && (
-          <Badge variant="secondary">
-            Client actief
-          </Badge>
-        )}
+        <div className="flex items-center gap-2">
+          {clientId && clientContext && (
+            <Badge variant="outline" className="text-green-700 border-green-300 bg-green-50">
+              <Sparkles className="h-3 w-3 mr-1" />
+              AI Context actief
+            </Badge>
+          )}
+          {clientId && !clientContext && (
+            <Badge variant="secondary">
+              Client actief
+            </Badge>
+          )}
+        </div>
       </div>
 
       {/* Error Alert */}
@@ -371,13 +506,32 @@ export default function ViralHubPage() {
         <div className="lg:col-span-1 space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Zap className="h-5 w-5 text-primary" />
-                Signal Discovery
-              </CardTitle>
-              <CardDescription>
-                Configureer welke trends je wilt ontdekken
-              </CardDescription>
+              <div className="flex items-start justify-between">
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Zap className="h-5 w-5 text-primary" />
+                    Signal Discovery
+                  </CardTitle>
+                  <CardDescription>
+                    {clientContext
+                      ? 'Instellingen afgeleid van AI Context'
+                      : 'Configureer welke trends je wilt ontdekken'}
+                  </CardDescription>
+                </div>
+                {clientContext && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setConfig(contextDerivedConfig)
+                      setHasAppliedClientContext(clientId)
+                    }}
+                    title="Herstel naar AI Context"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>

@@ -226,11 +226,11 @@ function clusterSignals(signals: SignalWithId[]): SignalCluster[] {
         assignedSignals.add(otherId)
 
         // Merge keywords
-        for (const kw of otherKeywords) {
+        otherKeywords.forEach(kw => {
           if (!cluster.keywords.includes(kw)) {
             cluster.keywords.push(kw)
           }
-        }
+        })
       }
     }
 
@@ -255,9 +255,9 @@ function extractKeywords(text: string): Set<string> {
 
 function countOverlap(set1: Set<string>, set2: Set<string>): number {
   let count = 0
-  for (const item of set1) {
+  set1.forEach(item => {
     if (set2.has(item)) count++
-  }
+  })
   return count
 }
 

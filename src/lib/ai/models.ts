@@ -163,6 +163,42 @@ export const TASK_MODEL_MAPPING: Record<AITask, TaskModelMapping> = {
     fallbackModelId: 'gpt-4o-mini',
     requiredCapabilities: ['text-generation'],
   },
+  meta_ads_insights: {
+    task: 'meta_ads_insights',
+    defaultModelId: 'claude-sonnet',
+    fallbackModelId: 'gpt-4o',
+    requiredCapabilities: ['text-generation'],
+  },
+  viral_topic_synthesis: {
+    task: 'viral_topic_synthesis',
+    defaultModelId: 'claude-sonnet',
+    fallbackModelId: 'gpt-4o',
+    requiredCapabilities: ['text-generation'],
+  },
+  viral_ig_package: {
+    task: 'viral_ig_package',
+    defaultModelId: 'claude-sonnet',
+    fallbackModelId: 'gpt-4o',
+    requiredCapabilities: ['text-generation'],
+  },
+  viral_youtube_script: {
+    task: 'viral_youtube_script',
+    defaultModelId: 'claude-sonnet',
+    fallbackModelId: 'gpt-4o',
+    requiredCapabilities: ['text-generation'],
+  },
+  viral_blog_outline: {
+    task: 'viral_blog_outline',
+    defaultModelId: 'claude-sonnet',
+    fallbackModelId: 'gpt-4o',
+    requiredCapabilities: ['text-generation'],
+  },
+  viral_blog_draft: {
+    task: 'viral_blog_draft',
+    defaultModelId: 'claude-sonnet',
+    fallbackModelId: 'gpt-4o',
+    requiredCapabilities: ['text-generation'],
+  },
 }
 
 // ============================================
