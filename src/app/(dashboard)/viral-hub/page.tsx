@@ -200,6 +200,7 @@ export default function ViralHubPage() {
   const [error, setError] = useState<string | null>(null)
   const [copiedText, setCopiedText] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'youtube' | 'instagram' | 'blog'>('youtube')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'new' | 'shortlisted' | 'generated'>('all')
 
   // ============================================
   // Data Fetching
@@ -631,21 +632,45 @@ export default function ViralHubPage() {
         {/* Opportunities List */}
         <div className="lg:col-span-2">
           <Card className="h-full">
-            <CardHeader className="flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-lg">Content Opportunities</CardTitle>
-                <CardDescription>
-                  Gesorteerd op score (hoogste eerst)
-                </CardDescription>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg">Content Opportunities</CardTitle>
+                  <CardDescription>
+                    Gesorteerd op score (hoogste eerst)
+                  </CardDescription>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={loadOpportunities}
+                  disabled={isLoadingOpportunities}
+                >
+                  <RefreshCw className={cn('h-4 w-4', isLoadingOpportunities && 'animate-spin')} />
+                </Button>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={loadOpportunities}
-                disabled={isLoadingOpportunities}
-              >
-                <RefreshCw className={cn('h-4 w-4', isLoadingOpportunities && 'animate-spin')} />
-              </Button>
+              {/* Status Filter Tabs */}
+              <div className="flex gap-1 mt-3 border-b">
+                {[
+                  { value: 'all', label: 'Alle', count: opportunities.length },
+                  { value: 'shortlisted', label: '⭐ Shortlist', count: opportunities.filter(o => o.status === 'shortlisted').length },
+                  { value: 'generated', label: '✓ Gegenereerd', count: opportunities.filter(o => o.status === 'generated').length },
+                  { value: 'new', label: 'Nieuw', count: opportunities.filter(o => o.status === 'new').length },
+                ] .map(tab => (
+                  <button
+                    key={tab.value}
+                    onClick={() => setStatusFilter(tab.value as typeof statusFilter)}
+                    className={cn(
+                      'px-3 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
+                      statusFilter === tab.value
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-surface-600 hover:text-surface-900'
+                    )}
+                  >
+                    {tab.label} ({tab.count})
+                  </button>
+                ))}
+              </div>
             </CardHeader>
             <CardContent>
               {isLoadingOpportunities ? (
@@ -662,14 +687,21 @@ export default function ViralHubPage() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {opportunities.map((opportunity) => (
-                    <OpportunityCard
-                      key={opportunity.id}
-                      opportunity={opportunity}
-                      onClick={() => handleSelectOpportunity(opportunity)}
-                      onStatusChange={(status) => handleUpdateStatus(opportunity.id, status)}
-                    />
-                  ))}
+                  {opportunities
+                    .filter(o => statusFilter === 'all' || o.status === statusFilter)
+                    .map((opportunity) => (
+                      <OpportunityCard
+                        key={opportunity.id}
+                        opportunity={opportunity}
+                        onClick={() => handleSelectOpportunity(opportunity)}
+                        onStatusChange={(status) => handleUpdateStatus(opportunity.id, status)}
+                      />
+                    ))}
+                  {opportunities.filter(o => statusFilter === 'all' || o.status === statusFilter).length === 0 && (
+                    <div className="text-center py-8 text-surface-500">
+                      Geen items met status &quot;{statusFilter}&quot;
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>
