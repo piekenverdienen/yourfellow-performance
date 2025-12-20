@@ -196,7 +196,7 @@ export default function ViralHubPage() {
   const [isLoadingOpportunities, setIsLoadingOpportunities] = useState(false)
   const [isLoadingDetails, setIsLoadingDetails] = useState(false)
 
-  const [ingestResult, setIngestResult] = useState<{ inserted: number; updated: number } | null>(null)
+  const [ingestResult, setIngestResult] = useState<{ inserted: number; updated: number; errors?: string[] } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copiedText, setCopiedText] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'youtube' | 'instagram' | 'blog'>('youtube')
@@ -249,6 +249,8 @@ export default function ViralHubPage() {
         .map(s => s.trim())
         .filter(s => s.length > 0)
 
+      console.log('[Viral Hub] Starting ingest with:', { subreddits, query: config.query })
+
       const response = await fetch('/api/viral/ingest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -258,23 +260,32 @@ export default function ViralHubPage() {
             subreddits: subreddits.length > 0 ? subreddits : undefined,
             query: config.query || undefined,
             sort: 'hot',
-            timeFilter: 'day',
-            limit: 25,
+            timeFilter: 'week',  // Changed to week for more results
+            limit: 50,  // Increased limit
           },
         }),
       })
 
       const data = await response.json()
+      console.log('[Viral Hub] Ingest response:', data)
 
       if (!response.ok) {
         throw new Error(data.error || 'Ingest failed')
       }
 
+      // Show errors from the ingest process
+      if (data.errors && data.errors.length > 0) {
+        console.warn('[Viral Hub] Ingest errors:', data.errors)
+        setError(`Ingest waarschuwingen: ${data.errors.join(', ')}`)
+      }
+
       setIngestResult({
         inserted: data.data.inserted,
         updated: data.data.updated,
+        errors: data.errors,
       })
     } catch (err) {
+      console.error('[Viral Hub] Ingest failed:', err)
       setError(err instanceof Error ? err.message : 'Ingest failed')
     } finally {
       setIsIngesting(false)
@@ -564,11 +575,35 @@ export default function ViralHubPage() {
               </div>
 
               {ingestResult && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm">
-                  <p className="text-green-800 font-medium">Ingest succesvol!</p>
-                  <p className="text-green-600">
+                <div className={cn(
+                  'rounded-lg p-3 text-sm',
+                  ingestResult.inserted > 0 || ingestResult.updated > 0
+                    ? 'bg-green-50 border border-green-200'
+                    : 'bg-amber-50 border border-amber-200'
+                )}>
+                  <p className={cn(
+                    'font-medium',
+                    ingestResult.inserted > 0 || ingestResult.updated > 0
+                      ? 'text-green-800'
+                      : 'text-amber-800'
+                  )}>
+                    {ingestResult.inserted > 0 || ingestResult.updated > 0
+                      ? 'Ingest succesvol!'
+                      : 'Geen nieuwe content gevonden'}
+                  </p>
+                  <p className={ingestResult.inserted > 0 || ingestResult.updated > 0 ? 'text-green-600' : 'text-amber-600'}>
                     {ingestResult.inserted} nieuwe, {ingestResult.updated} bijgewerkt
                   </p>
+                  {ingestResult.errors && ingestResult.errors.length > 0 && (
+                    <p className="text-amber-700 text-xs mt-1">
+                      ⚠️ {ingestResult.errors.join(', ')}
+                    </p>
+                  )}
+                  {ingestResult.inserted === 0 && ingestResult.updated === 0 && !ingestResult.errors?.length && (
+                    <p className="text-amber-600 text-xs mt-1">
+                      Controleer de server logs voor meer details. Mogelijk blokkeert Reddit de server.
+                    </p>
+                  )}
                 </div>
               )}
             </CardContent>

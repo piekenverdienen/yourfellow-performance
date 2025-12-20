@@ -44,21 +44,38 @@ export class RedditProvider implements SignalSourceProvider {
     const timeFilter = config.timeFilter || 'day'
     const limit = Math.min(config.limit || 25, 100)
 
+    console.log('[Reddit] Starting fetch with config:', {
+      subreddits,
+      sort,
+      timeFilter,
+      limit,
+      query: config.query,
+    })
+
     for (const subreddit of subreddits) {
       try {
         // Rate limiting
         await this.respectRateLimit()
 
+        console.log(`[Reddit] Fetching r/${subreddit}...`)
         const posts = await this.fetchSubreddit(subreddit, sort, timeFilter, limit)
+        console.log(`[Reddit] Received ${posts.length} posts from r/${subreddit}`)
 
+        let added = 0
+        let skipped = 0
         for (const post of posts) {
           // Skip stickied posts, removed content, etc.
-          if (this.shouldSkipPost(post)) continue
+          if (this.shouldSkipPost(post)) {
+            skipped++
+            continue
+          }
 
           signals.push(this.normalizePost(post, config.industry))
+          added++
         }
+        console.log(`[Reddit] r/${subreddit}: added ${added}, skipped ${skipped}`)
       } catch (error) {
-        console.error(`Error fetching r/${subreddit}:`, error)
+        console.error(`[Reddit] Error fetching r/${subreddit}:`, error)
         // Continue with other subreddits
       }
     }
@@ -67,8 +84,11 @@ export class RedditProvider implements SignalSourceProvider {
     if (config.query) {
       try {
         await this.respectRateLimit()
+        console.log(`[Reddit] Searching for: ${config.query}`)
         const searchPosts = await this.searchReddit(config.query, sort, timeFilter, limit)
+        console.log(`[Reddit] Search returned ${searchPosts.length} posts`)
 
+        let added = 0
         for (const post of searchPosts) {
           if (this.shouldSkipPost(post)) continue
 
@@ -76,13 +96,16 @@ export class RedditProvider implements SignalSourceProvider {
           const exists = signals.some(s => s.externalId === post.id)
           if (!exists) {
             signals.push(this.normalizePost(post, config.industry))
+            added++
           }
         }
+        console.log(`[Reddit] Added ${added} from search`)
       } catch (error) {
-        console.error('Error searching Reddit:', error)
+        console.error('[Reddit] Error searching:', error)
       }
     }
 
+    console.log(`[Reddit] Total signals: ${signals.length}`)
     return signals
   }
 
