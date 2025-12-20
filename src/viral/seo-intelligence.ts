@@ -10,6 +10,7 @@
  */
 
 import { SearchConsoleClient } from '@/seo/search-console/client'
+import { AhrefsClient, type AhrefsKeywordData } from '@/seo/ahrefs/client'
 import type { SearchConsoleQuery } from '@/seo/types'
 
 // ============================================
@@ -26,14 +27,25 @@ export interface SearchIntelligence {
   // Do we have any search data?
   hasData: boolean
 
-  // GSC queries (where we already rank)
+  // What data sources do we have?
+  dataSources: {
+    ahrefs: boolean   // Real search volume data
+    gsc: boolean      // Where we already rank (for cannibalization)
+  }
+
+  // Ahrefs keyword data (REAL search demand)
+  ahrefsData: AhrefsKeywordData | null
+
+  // GSC queries (where we already rank - for cannibalization only)
   gscQueries: SearchQuery[]
 
   // Matched keywords (viral keywords matched to known search terms)
   matchedKeywords: MatchedKeyword[]
 
-  // Aggregated metrics
-  totalImpressions: number
+  // Aggregated metrics (from Ahrefs if available, otherwise GSC)
+  searchVolume: number | null           // Real monthly search volume (Ahrefs)
+  keywordDifficulty: number | null      // 0-100 (Ahrefs)
+  totalImpressions: number              // GSC impressions (where WE rank)
   totalClicks: number
   bestPosition: number | null
 
@@ -125,10 +137,11 @@ export interface ChannelScore {
 }
 
 // ============================================
-// Search Context for Briefs
+// Search Context for Briefs (internal, camelCase version)
+// For API serialization use SearchContext from ./schemas
 // ============================================
 
-export interface SearchContext {
+export interface InternalSearchContext {
   // What is the searcher looking for?
   searcherQuestion: string
 
@@ -490,44 +503,65 @@ export function calculateChannelScores(input: ChannelScoringInput): ChannelScore
 function calculateBlogScore(input: ChannelScoringInput): ChannelScore | null {
   const { searchIntelligence, viralScore, strategicGates } = input
 
-  // Blog scoring depends on whether we have search data
-  const hasSearchData = searchIntelligence.hasData
+  // Blog scoring now uses Ahrefs for REAL search demand
+  const hasAhrefsData = searchIntelligence.dataSources.ahrefs
+  const hasGscData = searchIntelligence.dataSources.gsc
+
+  // Demand levels from Ahrefs (real search volume)
   const hasSearchDemand = searchIntelligence.demandLevel === 'high' ||
                           searchIntelligence.demandLevel === 'medium'
   const hasLowDemand = searchIntelligence.demandLevel === 'low'
-  const hasExceptionalViral = input.totalEngagement > 5000 // Lowered threshold
+  const demandUnknown = searchIntelligence.demandLevel === 'unknown'
 
-  // Case 1: We have search data and demand is low → block blog
-  if (hasSearchData && hasLowDemand && !hasExceptionalViral) {
+  const hasExceptionalViral = input.totalEngagement > 5000
+
+  // Case 1: Ahrefs confirms LOW demand → block blog (unless exceptional viral)
+  if (hasAhrefsData && hasLowDemand && !hasExceptionalViral) {
+    const volume = searchIntelligence.searchVolume || 0
     return {
       total: 0,
       breakdown: {},
       viable: false,
-      rationale: 'Low search demand detected - consider social channels instead',
+      rationale: `Low search volume (${volume}/mo) - social channels recommended instead`,
     }
   }
-
-  // Case 2: No search data available → allow blog but with lower confidence
-  // This is the "demand creation" scenario - we don't know if there's demand
-  const isUnknownDemand = !hasSearchData
 
   // Blog scoring: search-heavy (60% search, 25% viral validation, 15% strategic)
   const breakdown: Record<string, number> = {}
 
-  // Search demand (0-35)
-  if (hasSearchDemand) {
-    breakdown.searchDemand = searchIntelligence.demandLevel === 'high' ? 35 : 25
-  } else if (isUnknownDemand) {
-    // No GSC data - give moderate score, rely on viral validation
+  // Search demand score (0-35) - Based on Ahrefs volume
+  if (hasAhrefsData && hasSearchDemand) {
+    const volume = searchIntelligence.searchVolume || 0
+    if (volume >= 1000) {
+      breakdown.searchDemand = 35  // High volume
+    } else if (volume >= 100) {
+      breakdown.searchDemand = 25  // Medium volume
+    } else {
+      breakdown.searchDemand = 15
+    }
+  } else if (demandUnknown) {
+    // No Ahrefs data - demand creation opportunity
     breakdown.searchDemand = 15
   } else {
     breakdown.searchDemand = 5
   }
 
-  // Position opportunity (0-25)
-  if (searchIntelligence.bestPosition) {
+  // Keyword difficulty penalty (0 to -10)
+  if (hasAhrefsData && searchIntelligence.keywordDifficulty !== null) {
+    const kd = searchIntelligence.keywordDifficulty
+    if (kd > 70) {
+      breakdown.difficultyPenalty = -10  // Super hard
+    } else if (kd > 50) {
+      breakdown.difficultyPenalty = -5   // Hard
+    } else {
+      breakdown.difficultyPenalty = 0    // Easy/Medium
+    }
+  }
+
+  // Position opportunity from GSC (0-25) - for cannibalization/quick wins
+  if (hasGscData && searchIntelligence.bestPosition) {
     if (searchIntelligence.bestPosition <= 10) {
-      breakdown.positionOpportunity = 25 // Quick win
+      breakdown.positionOpportunity = 25 // Quick win - already ranking
     } else if (searchIntelligence.bestPosition <= 20) {
       breakdown.positionOpportunity = 20 // Growth opportunity
     } else if (searchIntelligence.bestPosition <= 50) {
@@ -536,7 +570,7 @@ function calculateBlogScore(input: ChannelScoringInput): ChannelScore | null {
       breakdown.positionOpportunity = 5
     }
   } else {
-    // Not ranking - medium opportunity
+    // Not ranking yet - new territory
     breakdown.positionOpportunity = 15
   }
 
@@ -548,16 +582,19 @@ function calculateBlogScore(input: ChannelScoringInput): ChannelScore | null {
 
   const total = Object.values(breakdown).reduce((sum, val) => sum + val, 0)
 
-  // Build rationale based on data availability
+  // Build rationale based on data sources
   let rationale: string
-  if (hasSearchDemand) {
-    rationale = total >= 60
-      ? `Strong blog opportunity - ${searchIntelligence.demandLevel} search demand confirmed`
-      : 'Moderate blog opportunity with search validation'
-  } else if (isUnknownDemand) {
-    rationale = 'Blog opportunity (no GSC data) - recommend adding siteUrl for search insights'
+  if (hasAhrefsData && hasSearchDemand) {
+    const volume = searchIntelligence.searchVolume || 0
+    const kd = searchIntelligence.keywordDifficulty || 0
+    rationale = `Strong blog opportunity - ${volume}/mo search volume, KD ${kd}`
+  } else if (hasAhrefsData) {
+    const volume = searchIntelligence.searchVolume || 0
+    rationale = `Blog allowed despite lower volume (${volume}/mo) due to viral validation`
+  } else if (hasGscData && !hasAhrefsData) {
+    rationale = 'Blog opportunity (GSC data only) - add AHREFS_API_TOKEN for real search volume'
   } else {
-    rationale = 'Blog allowed due to high viral engagement despite low search demand'
+    rationale = 'Demand creation opportunity - no search data yet, viral-first approach'
   }
 
   return {
@@ -663,14 +700,40 @@ function calculateInstagramScore(input: ChannelScoringInput): ChannelScore | nul
 // Search Intelligence Builder
 // ============================================
 
-export async function buildSearchIntelligence(
-  viralKeywords: string[],
-  siteUrl?: string,
-  gscClient?: SearchConsoleClient
-): Promise<SearchIntelligence> {
-  let gscQueries: SearchQuery[] = []
+export interface BuildSearchIntelligenceOptions {
+  viralKeywords: string[]
+  topic: string                     // Main topic to search for
+  siteUrl?: string                  // For GSC cannibalization check
+  gscClient?: SearchConsoleClient   // GSC client (for cannibalization)
+  ahrefsClient?: AhrefsClient | null // Ahrefs client (for real demand)
+}
 
-  // Try to get GSC data if available
+export async function buildSearchIntelligence(
+  options: BuildSearchIntelligenceOptions
+): Promise<SearchIntelligence> {
+  const { viralKeywords, topic, siteUrl, gscClient, ahrefsClient } = options
+
+  let gscQueries: SearchQuery[] = []
+  let ahrefsData: AhrefsKeywordData | null = null
+
+  // 1. Try to get Ahrefs data for REAL search demand
+  if (ahrefsClient) {
+    try {
+      // Create search query from topic and viral keywords
+      const searchKeyword = topic.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim()
+      ahrefsData = await ahrefsClient.getSingleKeyword(searchKeyword)
+
+      if (!ahrefsData && viralKeywords.length > 0) {
+        // Try with first viral keyword
+        const altKeyword = viralKeywords[0].toLowerCase().replace(/[^a-z0-9\s]/g, '').trim()
+        ahrefsData = await ahrefsClient.getSingleKeyword(altKeyword)
+      }
+    } catch (error) {
+      console.warn('[SEO Intelligence] Failed to fetch Ahrefs data:', error)
+    }
+  }
+
+  // 2. Try to get GSC data for CANNIBALIZATION check (not demand!)
   if (siteUrl && gscClient) {
     try {
       const endDate = new Date()
@@ -704,56 +767,86 @@ export async function buildSearchIntelligence(
           position: q.position,
         }))
     } catch (error) {
-      console.warn('Failed to fetch GSC data:', error)
+      console.warn('[SEO Intelligence] Failed to fetch GSC data:', error)
     }
   }
 
-  // Calculate aggregates
+  // Calculate GSC aggregates (for cannibalization only)
   const totalImpressions = gscQueries.reduce((sum, q) => sum + q.impressions, 0)
   const totalClicks = gscQueries.reduce((sum, q) => sum + q.clicks, 0)
   const bestPosition = gscQueries.length > 0
     ? Math.min(...gscQueries.map(q => q.position))
     : null
 
-  // Determine demand level
+  // Determine demand level from AHREFS (real search volume), NOT GSC
   let demandLevel: SearchDemandLevel
-  if (totalImpressions === 0) {
-    demandLevel = 'unknown'
-  } else if (totalImpressions > 5000) {
-    demandLevel = 'high'
-  } else if (totalImpressions > 500) {
-    demandLevel = 'medium'
+  if (ahrefsData) {
+    // Use real search volume from Ahrefs
+    const ahrefsDemand = AhrefsClient.categorizeDemand(ahrefsData.volume)
+    // Map 'none' to 'low' since both indicate insufficient search demand
+    demandLevel = ahrefsDemand === 'none' ? 'low' : ahrefsDemand
   } else {
-    demandLevel = 'low'
+    // No Ahrefs data - demand is unknown
+    // NOTE: We deliberately do NOT fall back to GSC impressions as that's NOT search volume
+    demandLevel = 'unknown'
   }
 
-  // Determine opportunity type
-  const opportunityType: OpportunityType = demandLevel !== 'unknown' && demandLevel !== 'low'
+  // Determine opportunity type based on REAL demand
+  const opportunityType: OpportunityType = demandLevel === 'high' || demandLevel === 'medium'
     ? 'demand_capture'
     : 'demand_creation'
 
-  // Get primary keyword (highest impressions)
-  const primaryQuery = gscQueries.length > 0
-    ? gscQueries.reduce((best, q) => q.impressions > best.impressions ? q : best)
-    : null
+  // Get primary keyword
+  const primaryKeyword = ahrefsData?.keyword ||
+    (gscQueries.length > 0
+      ? gscQueries.reduce((best, q) => q.impressions > best.impressions ? q : best).query
+      : null)
 
   // Detect intent from primary keyword or viral keywords
-  const textForIntent = primaryQuery?.query || viralKeywords.join(' ')
+  const textForIntent = primaryKeyword || viralKeywords.join(' ')
   const intent = detectSearchIntent(textForIntent)
 
+  const hasAhrefsData = ahrefsData !== null
+  const hasGscData = gscQueries.length > 0
+
   return {
-    hasData: gscQueries.length > 0,
+    hasData: hasAhrefsData || hasGscData,
+    dataSources: {
+      ahrefs: hasAhrefsData,
+      gsc: hasGscData,
+    },
+    ahrefsData,
     gscQueries,
-    matchedKeywords: [], // TODO: Implement keyword matching database
+    matchedKeywords: [],
+    searchVolume: ahrefsData?.volume || null,
+    keywordDifficulty: ahrefsData?.difficulty || null,
     totalImpressions,
     totalClicks,
     bestPosition,
     demandLevel,
     opportunityType,
-    primaryKeyword: primaryQuery?.query || null,
+    primaryKeyword,
     intent,
     trendDirection: 'stable', // TODO: Integrate Google Trends
   }
+}
+
+/**
+ * Legacy function signature for backward compatibility
+ * @deprecated Use buildSearchIntelligence with options object instead
+ */
+export async function buildSearchIntelligenceLegacy(
+  viralKeywords: string[],
+  siteUrl?: string,
+  gscClient?: SearchConsoleClient
+): Promise<SearchIntelligence> {
+  return buildSearchIntelligence({
+    viralKeywords,
+    topic: viralKeywords[0] || '',
+    siteUrl,
+    gscClient,
+    ahrefsClient: AhrefsClient.fromEnv(),
+  })
 }
 
 // ============================================
@@ -763,7 +856,7 @@ export async function buildSearchIntelligence(
 export function buildSearchContext(
   searchIntelligence: SearchIntelligence,
   viralContext: { topic: string; coreDiscussion: string }
-): SearchContext | null {
+): InternalSearchContext | null {
   // Only build search context if we have search data
   if (!searchIntelligence.hasData || searchIntelligence.demandLevel === 'unknown') {
     return null

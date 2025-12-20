@@ -29,6 +29,7 @@ import type {
 export * from './types'
 export { analyzePageContent } from './page-analyzer'
 export { SearchConsoleClient } from './search-console'
+export { AhrefsClient } from './ahrefs'
 export { analyzeKeywords, getHighSignalKeywords, filterOpportunities } from './keyword-analyzer'
 export { SEOAdvisor, buildContentAdvisoryReport } from './advisor'
 

@@ -22,9 +22,10 @@ import {
   type SearchIntelligence,
   type StrategicGates,
   type ChannelScores,
-  type SearchContext,
+  type InternalSearchContext,
 } from './seo-intelligence'
 import { SearchConsoleClient } from '@/seo/search-console/client'
+import { AhrefsClient } from '@/seo/ahrefs/client'
 
 // ============================================
 // Types
@@ -70,7 +71,7 @@ export interface Opportunity {
     searchIntelligence: SearchIntelligence
     strategicGates: StrategicGates
     channelScores: ChannelScores
-    searchContext: SearchContext | null
+    searchContext: InternalSearchContext | null
     opportunityType: 'demand_capture' | 'demand_creation'
   }
 }
@@ -167,13 +168,27 @@ export async function buildOpportunities(
     },
   }))
 
-  // 2b. Initialize GSC client if SEO is enabled
+  // 2b. Initialize SEO clients if SEO is enabled
   let gscClient: SearchConsoleClient | undefined
-  if (seoEnabled && config.seoOptions?.siteUrl) {
-    try {
-      gscClient = SearchConsoleClient.fromEnv()
-    } catch (error) {
-      console.warn('GSC client initialization failed:', error)
+  let ahrefsClient: AhrefsClient | null = null
+
+  if (seoEnabled) {
+    // Ahrefs for REAL search demand (volume, difficulty)
+    ahrefsClient = AhrefsClient.fromEnv()
+    if (ahrefsClient) {
+      console.log('[Opportunities] Ahrefs client initialized - real search volume available')
+    } else {
+      console.log('[Opportunities] No Ahrefs API token - search demand will be unknown')
+    }
+
+    // GSC for cannibalization check only (where we already rank)
+    if (config.seoOptions?.siteUrl) {
+      try {
+        gscClient = SearchConsoleClient.fromEnv()
+        console.log('[Opportunities] GSC client initialized - cannibalization check available')
+      } catch (error) {
+        console.warn('[Opportunities] GSC client initialization failed:', error)
+      }
     }
   }
 
@@ -206,7 +221,8 @@ export async function buildOpportunities(
     const clusterOpportunities = await createOpportunitiesFromClusterV2(
       singleCluster,
       config,
-      gscClient
+      gscClient,
+      ahrefsClient
     )
 
     // Apply gate filtering if enforced
@@ -229,7 +245,8 @@ export async function buildOpportunities(
     const clusterOpportunities = await createOpportunitiesFromClusterV2(
       cluster,
       config,
-      gscClient
+      gscClient,
+      ahrefsClient
     )
 
     // Apply gate filtering if enforced
@@ -303,7 +320,8 @@ export async function buildOpportunities(
 async function createOpportunitiesFromClusterV2(
   cluster: SignalCluster,
   config: BuildOpportunitiesConfig,
-  gscClient?: SearchConsoleClient
+  gscClient?: SearchConsoleClient,
+  ahrefsClient?: AhrefsClient | null
 ): Promise<Opportunity[]> {
   const seoEnabled = config.seoOptions?.enabled ?? false
 
@@ -315,11 +333,14 @@ async function createOpportunitiesFromClusterV2(
   }
 
   // Build search intelligence from cluster keywords
-  const searchIntelligence = await buildSearchIntelligence(
-    cluster.keywords,
-    config.seoOptions?.siteUrl,
-    gscClient
-  )
+  // Now uses Ahrefs for REAL search volume, GSC only for cannibalization
+  const searchIntelligence = await buildSearchIntelligence({
+    viralKeywords: cluster.keywords,
+    topic: cluster.keywords.join(' '),
+    siteUrl: config.seoOptions?.siteUrl,
+    gscClient,
+    ahrefsClient,
+  })
 
   // Evaluate strategic gates
   const strategicGates = evaluateStrategicGates({
