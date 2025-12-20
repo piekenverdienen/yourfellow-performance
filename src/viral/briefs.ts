@@ -136,8 +136,10 @@ export async function generateBrief(
         if (ctx.proposition) parts.push(`Propositie: ${ctx.proposition}`)
         if (ctx.targetAudience) parts.push(`Doelgroep: ${ctx.targetAudience}`)
         if (ctx.usps && Array.isArray(ctx.usps)) parts.push(`USPs: ${(ctx.usps as string[]).join(', ')}`)
+        if (ctx.toneOfVoice) parts.push(`Tone of Voice: ${ctx.toneOfVoice}`)
+        if (ctx.brandVoice) parts.push(`Brand Voice: ${ctx.brandVoice}`)
         if (ctx.doNots && Array.isArray(ctx.doNots)) {
-          parts.push(`\nVERBODEN CLAIMS: ${(ctx.doNots as string[]).join(', ')}`)
+          parts.push(`\nVERBODEN CLAIMS (gebruik deze NOOIT): ${(ctx.doNots as string[]).join(', ')}`)
         }
         clientContext = parts.join('\n')
       }
@@ -498,9 +500,11 @@ export async function generateContentFromBrief(
     }
   }
 
-  // 3. Get client context for target audience
+  // 3. Get client context for target audience and tone
   let targetAudience = options?.targetAudience || 'Algemeen publiek'
   let industry = ''
+  let toneOfVoice = ''
+  let brandVoice = ''
 
   if (brief.clientId) {
     const { data: client } = await supabase
@@ -513,6 +517,8 @@ export async function generateContentFromBrief(
       const ctx = client.settings.context as Record<string, unknown>
       if (ctx.targetAudience) targetAudience = ctx.targetAudience as string
       if (ctx.industry) industry = ctx.industry as string
+      if (ctx.toneOfVoice) toneOfVoice = ctx.toneOfVoice as string
+      if (ctx.brandVoice) brandVoice = ctx.brandVoice as string
     }
   }
 
@@ -535,6 +541,8 @@ export async function generateContentFromBrief(
     no_go_claims: brief.brief.no_go_claims?.join(', ') || 'Geen specifieke beperkingen',
     target_audience: targetAudience,
     industry,
+    tone_of_voice: toneOfVoice || 'Professioneel maar toegankelijk',
+    brand_voice: brandVoice || '',
   }
 
   // Channel-specific options

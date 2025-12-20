@@ -734,10 +734,14 @@ NO-GO CLAIMS (vermijd deze!):
 {{no_go_claims}}
 
 DOELGROEP: {{target_audience}}
+TONE OF VOICE: {{tone_of_voice}}
+{{#brand_voice}}BRAND VOICE: {{brand_voice}}{{/brand_voice}}
 GEWENSTE VIDEO LENGTE: {{video_length}}
 
 Genereer nu het complete YouTube script package.
-BELANGRIJK: Blijf binnen de claims en bewijzen uit de brief. Voeg geen nieuwe informatie toe.`,
+BELANGRIJK:
+- Blijf binnen de claims en bewijzen uit de brief. Voeg geen nieuwe informatie toe.
+- Schrijf in de aangegeven tone of voice. Dit is ESSENTIEEL voor merkherkenning.`,
     temperature: 0.7,
     maxTokens: 6000,
     xpReward: 25,
@@ -816,11 +820,15 @@ NO-GO CLAIMS (vermijd deze!):
 {{no_go_claims}}
 
 DOELGROEP: {{target_audience}}
+TONE OF VOICE: {{tone_of_voice}}
+{{#brand_voice}}BRAND VOICE: {{brand_voice}}{{/brand_voice}}
 INDUSTRIE: {{industry}}
 TARGET WORD COUNT: {{word_count}}
 
 Genereer nu de complete blog post.
-BELANGRIJK: Blijf binnen de claims en bewijzen uit de brief. Voeg geen nieuwe informatie toe.`,
+BELANGRIJK:
+- Blijf binnen de claims en bewijzen uit de brief. Voeg geen nieuwe informatie toe.
+- Schrijf in de aangegeven tone of voice. Dit is ESSENTIEEL voor merkherkenning.`,
     temperature: 0.6,
     maxTokens: 5000,
     xpReward: 20,
@@ -882,10 +890,14 @@ NO-GO CLAIMS (vermijd deze!):
 {{no_go_claims}}
 
 DOELGROEP: {{target_audience}}
+TONE OF VOICE: {{tone_of_voice}}
+{{#brand_voice}}BRAND VOICE: {{brand_voice}}{{/brand_voice}}
 INDUSTRIE: {{industry}}
 
 Genereer nu het complete Instagram content package.
-BELANGRIJK: Blijf binnen de claims en bewijzen uit de brief.`,
+BELANGRIJK:
+- Blijf binnen de claims en bewijzen uit de brief.
+- Schrijf in de aangegeven tone of voice. Dit is ESSENTIEEL voor merkherkenning.`,
     temperature: 0.8,
     maxTokens: 3000,
     xpReward: 15,
