@@ -31,8 +31,8 @@ export async function POST(request: NextRequest) {
     if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData()
       prompt = formData.get('prompt') as string
-      model = (formData.get('model') as string) || 'gpt-image'
-      provider = model === 'gemini-flash' ? 'gemini' : 'openai'
+      model = (formData.get('model') as string) || 'dall-e-3'
+      provider = ['gemini-flash', 'imagen-3', 'imagen-2'].includes(model) ? 'gemini' : 'openai'
       size = (formData.get('size') as string) || '1024x1024'
       quality = (formData.get('quality') as string) || 'medium'
       tool = (formData.get('tool') as string) || 'social-image'
@@ -41,8 +41,8 @@ export async function POST(request: NextRequest) {
     } else {
       const body = await request.json()
       prompt = body.prompt
-      model = body.model || 'gpt-image'
-      provider = model === 'gemini-flash' ? 'gemini' : 'openai'
+      model = body.model || 'dall-e-3'
+      provider = ['gemini-flash', 'imagen-3', 'imagen-2'].includes(model) ? 'gemini' : 'openai'
       size = body.size || '1024x1024'
       quality = body.quality || 'medium'
       tool = body.tool || 'social-image'
@@ -71,9 +71,10 @@ export async function POST(request: NextRequest) {
       : `Create a professional marketing image: ${enhancedPrompt} High quality, suitable for business use, clean design.`
 
     // Determine the actual model to use
-    const actualModel = model === 'gemini-flash' ? 'gemini-2.5-flash-image'
+    const actualModel = ['gemini-flash', 'imagen-3', 'imagen-2'].includes(model) ? 'gemini-2.5-flash-image'
       : model === 'dall-e-3' ? 'dall-e-3'
       : model === 'dall-e-2' ? 'dall-e-2'
+      : model === 'gpt-image-1' ? 'gpt-image-1'
       : 'gpt-image-1'
 
     // Generate image via imageEngine

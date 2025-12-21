@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { ImageModelSelector, type ImageModelId } from '@/components/chat/model-selector'
 import {
   Sparkles,
   Copy,
@@ -70,12 +71,6 @@ const imageSizeOptions = [
   { value: '1024x1536', label: 'Portret (2:3)' },
 ]
 
-const imageModelOptions = [
-  { value: 'dall-e-3', label: 'DALL-E 3 (OpenAI)' },
-  { value: 'gpt-image', label: 'GPT Image (OpenAI)' },
-  { value: 'gemini-flash', label: 'Gemini 2.5 Flash Image (Google)' },
-]
-
 const initialFormData = {
   topic: '',
   context: '',
@@ -97,7 +92,7 @@ export default function SocialPostsPage() {
   const [wantsImage, setWantsImage] = usePersistedState('social-posts-wants-image', false)
   const [imagePrompt, setImagePrompt] = usePersistedState('social-posts-image-prompt', '')
   const [imageSize, setImageSize] = usePersistedState('social-posts-image-size', '1024x1024')
-  const [imageModel, setImageModel] = usePersistedState('social-posts-image-model', 'dall-e-3')
+  const [imageModel, setImageModel] = usePersistedState<ImageModelId>('social-posts-image-model', 'dall-e-3')
   const [isGeneratingImage, setIsGeneratingImage] = useState(false)
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false)
   const [generatedImage, setGeneratedImage] = useClientPersistedState<GeneratedImage | null>('social-posts-image-result', null)
@@ -750,33 +745,33 @@ Genereer een passende image prompt voor deze post.`
                         )}
                       </div>
 
-                      <div className="flex gap-3">
-                        <div className="flex-1">
-                          <label className="text-sm text-surface-600 mb-1 block">Model</label>
-                          <Select
-                            options={imageModelOptions}
-                            value={imageModel}
-                            onChange={(e) => setImageModel(e.target.value)}
-                          />
+                      <div className="space-y-3">
+                        <div className="flex gap-3">
+                          <div>
+                            <label className="text-sm text-surface-600 mb-1 block">Model</label>
+                            <ImageModelSelector
+                              value={imageModel}
+                              onChange={setImageModel}
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <label className="text-sm text-surface-600 mb-1 block">Formaat</label>
+                            <Select
+                              options={imageSizeOptions}
+                              value={imageSize}
+                              onChange={(e) => setImageSize(e.target.value)}
+                            />
+                          </div>
                         </div>
-                        <div className="flex-1">
-                          <label className="text-sm text-surface-600 mb-1 block">Formaat</label>
-                          <Select
-                            options={imageSizeOptions}
-                            value={imageSize}
-                            onChange={(e) => setImageSize(e.target.value)}
-                          />
-                        </div>
-                        <div className="flex items-end">
-                          <Button
-                            onClick={handleGenerateImage}
-                            isLoading={isGeneratingImage}
-                            disabled={!imagePrompt.trim() || isGeneratingPrompt}
-                            leftIcon={<Wand2 className="h-4 w-4" />}
-                          >
-                            {isGeneratingImage ? 'Genereren...' : 'Genereer afbeelding'}
-                          </Button>
-                        </div>
+                        <Button
+                          onClick={handleGenerateImage}
+                          isLoading={isGeneratingImage}
+                          disabled={!imagePrompt.trim() || isGeneratingPrompt}
+                          leftIcon={<Wand2 className="h-4 w-4" />}
+                          className="w-full"
+                        >
+                          {isGeneratingImage ? 'Genereren...' : 'Genereer afbeelding'}
+                        </Button>
                       </div>
 
                       {imageError && (
