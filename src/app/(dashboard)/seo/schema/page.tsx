@@ -5,7 +5,7 @@ import { SchemaType } from '@/types/schema-markup'
 import { getSchemaTemplate } from '@/lib/schema-templates'
 import { generateSchema } from '@/lib/schema-generator'
 import { validateSchema, hasMinimumData } from '@/lib/schema-validation'
-import { usePersistedState } from '@/hooks/use-persisted-form'
+import { useClientPersistedState, useOnClientChange } from '@/hooks/use-persisted-form'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { SchemaTypeSelector } from '@/components/schema/schema-type-selector'
 import { SchemaForm } from '@/components/schema/schema-form'
@@ -41,7 +41,12 @@ function getInitialFormData(schemaType: SchemaType): Record<string, unknown> {
 }
 
 export default function SchemaMarkupPage() {
-  const [state, setState] = usePersistedState<SchemaState>('schema-markup', initialState)
+  const [state, setState] = useClientPersistedState<SchemaState>('schema-markup', initialState)
+
+  // Reset state when client changes
+  useOnClientChange(useCallback(() => {
+    setState(initialState)
+  }, [setState]))
   const { selectedType, formData } = state
 
   const handleTypeSelect = useCallback((type: SchemaType) => {

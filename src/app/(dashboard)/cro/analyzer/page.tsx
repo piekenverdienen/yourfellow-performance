@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useSelectedClientId } from '@/stores/client-store'
-import { usePersistedState } from '@/hooks/use-persisted-form'
+import { usePersistedState, useClientPersistedState, useOnClientChange } from '@/hooks/use-persisted-form'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -87,10 +87,18 @@ export default function CROAnalyzerPage() {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [isFetching, setIsFetching] = useState(false)
   const [formData, setFormData] = usePersistedState('cro-analyzer-form', initialFormData)
-  const [analysisResult, setAnalysisResult] = usePersistedState<AnalysisResult | null>('cro-analyzer-result', null)
-  const [fetchedData, setFetchedData] = usePersistedState<FetchedPageData | null>('cro-analyzer-fetched', null)
+  const [analysisResult, setAnalysisResult] = useClientPersistedState<AnalysisResult | null>('cro-analyzer-result', null)
+  const [fetchedData, setFetchedData] = useClientPersistedState<FetchedPageData | null>('cro-analyzer-fetched', null)
   const [error, setError] = useState<string | null>(null)
   const [fetchError, setFetchError] = useState<string | null>(null)
+
+  // Reset state when client changes
+  useOnClientChange(useCallback(() => {
+    setAnalysisResult(null)
+    setFetchedData(null)
+    setError(null)
+    setFetchError(null)
+  }, [setAnalysisResult, setFetchedData]))
 
   const handleFetchPage = async () => {
     if (!formData.url) {
