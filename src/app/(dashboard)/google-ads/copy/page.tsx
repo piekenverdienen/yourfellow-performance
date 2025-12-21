@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState } from 'react'
 import { useSelectedClientId } from '@/stores/client-store'
-import { usePersistedState } from '@/hooks/use-persisted-form'
+import { usePersistedState, useClientPersistedState } from '@/hooks/use-persisted-form'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -96,8 +96,8 @@ export default function GoogleAdsCopyPage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [formData, setFormData] = usePersistedState('google-ads-form', initialFormData)
-  const [generatedAd, setGeneratedAd] = usePersistedState<GeneratedAd | null>('google-ads-result', null)
-  const [fetchedPageData, setFetchedPageData] = usePersistedState<FetchedPageData | null>('google-ads-fetched-page', null)
+  const [generatedAd, setGeneratedAd] = useClientPersistedState<GeneratedAd | null>('google-ads-result', null)
+  const [fetchedPageData, setFetchedPageData] = useClientPersistedState<FetchedPageData | null>('google-ads-fetched-page', null)
   const [copiedIndex, setCopiedIndex] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [analyzeError, setAnalyzeError] = useState<string | null>(null)
@@ -107,18 +107,6 @@ export default function GoogleAdsCopyPage() {
   const [adGroupName, setAdGroupName] = useState('General')
   const [path1, setPath1] = useState('')
   const [path2, setPath2] = useState('')
-
-  // Reset generated content when client changes
-  const prevClientId = useRef(clientId)
-  useEffect(() => {
-    if (prevClientId.current !== clientId) {
-      setGeneratedAd(null)
-      setFetchedPageData(null)
-      setError(null)
-      setAnalyzeError(null)
-      prevClientId.current = clientId
-    }
-  }, [clientId, setGeneratedAd, setFetchedPageData])
 
   const handleAnalyzeUrl = async () => {
     if (!formData.landingPageUrl) return

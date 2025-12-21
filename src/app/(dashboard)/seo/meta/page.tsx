@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState } from 'react'
 import { useSelectedClientId } from '@/stores/client-store'
-import { usePersistedState } from '@/hooks/use-persisted-form'
+import { usePersistedState, useClientPersistedState } from '@/hooks/use-persisted-form'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -50,19 +50,9 @@ export default function SEOMetaPage() {
   const clientId = useSelectedClientId()
   const [isGenerating, setIsGenerating] = useState(false)
   const [formData, setFormData] = usePersistedState('seo-meta-form', initialFormData)
-  const [generatedMeta, setGeneratedMeta] = usePersistedState<GeneratedMeta | null>('seo-meta-result', null)
+  const [generatedMeta, setGeneratedMeta] = useClientPersistedState<GeneratedMeta | null>('seo-meta-result', null)
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-
-  // Reset generated content when client changes
-  const prevClientId = useRef(clientId)
-  useEffect(() => {
-    if (prevClientId.current !== clientId) {
-      setGeneratedMeta(null)
-      setError(null)
-      prevClientId.current = clientId
-    }
-  }, [clientId, setGeneratedMeta])
 
   const handleGenerate = async () => {
     setIsGenerating(true)

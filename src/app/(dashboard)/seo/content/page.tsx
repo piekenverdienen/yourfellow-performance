@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo } from 'react'
 import DOMPurify from 'dompurify'
 import { useSelectedClientId } from '@/stores/client-store'
-import { usePersistedState } from '@/hooks/use-persisted-form'
+import { usePersistedState, useClientPersistedState } from '@/hooks/use-persisted-form'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -58,19 +58,9 @@ export default function SEOContentPage() {
   const clientId = useSelectedClientId()
   const [isGenerating, setIsGenerating] = useState(false)
   const [formData, setFormData] = usePersistedState('seo-content-form', initialFormData)
-  const [generatedContent, setGeneratedContent] = usePersistedState<string | null>('seo-content-result', null)
+  const [generatedContent, setGeneratedContent] = useClientPersistedState<string | null>('seo-content-result', null)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  // Reset generated content when client changes
-  const prevClientId = useRef(clientId)
-  useEffect(() => {
-    if (prevClientId.current !== clientId) {
-      setGeneratedContent(null)
-      setError(null)
-      prevClientId.current = clientId
-    }
-  }, [clientId, setGeneratedContent])
 
   const handleGenerate = async () => {
     setIsGenerating(true)

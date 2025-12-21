@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useSelectedClientId } from '@/stores/client-store'
 
 /**
  * Hook that persists state to localStorage
@@ -49,6 +50,78 @@ export function usePersistedState<T>(
       console.error(`Failed to save state for ${key}:`, e)
     }
   }, [value, storageKey, key])
+
+  return [value, setValue, isLoaded]
+}
+
+/**
+ * Hook that persists state to localStorage, scoped per client
+ * Automatically resets to initial value when switching clients
+ */
+export function useClientPersistedState<T>(
+  key: string,
+  initialValue: T
+): [T, React.Dispatch<React.SetStateAction<T>>, boolean] {
+  const clientId = useSelectedClientId()
+  const storageKey = `state-${key}-client-${clientId || 'none'}`
+  const isInitialized = useRef(false)
+  const prevClientId = useRef(clientId)
+
+  const [value, setValue] = useState<T>(() => {
+    if (typeof window === 'undefined') {
+      return initialValue
+    }
+
+    try {
+      const saved = localStorage.getItem(storageKey)
+      if (saved) {
+        return JSON.parse(saved)
+      }
+    } catch (e) {
+      console.error(`Failed to load state for ${key}:`, e)
+    }
+    return initialValue
+  })
+
+  const [isLoaded, setIsLoaded] = useState(false)
+
+  // Mark as loaded after hydration
+  useEffect(() => {
+    setIsLoaded(true)
+    isInitialized.current = true
+  }, [])
+
+  // Load correct value when client changes
+  useEffect(() => {
+    if (prevClientId.current !== clientId) {
+      prevClientId.current = clientId
+      const newStorageKey = `state-${key}-client-${clientId || 'none'}`
+
+      try {
+        const saved = localStorage.getItem(newStorageKey)
+        if (saved) {
+          setValue(JSON.parse(saved))
+        } else {
+          setValue(initialValue)
+        }
+      } catch (e) {
+        console.error(`Failed to load state for ${key}:`, e)
+        setValue(initialValue)
+      }
+    }
+  }, [clientId, key, initialValue])
+
+  // Save to localStorage when value changes
+  useEffect(() => {
+    if (!isInitialized.current) return
+
+    const currentStorageKey = `state-${key}-client-${clientId || 'none'}`
+    try {
+      localStorage.setItem(currentStorageKey, JSON.stringify(value))
+    } catch (e) {
+      console.error(`Failed to save state for ${key}:`, e)
+    }
+  }, [value, key, clientId])
 
   return [value, setValue, isLoaded]
 }
