@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import DOMPurify from 'dompurify'
 import { useSelectedClientId } from '@/stores/client-store'
 import { usePersistedState } from '@/hooks/use-persisted-form'
@@ -61,6 +61,16 @@ export default function SEOContentPage() {
   const [generatedContent, setGeneratedContent] = usePersistedState<string | null>('seo-content-result', null)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Reset generated content when client changes
+  const prevClientId = useRef(clientId)
+  useEffect(() => {
+    if (prevClientId.current !== clientId) {
+      setGeneratedContent(null)
+      setError(null)
+      prevClientId.current = clientId
+    }
+  }, [clientId, setGeneratedContent])
 
   const handleGenerate = async () => {
     setIsGenerating(true)

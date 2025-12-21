@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSelectedClientId } from '@/stores/client-store'
 import { usePersistedState } from '@/hooks/use-persisted-form'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
@@ -53,6 +53,16 @@ export default function SEOMetaPage() {
   const [generatedMeta, setGeneratedMeta] = usePersistedState<GeneratedMeta | null>('seo-meta-result', null)
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // Reset generated content when client changes
+  const prevClientId = useRef(clientId)
+  useEffect(() => {
+    if (prevClientId.current !== clientId) {
+      setGeneratedMeta(null)
+      setError(null)
+      prevClientId.current = clientId
+    }
+  }, [clientId, setGeneratedMeta])
 
   const handleGenerate = async () => {
     setIsGenerating(true)

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useSelectedClientId } from '@/stores/client-store'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -67,6 +67,16 @@ export default function ImageGeneratorPage() {
   const [referencePreview, setReferencePreview] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Reset generated content when client changes
+  const prevClientId = useRef(clientId)
+  useEffect(() => {
+    if (prevClientId.current !== clientId) {
+      setGeneratedImage(null)
+      setError(null)
+      prevClientId.current = clientId
+    }
+  }, [clientId])
 
   const handleFileSelect = (file: File) => {
     // Validate file type

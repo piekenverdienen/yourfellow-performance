@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSelectedClientId } from '@/stores/client-store'
 import { usePersistedState } from '@/hooks/use-persisted-form'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
@@ -107,6 +107,18 @@ export default function GoogleAdsCopyPage() {
   const [adGroupName, setAdGroupName] = useState('General')
   const [path1, setPath1] = useState('')
   const [path2, setPath2] = useState('')
+
+  // Reset generated content when client changes
+  const prevClientId = useRef(clientId)
+  useEffect(() => {
+    if (prevClientId.current !== clientId) {
+      setGeneratedAd(null)
+      setFetchedPageData(null)
+      setError(null)
+      setAnalyzeError(null)
+      prevClientId.current = clientId
+    }
+  }, [clientId, setGeneratedAd, setFetchedPageData])
 
   const handleAnalyzeUrl = async () => {
     if (!formData.landingPageUrl) return
