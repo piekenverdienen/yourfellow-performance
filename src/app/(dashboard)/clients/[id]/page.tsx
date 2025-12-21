@@ -27,6 +27,7 @@ import {
 import { useUser } from '@/hooks/use-user'
 import { useClientStore } from '@/stores/client-store'
 import { ClientContextForm } from '@/components/client-context-form'
+import { AIContextIntake } from '@/components/ai-context-intake'
 import { LogoUpload, ClientLogoFallback } from '@/components/logo-upload'
 import { ClickUpTasks } from '@/components/clickup-tasks'
 import { ClickUpSetup } from '@/components/clickup-setup'
@@ -423,21 +424,31 @@ export default function ClientDetailPage() {
       )}
 
       {activeTab === 'context' && (
-        <ClientContextForm
-          clientId={id}
-          initialContext={client.settings?.context}
-          canEdit={isAdmin || false}
-          onSave={(context) => {
-            setClient((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    settings: { ...prev.settings, context },
-                  }
-                : prev
-            )
-          }}
-        />
+        <div className="space-y-8">
+          {/* AI Context Intake - Auto-generate context from website */}
+          <AIContextIntake
+            clientId={id}
+            clientName={client.name}
+            canEdit={isAdmin || false}
+          />
+
+          {/* Manual Context Form - For fine-tuning */}
+          <ClientContextForm
+            clientId={id}
+            initialContext={client.settings?.context}
+            canEdit={isAdmin || false}
+            onSave={(context) => {
+              setClient((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      settings: { ...prev.settings, context },
+                    }
+                  : prev
+              )
+            }}
+          />
+        </div>
       )}
 
       {activeTab === 'team' && (
