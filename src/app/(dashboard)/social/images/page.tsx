@@ -321,7 +321,7 @@ export default function ImageGeneratorPage() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className={selectedModel === 'gpt-image-1' ? 'grid grid-cols-2 gap-4' : ''}>
                 <div>
                   <label className="label flex items-center gap-2">
                     <Maximize className="h-4 w-4" />
@@ -333,14 +333,16 @@ export default function ImageGeneratorPage() {
                     onChange={(e) => setFormData({ ...formData, size: e.target.value })}
                   />
                 </div>
-                <div>
-                  <label className="label">Kwaliteit</label>
-                  <Select
-                    options={qualityOptions}
-                    value={formData.quality}
-                    onChange={(e) => setFormData({ ...formData, quality: e.target.value })}
-                  />
-                </div>
+                {selectedModel === 'gpt-image-1' && (
+                  <div>
+                    <label className="label">Kwaliteit</label>
+                    <Select
+                      options={qualityOptions}
+                      value={formData.quality}
+                      onChange={(e) => setFormData({ ...formData, quality: e.target.value })}
+                    />
+                  </div>
+                )}
               </div>
 
               <Button
