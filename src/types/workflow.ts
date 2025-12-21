@@ -90,7 +90,14 @@ export type WorkflowNodeType =
   | 'outputNode'
 
 export type WorkflowNode = Node<BaseNodeData, WorkflowNodeType>
-export type WorkflowEdge = Edge
+
+// Edge data for conditional branching
+export interface WorkflowEdgeData {
+  branch?: 'true' | 'false' | 'default'
+  label?: string
+}
+
+export type WorkflowEdge = Edge<WorkflowEdgeData>
 
 // Workflow database types
 export interface Workflow {
