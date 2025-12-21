@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { User as SupabaseUser } from '@supabase/supabase-js'
+import type { User as SupabaseUser, AuthChangeEvent, Session } from '@supabase/supabase-js'
 import type { User, UserStats } from '@/types'
 
 interface UseUserReturn {
@@ -128,7 +128,7 @@ export function useUser(): UseUserReturn {
     fetchUser(true) // Initial load - show loading spinner
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
       if (session?.user) {
         fetchUser(false) // Re-fetch without showing loading spinner
       } else {

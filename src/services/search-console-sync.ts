@@ -285,8 +285,9 @@ export async function syncSearchConsoleData(
       .eq('client_id', clientId)
       .in('query', queryTexts)
 
+    interface QueryRow { id: string; query: string }
     const existingQueryMap = new Map(
-      (existingQueries || []).map(q => [q.query, q.id])
+      (existingQueries as QueryRow[] || []).map((q: QueryRow) => [q.query, q.id])
     )
 
     // Step 2: Prepare all records for batch operations
@@ -321,7 +322,7 @@ export async function syncSearchConsoleData(
 
     const queryToDataMap = new Map<string, typeof queryMap extends Map<string, infer V> ? V : never>()
 
-    for (const [queryText, data] of queryMap) {
+    Array.from(queryMap.entries()).forEach(([queryText, data]) => {
       const classification = classifyQuery(queryText)
       const isBranded = isBrandedQuery(queryText, brandedKeywords)
       const avgCtr = data.impressions > 0 ? data.clicks / data.impressions : 0
@@ -360,7 +361,7 @@ export async function syncSearchConsoleData(
           is_branded: isBranded,
         })
       }
-    }
+    })
 
     // Step 3: Batch insert new queries
     const insertedQueryIds = new Map<string, string>()
@@ -414,12 +415,12 @@ export async function syncSearchConsoleData(
 
     // Step 5: Build complete query ID map
     const finalQueryIdMap = new Map<string, string>()
-    for (const [query, id] of existingQueryMap) {
+    Array.from(existingQueryMap.entries()).forEach(([query, id]) => {
       finalQueryIdMap.set(query, id)
-    }
-    for (const [query, id] of insertedQueryIds) {
+    })
+    Array.from(insertedQueryIds.entries()).forEach(([query, id]) => {
       finalQueryIdMap.set(query, id)
-    }
+    })
 
     // Step 6: Batch upsert all pages
     const allPages: Array<{
@@ -431,9 +432,9 @@ export async function syncSearchConsoleData(
       ctr: number
     }> = []
 
-    for (const [queryText, data] of queryToDataMap) {
+    Array.from(queryToDataMap.entries()).forEach(([queryText, data]) => {
       const queryId = finalQueryIdMap.get(queryText)
-      if (!queryId) continue
+      if (!queryId) return
 
       for (const page of data.pages) {
         allPages.push({
@@ -445,7 +446,7 @@ export async function syncSearchConsoleData(
           ctr: page.ctr,
         })
       }
-    }
+    })
 
     pagesProcessed = allPages.length
 
@@ -472,9 +473,9 @@ export async function syncSearchConsoleData(
       ctr: number
     }> = []
 
-    for (const [queryText, data] of queryToDataMap) {
+    Array.from(queryToDataMap.entries()).forEach(([queryText, data]) => {
       const queryId = finalQueryIdMap.get(queryText)
-      if (!queryId) continue
+      if (!queryId) return
 
       const avgCtr = data.impressions > 0 ? data.clicks / data.impressions : 0
       allHistory.push({
@@ -486,7 +487,7 @@ export async function syncSearchConsoleData(
         position: data.bestPosition,
         ctr: avgCtr,
       })
-    }
+    })
 
     if (allHistory.length > 0) {
       await processBatch(allHistory, BATCH_SIZE, async (batch) => {
@@ -663,7 +664,7 @@ export async function matchQueriesToClusters(clientId: string): Promise<void> {
 
   // Update cluster metrics (can be parallelized with Promise.all)
   await Promise.all(
-    clusters.map(cluster =>
+    clusters.map((cluster: { id: string }) =>
       supabase.rpc('update_topic_cluster_metrics', { p_cluster_id: cluster.id })
     )
   )
@@ -684,7 +685,7 @@ export async function matchPagesToGroups(clientId: string): Promise<void> {
     .select('*')
     .eq('client_id', clientId)
 
-  console.log('🔍 matchPagesToGroups: Found groups:', groups?.length, groups?.map(g => ({ name: g.name, patterns: g.url_patterns })))
+  console.log('🔍 matchPagesToGroups: Found groups:', groups?.length, groups?.map((g: { name: string; url_patterns: string[] }) => ({ name: g.name, patterns: g.url_patterns })))
 
   if (!groups || groups.length === 0) return
 
@@ -728,12 +729,12 @@ export async function matchPagesToGroups(clientId: string): Promise<void> {
 
   // For each group, find matching pages
   for (const group of groups) {
-    for (const [url, metrics] of pageMap) {
+    Array.from(pageMap.entries()).forEach(([url, metrics]) => {
       let urlPath: string
       try {
         urlPath = new URL(url).pathname
       } catch {
-        continue // Skip invalid URLs
+        return // Skip invalid URLs
       }
 
       // Check URL pattern matches
@@ -758,7 +759,7 @@ export async function matchPagesToGroups(clientId: string): Promise<void> {
           clicks: metrics.clicks,
           matched_by: 'pattern',
         })
-        continue
+        return
       }
 
       // Check regex match
@@ -778,7 +779,7 @@ export async function matchPagesToGroups(clientId: string): Promise<void> {
           // Invalid regex, skip
         }
       }
-    }
+    })
   }
 
   console.log('🔍 matchPagesToGroups: Total mappings to upsert:', allMappings.length)
@@ -798,7 +799,7 @@ export async function matchPagesToGroups(clientId: string): Promise<void> {
 
   // Update group metrics (parallelized with Promise.all)
   await Promise.all(
-    groups.map(async (group) => {
+    groups.map(async (group: { id: string; name: string }) => {
       const { error: rpcError } = await supabase.rpc('update_content_group_metrics', { p_group_id: group.id })
       if (rpcError) {
         console.error('🔍 matchPagesToGroups: Error updating metrics for', group.name, rpcError)

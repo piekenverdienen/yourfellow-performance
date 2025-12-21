@@ -102,8 +102,8 @@ export async function getTemplateAverageScore(templateId: string): Promise<numbe
       .eq('ai_usage_logs.template_id', templateId)
 
     if (!data || data.length === 0) return null
-
-    const total = data.reduce((sum, row) => sum + row.score, 0)
+    interface EvalRow { score: number; ai_usage_logs: unknown }
+    const total = (data as EvalRow[]).reduce((sum: number, row: EvalRow) => sum + row.score, 0)
     return Math.round(total / data.length)
   } catch (error) {
     console.error('Error getting template score:', error)
@@ -130,9 +130,10 @@ export async function getUserQualityStats(userId: string): Promise<{
     if (!data || data.length === 0) {
       return { averageScore: 0, totalEvaluated: 0, highQualityCount: 0 }
     }
-
-    const total = data.reduce((sum, row) => sum + row.score, 0)
-    const highQuality = data.filter(row => row.score >= 80).length
+    interface ScoreRow { score: number; ai_usage_logs: unknown }
+    const typedData = data as ScoreRow[]
+    const total = typedData.reduce((sum: number, row: ScoreRow) => sum + row.score, 0)
+    const highQuality = typedData.filter((row: ScoreRow) => row.score >= 80).length
 
     return {
       averageScore: Math.round(total / data.length),

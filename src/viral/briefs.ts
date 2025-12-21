@@ -282,7 +282,7 @@ Geef alleen de gecorrigeerde JSON terug.`,
     if (!parseResult.success) {
       return {
         success: false,
-        error: parseResult.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', '),
+        error: parseResult.error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', '),
       }
     }
 
@@ -358,8 +358,11 @@ export async function getBriefs(filters: {
   if (filters.limit) query = query.limit(filters.limit)
 
   const { data } = await query
+  interface BriefRow extends Record<string, unknown> {
+    viral_opportunities?: { topic?: string; angle?: string; score?: number } | null
+  }
 
-  return (data || []).map(row => ({
+  return (data as BriefRow[] || []).map((row: BriefRow) => ({
     ...mapBriefRecord(row),
     ideaTopic: row.viral_opportunities?.topic,
     ideaAngle: row.viral_opportunities?.angle,
@@ -630,8 +633,9 @@ export async function getBriefGenerations(briefId: string): Promise<{
     .select('*')
     .eq('brief_id', briefId)
     .order('created_at', { ascending: false })
+  interface GenerationRow { id: string; channel: string; output: unknown; version: number; created_at: string }
 
-  return (data || []).map(row => ({
+  return (data as GenerationRow[] || []).map((row: GenerationRow) => ({
     id: row.id,
     channel: row.channel as Channel,
     output: row.output as Record<string, unknown>,

@@ -17,6 +17,7 @@ import type {
   LLMClusterOutput,
   MaturityStage,
   SearchIntent,
+  PillarRole,
   PillarPage,
   SupportingPage,
   ContentGap,
@@ -174,7 +175,7 @@ export class TopicalClusterAnalyzer {
       .filter((p) => typeof p?.url === 'string' && p.url.length > 0)
       .map((p) => ({
         url: p.url,
-        role: p.role === 'primary' || p.role === 'secondary' ? p.role : 'secondary',
+        role: (p.role === 'primary' || p.role === 'secondary' ? p.role : 'secondary') as PillarRole,
         coveredIntents: this.validateIntents(p.coveredIntents),
         topQueries: Array.isArray(p.topQueries)
           ? p.topQueries.filter((q): q is string => typeof q === 'string').slice(0, 5)

@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
       .select('client_id')
       .eq('user_id', user.id)
 
-    const clientIds = memberships?.map(m => m.client_id) || []
+    const clientIds = memberships?.map((m: { client_id: string }) => m.client_id) || []
 
     // Build query for authenticated users
     // Fetch: global events + own events + events from accessible clients

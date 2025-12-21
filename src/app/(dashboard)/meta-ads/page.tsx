@@ -245,7 +245,7 @@ export default function MetaAdsDashboard() {
 
           {/* Settings Link */}
           <Link href={`/clients/${selectedClientId}`}>
-            <Button variant="ghost" size="icon">
+            <Button variant="ghost" size="sm" className="p-2">
               <Settings className="h-4 w-4" />
             </Button>
           </Link>

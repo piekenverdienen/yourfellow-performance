@@ -72,7 +72,7 @@ export async function GET() {
       .select('xp_amount')
       .eq('to_user_id', user.id)
 
-    const totalXpFromKudos = xpData?.reduce((sum, k) => sum + (k.xp_amount || 5), 0) || 0
+    const totalXpFromKudos = xpData?.reduce((sum: number, k: { xp_amount: number | null }) => sum + (k.xp_amount || 5), 0) || 0
 
     return NextResponse.json({
       kudosRemaining,

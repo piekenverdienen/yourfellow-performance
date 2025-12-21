@@ -40,7 +40,16 @@ export async function GET(
       .eq('group_id', id)
       .order('impressions', { ascending: false })
 
-    group.pages = (pagesData || []).map(p => ({
+    interface PageData {
+      id: string
+      group_id: string
+      page_url: string
+      impressions: number
+      clicks: number
+      matched_by: string
+      created_at: string
+    }
+    group.pages = (pagesData as PageData[] || []).map((p: PageData) => ({
       id: p.id,
       groupId: p.group_id,
       pageUrl: p.page_url,

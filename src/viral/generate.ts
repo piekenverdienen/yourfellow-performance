@@ -238,15 +238,16 @@ export async function getGenerationsForOpportunity(
     .order('created_at', { ascending: false })
 
   if (error) throw error
+  interface GenRow { id: string; opportunity_id: string; task: string; output: unknown; model_id: string; tokens: unknown; created_at: string }
 
-  return (data || []).map(row => ({
+  return (data as GenRow[] || []).map((row: GenRow) => ({
     id: row.id,
     opportunityId: row.opportunity_id,
     channel: getChannelFromTask(row.task),
     task: row.task,
-    output: row.output,
+    output: row.output as Record<string, unknown>,
     modelId: row.model_id,
-    tokens: row.tokens,
+    tokens: row.tokens as { input: number; output: number; total: number } | undefined,
     createdAt: row.created_at,
   }))
 }

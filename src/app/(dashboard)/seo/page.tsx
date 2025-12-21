@@ -130,9 +130,11 @@ export default function SEODashboard() {
             Overzicht van Content, Techniek & Autoriteit
           </p>
         </div>
-        <Button href="/seo/settings" variant="outline" leftIcon={<Settings className="h-4 w-4" />}>
-          Instellingen
-        </Button>
+        <Link href="/seo/settings">
+          <Button variant="outline" leftIcon={<Settings className="h-4 w-4" />}>
+            Instellingen
+          </Button>
+        </Link>
       </div>
 
       {/* Quick Stats (if data available) */}

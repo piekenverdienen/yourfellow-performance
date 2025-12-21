@@ -40,7 +40,7 @@ export async function GET(
       .eq('cluster_id', id)
 
     if (clusterQueries && clusterQueries.length > 0) {
-      const queryIds = clusterQueries.map(cq => cq.query_id)
+      const queryIds = clusterQueries.map((cq: { query_id: string }) => cq.query_id)
 
       const { data: queriesData } = await supabase
         .from('search_console_queries')

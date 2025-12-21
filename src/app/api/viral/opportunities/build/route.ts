@@ -54,9 +54,9 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Rate limiting (heavy operation - max 5 per minute)
-    const clientId = getClientIdentifier(request, user.id)
+    const rateLimitId = getClientIdentifier(request, user.id)
     const rateCheck = rateLimiter.check(
-      `build:${clientId}`,
+      `build:${rateLimitId}`,
       RATE_LIMITS.HEAVY.maxRequests,
       RATE_LIMITS.HEAVY.windowMs
     )

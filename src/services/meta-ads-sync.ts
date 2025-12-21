@@ -254,8 +254,9 @@ export class MetaAdsSyncService {
       return { total: 0, success: 0, failed: 0, results: [] }
     }
 
+    interface ClientRow { id: string; name: string; settings: Record<string, unknown> | null }
     // Filter clients with Meta enabled
-    const enabledClients = clients.filter((c) => {
+    const enabledClients = (clients as ClientRow[]).filter((c: ClientRow) => {
       const meta = c.settings?.meta as MetaAdsSettings | undefined
       return meta?.enabled && meta?.syncEnabled && meta?.accessToken && meta?.adAccountId
     })
@@ -385,8 +386,10 @@ export class MetaAdsSyncService {
       }
     }
 
-    const totals = data.reduce(
-      (acc, row) => ({
+    interface MetricRow { spend: number | null; impressions: number | null; clicks: number | null; conversions: number | null; conversion_value: number | null }
+    interface Totals { spend: number; impressions: number; clicks: number; conversions: number; conversion_value: number }
+    const totals = (data as MetricRow[]).reduce(
+      (acc: Totals, row: MetricRow) => ({
         spend: acc.spend + (row.spend || 0),
         impressions: acc.impressions + (row.impressions || 0),
         clicks: acc.clicks + (row.clicks || 0),

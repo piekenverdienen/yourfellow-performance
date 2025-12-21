@@ -4,7 +4,14 @@ import { createClient } from '@/lib/supabase/server'
 
 export const runtime = 'edge'
 
-type ImageModel = 'dall-e-3' | 'dall-e-2' | 'gpt-image-1'
+type OpenAIImageModel = 'dall-e-3' | 'dall-e-2' | 'gpt-image-1'
+type GoogleImageModel = 'imagen-3' | 'imagen-2'
+type ImageModel = OpenAIImageModel | GoogleImageModel
+
+function getImageProvider(model: ImageModel): 'openai' | 'google' {
+  if (model.startsWith('imagen')) return 'google'
+  return 'openai'
+}
 
 interface GenerateImageRequest {
   prompt: string
@@ -19,14 +26,6 @@ interface GenerateImageRequest {
 
 export async function POST(request: NextRequest) {
   try {
-    // Check for OpenAI API key
-    if (!process.env.OPENAI_API_KEY) {
-      return NextResponse.json(
-        { error: 'OpenAI API is niet geconfigureerd' },
-        { status: 500 }
-      )
-    }
-
     const supabase = await createClient()
 
     // Check auth
@@ -50,12 +49,31 @@ export async function POST(request: NextRequest) {
       style = 'vivid',
     } = body
 
+    const provider = getImageProvider(model)
+
+    // Check for appropriate API key based on provider
+    if (provider === 'openai' && !process.env.OPENAI_API_KEY) {
+      return NextResponse.json(
+        { error: 'OpenAI API is niet geconfigureerd' },
+        { status: 500 }
+      )
+    }
+
+    const googleApiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY
+    if (provider === 'google' && !googleApiKey) {
+      return NextResponse.json(
+        { error: 'Google API is niet geconfigureerd' },
+        { status: 500 }
+      )
+    }
+
     // Model-specific defaults and validations
     const getModelConfig = (modelId: ImageModel) => {
       switch (modelId) {
         case 'dall-e-2':
           return {
             model: 'dall-e-2' as const,
+            provider: 'openai' as const,
             size: (requestedSize && ['256x256', '512x512', '1024x1024'].includes(requestedSize)
               ? requestedSize : '1024x1024') as '256x256' | '512x512' | '1024x1024',
             quality: undefined, // DALL-E 2 doesn't support quality
@@ -65,6 +83,7 @@ export async function POST(request: NextRequest) {
         case 'gpt-image-1':
           return {
             model: 'gpt-image-1' as const,
+            provider: 'openai' as const,
             size: (requestedSize && ['1024x1024', '1536x1024', '1024x1536'].includes(requestedSize)
               ? requestedSize : '1024x1024') as '1024x1024' | '1536x1024' | '1024x1536',
             quality: (requestedQuality && ['low', 'medium', 'high'].includes(requestedQuality)
@@ -72,10 +91,31 @@ export async function POST(request: NextRequest) {
             style: undefined, // GPT Image doesn't support style
             supportsN: true,
           }
+        case 'imagen-3':
+          return {
+            model: 'imagen-3.0-generate-002' as const,
+            provider: 'google' as const,
+            size: '1024x1024' as const,
+            aspectRatio: '1:1' as const,
+            quality: undefined,
+            style: undefined,
+            supportsN: true,
+          }
+        case 'imagen-2':
+          return {
+            model: 'imagen-3.0-fast-generate-001' as const, // Fast variant for quicker generation
+            provider: 'google' as const,
+            size: '1024x1024' as const,
+            aspectRatio: '1:1' as const,
+            quality: undefined,
+            style: undefined,
+            supportsN: true,
+          }
         case 'dall-e-3':
         default:
           return {
             model: 'dall-e-3' as const,
+            provider: 'openai' as const,
             size: (requestedSize && ['1024x1024', '1792x1024', '1024x1792'].includes(requestedSize)
               ? requestedSize : '1024x1024') as '1024x1024' | '1792x1024' | '1024x1792',
             quality: (requestedQuality === 'hd' ? 'hd' : 'standard') as 'standard' | 'hd',
@@ -94,104 +134,183 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Initialize OpenAI client
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    })
-
     // Generate image using selected model
-    // gpt-image-1 uses a different API format (no response_format, returns base64)
     let imageArrayBuffer: ArrayBuffer
     let revisedPrompt: string | undefined
+    let actualModelUsed = modelConfig.model
 
-    if (model === 'gpt-image-1') {
-      // GPT Image model - uses different API parameters
-      const gptImageRequest = {
-        model: 'gpt-image-1' as const,
-        prompt: prompt,
-        n: 1,
-        size: modelConfig.size as '1024x1024' | '1536x1024' | '1024x1536',
-        quality: modelConfig.quality as 'low' | 'medium' | 'high',
-      }
+    // Google Imagen generation
+    if (provider === 'google') {
+      // Use Gemini API for Imagen 3 with :predict endpoint
+      const imagenUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelConfig.model}:predict`
 
-      const response = await openai.images.generate(gptImageRequest)
+      const imagenResponse = await fetch(imagenUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': googleApiKey!,
+        },
+        body: JSON.stringify({
+          instances: [{ prompt: prompt }],
+          parameters: {
+            sampleCount: 1,
+            aspectRatio: '1:1',
+            personGeneration: 'ALLOW_ADULT',
+          },
+        }),
+      })
 
-      if (!response.data || response.data.length === 0) {
+      if (!imagenResponse.ok) {
+        const errorText = await imagenResponse.text()
+        console.error('Imagen API error:', errorText)
+
+        // Check for safety filter
+        if (errorText.includes('SAFETY') || errorText.includes('blocked') || errorText.includes('policy')) {
+          return NextResponse.json(
+            { error: 'De prompt is geblokkeerd door veiligheidsfilters. Probeer een andere beschrijving.' },
+            { status: 400 }
+          )
+        }
+
+        // Check if model not found - suggest using OpenAI instead
+        if (errorText.includes('NOT_FOUND') || errorText.includes('not found')) {
+          return NextResponse.json(
+            { error: 'Google Imagen is niet beschikbaar. Probeer een OpenAI model (DALL-E 3).' },
+            { status: 400 }
+          )
+        }
+
         return NextResponse.json(
-          { error: 'Geen afbeelding gegenereerd' },
+          { error: 'Google Imagen kon geen afbeelding genereren' },
           { status: 500 }
         )
       }
 
-      // gpt-image-1 returns base64 data (b64_json)
-      const imageData = response.data[0]
-      if (imageData.b64_json) {
-        // Decode base64 to ArrayBuffer
-        const binaryString = atob(imageData.b64_json)
-        const bytes = new Uint8Array(binaryString.length)
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i)
+      const imagenData = await imagenResponse.json()
+
+      // Imagen :predict endpoint returns predictions array
+      const predictions = imagenData.predictions || imagenData.generatedImages || []
+      if (predictions.length === 0) {
+        return NextResponse.json(
+          { error: 'Geen afbeelding gegenereerd door Imagen' },
+          { status: 500 }
+        )
+      }
+
+      // Get base64 data from response - :predict returns bytesBase64Encoded
+      const imageResult = predictions[0]
+      const base64Data = imageResult.bytesBase64Encoded || imageResult.image?.imageBytes
+
+      if (!base64Data) {
+        return NextResponse.json(
+          { error: 'Geen afbeelding data ontvangen van Imagen' },
+          { status: 500 }
+        )
+      }
+
+      // Decode base64 to ArrayBuffer
+      const binaryString = atob(base64Data)
+      const bytes = new Uint8Array(binaryString.length)
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i)
+      }
+      imageArrayBuffer = bytes.buffer
+      revisedPrompt = undefined // Imagen doesn't return revised prompts
+    } else {
+      // OpenAI models (DALL-E, GPT Image)
+      const openai = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY,
+      })
+
+      if (model === 'gpt-image-1') {
+        // GPT Image model - uses different API parameters
+        const gptImageRequest = {
+          model: 'gpt-image-1' as const,
+          prompt: prompt,
+          n: 1,
+          size: modelConfig.size as '1024x1024' | '1536x1024' | '1024x1536',
+          quality: modelConfig.quality as 'low' | 'medium' | 'high',
         }
-        imageArrayBuffer = bytes.buffer
-      } else if (imageData.url) {
-        // Fallback to URL if available
-        const imageResponse = await fetch(imageData.url)
+
+        const response = await openai.images.generate(gptImageRequest)
+
+        if (!response.data || response.data.length === 0) {
+          return NextResponse.json(
+            { error: 'Geen afbeelding gegenereerd' },
+            { status: 500 }
+          )
+        }
+
+        // gpt-image-1 returns base64 data (b64_json)
+        const imageData = response.data[0]
+        if (imageData.b64_json) {
+          // Decode base64 to ArrayBuffer
+          const binaryString = atob(imageData.b64_json)
+          const bytes = new Uint8Array(binaryString.length)
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i)
+          }
+          imageArrayBuffer = bytes.buffer
+        } else if (imageData.url) {
+          // Fallback to URL if available
+          const imageResponse = await fetch(imageData.url)
+          if (!imageResponse.ok) {
+            throw new Error('Failed to fetch generated image')
+          }
+          imageArrayBuffer = await imageResponse.arrayBuffer()
+        } else {
+          return NextResponse.json(
+            { error: 'Geen afbeelding gegenereerd' },
+            { status: 500 }
+          )
+        }
+
+        revisedPrompt = imageData.revised_prompt
+      } else {
+        // DALL-E 2/3 - standard API with URL response
+        const dalleRequest: Parameters<typeof openai.images.generate>[0] = {
+          model: modelConfig.model,
+          prompt: prompt,
+          n: 1,
+          size: modelConfig.size as '256x256' | '512x512' | '1024x1024' | '1792x1024' | '1024x1792',
+          response_format: 'url',
+        }
+
+        // Add optional parameters based on model support
+        if (modelConfig.quality !== undefined) {
+          dalleRequest.quality = modelConfig.quality as 'standard' | 'hd'
+        }
+        if (modelConfig.style !== undefined) {
+          dalleRequest.style = modelConfig.style
+        }
+
+        const response = await openai.images.generate(dalleRequest)
+
+        if (!response.data || response.data.length === 0) {
+          return NextResponse.json(
+            { error: 'Geen afbeelding gegenereerd' },
+            { status: 500 }
+          )
+        }
+
+        const generatedImageUrl = response.data[0].url
+        revisedPrompt = response.data[0].revised_prompt
+
+        if (!generatedImageUrl) {
+          return NextResponse.json(
+            { error: 'Geen afbeelding gegenereerd' },
+            { status: 500 }
+          )
+        }
+
+        // Download the generated image (OpenAI URLs expire)
+        const imageResponse = await fetch(generatedImageUrl)
         if (!imageResponse.ok) {
           throw new Error('Failed to fetch generated image')
         }
+
         imageArrayBuffer = await imageResponse.arrayBuffer()
-      } else {
-        return NextResponse.json(
-          { error: 'Geen afbeelding gegenereerd' },
-          { status: 500 }
-        )
       }
-
-      revisedPrompt = imageData.revised_prompt
-    } else {
-      // DALL-E 2/3 - standard API with URL response
-      const dalleRequest: Parameters<typeof openai.images.generate>[0] = {
-        model: modelConfig.model,
-        prompt: prompt,
-        n: 1,
-        size: modelConfig.size as '256x256' | '512x512' | '1024x1024' | '1792x1024' | '1024x1792',
-        response_format: 'url',
-      }
-
-      // Add optional parameters based on model support
-      if (modelConfig.quality !== undefined) {
-        dalleRequest.quality = modelConfig.quality as 'standard' | 'hd'
-      }
-      if (modelConfig.style !== undefined) {
-        dalleRequest.style = modelConfig.style
-      }
-
-      const response = await openai.images.generate(dalleRequest)
-
-      if (!response.data || response.data.length === 0) {
-        return NextResponse.json(
-          { error: 'Geen afbeelding gegenereerd' },
-          { status: 500 }
-        )
-      }
-
-      const generatedImageUrl = response.data[0].url
-      revisedPrompt = response.data[0].revised_prompt
-
-      if (!generatedImageUrl) {
-        return NextResponse.json(
-          { error: 'Geen afbeelding gegenereerd' },
-          { status: 500 }
-        )
-      }
-
-      // Download the generated image (OpenAI URLs expire)
-      const imageResponse = await fetch(generatedImageUrl)
-      if (!imageResponse.ok) {
-        throw new Error('Failed to fetch generated image')
-      }
-
-      imageArrayBuffer = await imageResponse.arrayBuffer()
     }
 
     // Generate unique file path

@@ -16,16 +16,21 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ChatActionType, UploadedFile } from '@/types'
+import { ModelSelector, ImageModelSelector } from './model-selector'
+import type { ChatModelId, ImageModelId } from './model-selector'
 
 interface ChatActionBarProps {
   onSubmit: (data: {
     message: string
     action: ChatActionType
     files?: UploadedFile[]
+    chatModel?: string
+    imageModel?: string
   }) => void
   isLoading: boolean
   placeholder?: string
   disabled?: boolean
+  showModelSelector?: boolean
 }
 
 interface ActionOption {
@@ -70,12 +75,15 @@ export function ChatActionBar({
   isLoading,
   placeholder = 'Typ een bericht...',
   disabled = false,
+  showModelSelector = true,
 }: ChatActionBarProps) {
   const [input, setInput] = useState('')
   const [selectedAction, setSelectedAction] = useState<ChatActionType>('chat')
   const [showActionMenu, setShowActionMenu] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [isDragging, setIsDragging] = useState(false)
+  const [selectedChatModel, setSelectedChatModel] = useState<ChatModelId>('claude-sonnet')
+  const [selectedImageModel, setSelectedImageModel] = useState<ImageModelId>('dall-e-3')
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -96,6 +104,8 @@ export function ChatActionBar({
       message: input.trim(),
       action: selectedAction,
       files: uploadedFiles.length > 0 ? uploadedFiles : undefined,
+      chatModel: selectedChatModel,
+      imageModel: selectedImageModel,
     })
 
     // Reset state
@@ -354,13 +364,37 @@ export function ChatActionBar({
         accept={currentAction?.acceptedFiles}
       />
 
-      {/* Help text */}
-      <p className="text-xs text-surface-500 mt-2 text-center">
-        {selectedAction === 'chat' && 'Enter om te versturen, Shift+Enter voor nieuwe regel'}
-        {selectedAction === 'image_analyze' && 'Upload een afbeelding en stel een vraag'}
-        {selectedAction === 'image_generate' && 'Beschrijf de afbeelding die je wilt maken'}
-        {selectedAction === 'file_analyze' && 'Upload een bestand (PDF, DOCX, CSV) en stel een vraag'}
-      </p>
+      {/* Model selector and help text */}
+      <div className="flex items-center justify-between mt-2">
+        {showModelSelector && (
+          <div className="flex items-center gap-2">
+            {selectedAction === 'image_generate' ? (
+              <ImageModelSelector
+                value={selectedImageModel}
+                onChange={setSelectedImageModel}
+                disabled={isLoading || disabled}
+                compact
+              />
+            ) : (
+              <ModelSelector
+                value={selectedChatModel}
+                onChange={setSelectedChatModel}
+                disabled={isLoading || disabled}
+                compact
+              />
+            )}
+          </div>
+        )}
+        <p className={cn(
+          "text-xs text-surface-500",
+          !showModelSelector && "text-center w-full"
+        )}>
+          {selectedAction === 'chat' && 'Enter om te versturen, Shift+Enter voor nieuwe regel'}
+          {selectedAction === 'image_analyze' && 'Upload een afbeelding en stel een vraag'}
+          {selectedAction === 'image_generate' && 'Beschrijf de afbeelding die je wilt maken'}
+          {selectedAction === 'file_analyze' && 'Upload een bestand (PDF, DOCX, CSV) en stel een vraag'}
+        </p>
+      </div>
     </div>
   )
 }

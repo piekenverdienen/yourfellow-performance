@@ -155,18 +155,19 @@ export async function buildOpportunities(
   }
 
   // 2. Convert to SignalWithId format
-  const signalsWithIds: SignalWithId[] = signals.map(row => ({
+  interface SignalRow { id: string; source_type: string; external_id: string; url: string; title: string; author: string | null; community: string | null; created_at_external: string | null; metrics: unknown; raw_excerpt: string | null; industry: string }
+  const signalsWithIds: SignalWithId[] = (signals as SignalRow[]).map((row: SignalRow) => ({
     id: row.id,
     signal: {
       sourceType: row.source_type as ViralSourceType,
       externalId: row.external_id,
       url: row.url,
       title: row.title,
-      author: row.author,
-      community: row.community,
+      author: row.author ?? undefined,
+      community: row.community ?? undefined,
       createdAtExternal: row.created_at_external ? new Date(row.created_at_external) : undefined,
       metrics: row.metrics as NormalizedSignal['metrics'],
-      rawExcerpt: row.raw_excerpt,
+      rawExcerpt: row.raw_excerpt ?? undefined,
       industry: row.industry,
     },
   }))
@@ -773,16 +774,17 @@ export async function getOpportunities(filters: {
   const { data, error } = await query
 
   if (error) throw error
+  interface OpportunityRow { id: string; client_id: string | null; industry: string; channel: string; topic: string; angle: string; hook: string | null; reasoning: string | null; score: string; score_breakdown: unknown; source_signal_ids: string[]; status: string; created_at: string }
 
-  return (data || []).map(row => ({
+  return (data as OpportunityRow[] || []).map((row: OpportunityRow) => ({
     id: row.id,
-    clientId: row.client_id,
+    clientId: row.client_id ?? undefined,
     industry: row.industry,
     channel: row.channel as ViralChannel,
     topic: row.topic,
     angle: row.angle,
-    hook: row.hook,
-    reasoning: row.reasoning,
+    hook: row.hook ?? '',
+    reasoning: row.reasoning ?? '',
     score: parseFloat(row.score),
     scoreBreakdown: row.score_breakdown as ScoreBreakdown,
     sourceSignalIds: row.source_signal_ids,
@@ -842,16 +844,17 @@ export async function getOpportunityWithSignals(opportunityId: string): Promise<
     createdAt: oppData.created_at,
   }
 
-  const signals: NormalizedSignal[] = (signalsData || []).map(row => ({
+  interface SignalRow { source_type: string; external_id: string; url: string; title: string; author: string | null; community: string | null; created_at_external: string | null; metrics: unknown; raw_excerpt: string | null; industry: string }
+  const signals: NormalizedSignal[] = (signalsData as SignalRow[] || []).map((row: SignalRow) => ({
     sourceType: row.source_type as ViralSourceType,
     externalId: row.external_id,
     url: row.url,
     title: row.title,
-    author: row.author,
-    community: row.community,
+    author: row.author ?? undefined,
+    community: row.community ?? undefined,
     createdAtExternal: row.created_at_external ? new Date(row.created_at_external) : undefined,
     metrics: row.metrics as NormalizedSignal['metrics'],
-    rawExcerpt: row.raw_excerpt,
+    rawExcerpt: row.raw_excerpt ?? undefined,
     industry: row.industry,
   }))
 

@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
         .eq('cluster_id', filters.clusterId)
 
       if (clusterQueries && clusterQueries.length > 0) {
-        const queryIds = clusterQueries.map(cq => cq.query_id)
+        const queryIds = clusterQueries.map((cq: { query_id: string }) => cq.query_id)
         query = query.in('id', queryIds)
       } else {
         // No queries in this cluster

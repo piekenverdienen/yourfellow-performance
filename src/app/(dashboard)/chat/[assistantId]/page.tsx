@@ -21,7 +21,7 @@ import type { Assistant, Conversation, Message, ChatActionType, UploadedFile, Me
 import { cn } from '@/lib/utils'
 import ReactMarkdown from 'react-markdown'
 import { AssistantAvatar } from '@/components/assistant-avatars'
-import { ChatActionBar, MultimodalMessage } from '@/components/chat'
+import { ChatActionBar, MultimodalMessage, CHAT_MODELS, IMAGE_MODELS } from '@/components/chat'
 
 export default function ChatInterfacePage() {
   const params = useParams()
@@ -191,7 +191,7 @@ export default function ChatInterfacePage() {
   }
 
   // Handle image generation
-  const handleImageGeneration = async (prompt: string): Promise<MessageAttachment | null> => {
+  const handleImageGeneration = async (prompt: string, imageModel?: string): Promise<MessageAttachment | null> => {
     setIsGeneratingImage(true)
     setStatusMessage('Afbeelding genereren...')
 
@@ -204,6 +204,7 @@ export default function ChatInterfacePage() {
           conversationId,
           clientId: selectedClientId,
           assistantSlug: assistant?.slug,
+          model: imageModel,
         }),
       })
 
@@ -239,10 +240,16 @@ export default function ChatInterfacePage() {
     message: string
     action: ChatActionType
     files?: UploadedFile[]
+    chatModel?: string
+    imageModel?: string
   }) => {
     if (isLoading || isStreaming) return
 
-    const { message, action, files } = data
+    const { message, action, files, chatModel, imageModel } = data
+
+    // Get the actual model name from model ID
+    const chatModelConfig = CHAT_MODELS.find(m => m.id === chatModel)
+    const chatModelName = chatModelConfig?.modelName
 
     // Handle image generation separately
     if (action === 'image_generate') {
@@ -264,7 +271,7 @@ export default function ChatInterfacePage() {
       }
       setMessages(prev => [...prev, tempUserMessage])
 
-      const generatedImage = await handleImageGeneration(message)
+      const generatedImage = await handleImageGeneration(message, imageModel)
 
       if (generatedImage) {
         const assistantMessage: Message = {
@@ -353,6 +360,7 @@ export default function ChatInterfacePage() {
           clientId: selectedClientId,
           action,
           attachments: uploadedAttachments,
+          model: chatModelName,
         }),
       })
 

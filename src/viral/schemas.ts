@@ -454,7 +454,7 @@ export function getBriefValidationErrors(data: unknown): string[] {
   const result = CanonicalBriefSchema.safeParse(data)
   if (result.success) return []
 
-  return result.error.errors.map(err =>
+  return result.error.issues.map(err =>
     `${err.path.join('.')}: ${err.message}`
   )
 }

@@ -32,7 +32,8 @@ export async function GET(request: NextRequest) {
       .from('prompt_templates')
       .select('key, name, xp_reward')
 
-    const templateMap = new Map(templates?.map(t => [t.key, { name: t.name, xp: t.xp_reward }]) || [])
+    interface Template { key: string; name: string; xp_reward: number }
+    const templateMap = new Map((templates as Template[] || []).map((t: Template) => [t.key, { name: t.name, xp: t.xp_reward }]))
 
     // Get usage data
     let query = supabase
@@ -53,8 +54,9 @@ export async function GET(request: NextRequest) {
 
     // Aggregate by tool
     const toolCounts: Record<string, { count: number; xpEarned: number; name: string }> = {}
+    interface UsageRow { tool: string; created_at: string }
 
-    usage?.forEach(u => {
+    (usage as UsageRow[] || []).forEach((u: UsageRow) => {
       const tool = u.tool
       const templateInfo = templateMap.get(tool)
       const xpPerUse = templateInfo?.xp || 10
