@@ -19,10 +19,18 @@ import '@xyflow/react/dist/style.css'
 import { nodeTypes } from './nodes'
 import { NodeSidebar } from './NodeSidebar'
 import { NodeConfigPanel } from './NodeConfigPanel'
+import { AIFlowBuilder, TodoChecklist } from './AIFlowBuilder'
 import { Button } from '@/components/ui/button'
-import { Save, Play, ArrowLeft, Loader2 } from 'lucide-react'
-import type { WorkflowNode, WorkflowEdge, BaseNodeData } from '@/types/workflow'
+import { Save, Play, ArrowLeft, Loader2, Sparkles } from 'lucide-react'
+import type { WorkflowNode, WorkflowEdge, BaseNodeData, TriggerConfig } from '@/types/workflow'
 import Link from 'next/link'
+
+interface Todo {
+  nodeId: string
+  field: string
+  reason: string
+  nodeLabel: string
+}
 
 interface WorkflowEditorProps {
   workflowId?: string
@@ -50,6 +58,9 @@ export function WorkflowEditor({
   const [isExecuting, setIsExecuting] = useState(false)
   const [executeInput, setExecuteInput] = useState('')
   const [showExecuteModal, setShowExecuteModal] = useState(false)
+  const [showAIBuilder, setShowAIBuilder] = useState(false)
+  const [todos, setTodos] = useState<Todo[]>([])
+  const [showTodos, setShowTodos] = useState(false)
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
@@ -146,6 +157,32 @@ export function WorkflowEditor({
     }
   }
 
+  const handleAIGenerate = useCallback(
+    (generatedNodes: WorkflowNode[], generatedEdges: WorkflowEdge[], generatedTodos: Todo[]) => {
+      // Replace current nodes and edges with generated ones
+      setNodes(generatedNodes as Node[])
+      setEdges(generatedEdges as Edge[])
+      setTodos(generatedTodos)
+      setShowAIBuilder(false)
+
+      // Show todos panel if there are any
+      if (generatedTodos.length > 0) {
+        setShowTodos(true)
+      }
+    },
+    [setNodes, setEdges]
+  )
+
+  const handleTodoClick = useCallback(
+    (nodeId: string) => {
+      const node = nodes.find((n) => n.id === nodeId)
+      if (node) {
+        setSelectedNode(node)
+      }
+    },
+    [nodes]
+  )
+
   return (
     <div className="flex h-[calc(100vh-120px)] bg-surface-50 rounded-xl overflow-hidden border border-surface-200">
       {/* Sidebar with node types */}
@@ -170,6 +207,14 @@ export function WorkflowEditor({
             />
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowAIBuilder(true)}
+              className="bg-gradient-to-r from-purple-50 to-pink-50 border-purple-200 hover:border-purple-300 text-purple-700"
+            >
+              <Sparkles className="h-4 w-4 mr-2" />
+              Bouw met AI
+            </Button>
             <Button variant="outline" onClick={handleSave} disabled={isSaving}>
               {isSaving ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -254,34 +299,104 @@ export function WorkflowEditor({
       )}
 
       {/* Execute modal */}
-      {showExecuteModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 max-w-lg w-full mx-4 shadow-2xl">
-            <h3 className="text-lg font-semibold mb-4">Workflow uitvoeren</h3>
-            <p className="text-sm text-surface-600 mb-4">
-              Voer een input in om de workflow te starten:
-            </p>
-            <textarea
-              value={executeInput}
-              onChange={(e) => setExecuteInput(e.target.value)}
-              placeholder="Bijv. 'Schrijf een blog over AI marketing'"
-              className="w-full h-32 p-3 border border-surface-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-            />
-            <div className="flex justify-end gap-2 mt-4">
-              <Button variant="outline" onClick={() => setShowExecuteModal(false)}>
-                Annuleren
-              </Button>
-              <Button onClick={handleExecute} disabled={isExecuting || !executeInput.trim()}>
-                {isExecuting ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Play className="h-4 w-4 mr-2" />
-                )}
-                Start
-              </Button>
+      {showExecuteModal && (() => {
+        // Find trigger node to check configuration
+        const triggerNode = nodes.find((n) => n.type === 'triggerNode')
+        const triggerConfig = triggerNode?.data?.config as TriggerConfig | undefined
+        const triggerType = triggerConfig?.triggerType || 'manual'
+
+        // Only require input for manual triggers with inputRequired=true
+        const needsInput = triggerType === 'manual' && triggerConfig?.inputRequired !== false
+
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl p-6 max-w-lg w-full mx-4 shadow-2xl">
+              <h3 className="text-lg font-semibold mb-4">
+                {needsInput ? 'Workflow uitvoeren' : 'Workflow starten'}
+              </h3>
+
+              {triggerType === 'schedule' && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-700">
+                    <strong>Gepland:</strong> {triggerConfig?.scheduleDescription || triggerConfig?.scheduleCron || 'Schema geconfigureerd'}
+                  </p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    In productie wordt deze automatisch uitgevoerd volgens schema.
+                  </p>
+                </div>
+              )}
+
+              {triggerType === 'webhook' && (
+                <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                  <p className="text-sm text-orange-700">
+                    <strong>Webhook:</strong> /api/webhooks/{triggerConfig?.webhookPath || 'workflow'}
+                  </p>
+                  <p className="text-xs text-orange-600 mt-1">
+                    In productie wordt deze getriggerd via de webhook URL.
+                  </p>
+                </div>
+              )}
+
+              {needsInput ? (
+                <>
+                  <p className="text-sm text-surface-600 mb-4">
+                    {triggerConfig?.inputPlaceholder || 'Voer een input in om de workflow te starten:'}
+                  </p>
+                  <textarea
+                    value={executeInput}
+                    onChange={(e) => setExecuteInput(e.target.value)}
+                    placeholder="Bijv. 'Schrijf een blog over AI marketing'"
+                    className="w-full h-32 p-3 border border-surface-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+                  />
+                </>
+              ) : (
+                <div className="p-4 bg-green-50 border border-green-200 rounded-lg mb-4">
+                  <p className="text-sm text-green-700">
+                    {triggerType === 'schedule'
+                      ? 'Klik op Start om de workflow nu uit te voeren (test run).'
+                      : triggerType === 'webhook'
+                      ? 'Klik op Start om de workflow handmatig te testen.'
+                      : 'Deze workflow start direct zonder input.'}
+                  </p>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 mt-4">
+                <Button variant="outline" onClick={() => setShowExecuteModal(false)}>
+                  Annuleren
+                </Button>
+                <Button
+                  onClick={handleExecute}
+                  disabled={isExecuting || (needsInput && !executeInput.trim())}
+                >
+                  {isExecuting ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Play className="h-4 w-4 mr-2" />
+                  )}
+                  Start
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
+        )
+      })()}
+
+      {/* AI Flow Builder modal */}
+      {showAIBuilder && (
+        <AIFlowBuilder
+          onGenerate={handleAIGenerate}
+          onClose={() => setShowAIBuilder(false)}
+        />
+      )}
+
+      {/* Todo checklist */}
+      {showTodos && todos.length > 0 && (
+        <TodoChecklist
+          todos={todos}
+          onTodoClick={handleTodoClick}
+          onClose={() => setShowTodos(false)}
+        />
       )}
     </div>
   )

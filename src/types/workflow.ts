@@ -2,12 +2,20 @@ import type { Node, Edge } from '@xyflow/react'
 
 // Node configuration types
 export interface TriggerConfig {
+  triggerType: 'manual' | 'schedule' | 'webhook'
+  // Manual trigger options
+  inputRequired?: boolean
   inputPlaceholder?: string
+  // Schedule trigger options
+  scheduleCron?: string
+  scheduleDescription?: string
+  // Webhook trigger options
+  webhookPath?: string
   [key: string]: unknown
 }
 
 export interface AIAgentConfig {
-  model: 'claude-sonnet' | 'claude-haiku' | 'gpt-4'
+  model: 'claude-sonnet' | 'claude-haiku' | 'claude-opus' | 'gpt-4o' | 'gpt-4o-mini' | 'gemini-flash' | 'gemini-pro'
   prompt: string
   temperature?: number
   maxTokens?: number
@@ -25,6 +33,7 @@ export interface WebhookConfig {
   url?: string
   method?: 'GET' | 'POST'
   headers?: Record<string, string>
+  bodyTemplate?: string
   [key: string]: unknown
 }
 
@@ -36,6 +45,8 @@ export interface DelayConfig {
 
 export interface ConditionConfig {
   condition: string
+  mode?: 'contains' | 'equals' | 'not_equals' | 'regex'
+  caseSensitive?: boolean
   trueLabel?: string
   falseLabel?: string
   [key: string]: unknown
@@ -87,7 +98,15 @@ export type WorkflowNodeType =
   | 'outputNode'
 
 export type WorkflowNode = Node<BaseNodeData, WorkflowNodeType>
-export type WorkflowEdge = Edge
+
+// Edge data for conditional branching
+export interface WorkflowEdgeData {
+  branch?: 'true' | 'false' | 'default'
+  label?: string
+  [key: string]: unknown
+}
+
+export type WorkflowEdge = Edge<WorkflowEdgeData>
 
 // Workflow database types
 export interface Workflow {
@@ -148,7 +167,11 @@ export const NODE_DEFINITIONS: NodeDefinition[] = [
     description: 'Startpunt van de workflow',
     icon: 'Play',
     color: '#22C55E',
-    defaultConfig: { inputPlaceholder: 'Voer je input in...' },
+    defaultConfig: {
+      triggerType: 'manual',
+      inputRequired: true,
+      inputPlaceholder: 'Voer je input in...'
+    },
   },
   {
     type: 'aiAgentNode',
