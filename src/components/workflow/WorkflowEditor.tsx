@@ -304,20 +304,24 @@ export function WorkflowEditor({
         const triggerNode = nodes.find((n) => n.type === 'triggerNode')
         const triggerConfig = triggerNode?.data?.config as TriggerConfig | undefined
         const triggerType = triggerConfig?.triggerType || 'manual'
-        const inputRequired = triggerConfig?.inputRequired !== false
+
+        // Only require input for manual triggers with inputRequired=true
+        const needsInput = triggerType === 'manual' && triggerConfig?.inputRequired !== false
 
         return (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
             <div className="bg-white rounded-xl p-6 max-w-lg w-full mx-4 shadow-2xl">
-              <h3 className="text-lg font-semibold mb-4">Workflow uitvoeren</h3>
+              <h3 className="text-lg font-semibold mb-4">
+                {needsInput ? 'Workflow uitvoeren' : 'Workflow starten'}
+              </h3>
 
               {triggerType === 'schedule' && (
                 <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                   <p className="text-sm text-blue-700">
-                    <strong>Gepland:</strong> {triggerConfig?.scheduleDescription || triggerConfig?.scheduleCron}
+                    <strong>Gepland:</strong> {triggerConfig?.scheduleDescription || triggerConfig?.scheduleCron || 'Schema geconfigureerd'}
                   </p>
                   <p className="text-xs text-blue-600 mt-1">
-                    Je kunt de workflow nu handmatig testen. In productie wordt deze automatisch uitgevoerd.
+                    In productie wordt deze automatisch uitgevoerd volgens schema.
                   </p>
                 </div>
               )}
@@ -325,32 +329,34 @@ export function WorkflowEditor({
               {triggerType === 'webhook' && (
                 <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
                   <p className="text-sm text-orange-700">
-                    <strong>Webhook trigger:</strong> /api/webhooks/{triggerConfig?.webhookPath || 'workflow'}
+                    <strong>Webhook:</strong> /api/webhooks/{triggerConfig?.webhookPath || 'workflow'}
                   </p>
                   <p className="text-xs text-orange-600 mt-1">
-                    Je kunt de workflow nu handmatig testen met simulatie-input.
+                    In productie wordt deze getriggerd via de webhook URL.
                   </p>
                 </div>
               )}
 
-              {inputRequired || triggerType !== 'manual' ? (
+              {needsInput ? (
                 <>
                   <p className="text-sm text-surface-600 mb-4">
-                    {triggerType === 'manual'
-                      ? (triggerConfig?.inputPlaceholder ? `Input: ${triggerConfig.inputPlaceholder}` : 'Voer een input in om de workflow te starten:')
-                      : 'Voer test-input in (of laat leeg voor scheduled/webhook test):'}
+                    {triggerConfig?.inputPlaceholder || 'Voer een input in om de workflow te starten:'}
                   </p>
                   <textarea
                     value={executeInput}
                     onChange={(e) => setExecuteInput(e.target.value)}
-                    placeholder={triggerConfig?.inputPlaceholder || "Bijv. 'Schrijf een blog over AI marketing'"}
+                    placeholder="Bijv. 'Schrijf een blog over AI marketing'"
                     className="w-full h-32 p-3 border border-surface-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none"
                   />
                 </>
               ) : (
                 <div className="p-4 bg-green-50 border border-green-200 rounded-lg mb-4">
                   <p className="text-sm text-green-700">
-                    Deze workflow start direct zonder input.
+                    {triggerType === 'schedule'
+                      ? 'Klik op Start om de workflow nu uit te voeren (test run).'
+                      : triggerType === 'webhook'
+                      ? 'Klik op Start om de workflow handmatig te testen.'
+                      : 'Deze workflow start direct zonder input.'}
                   </p>
                 </div>
               )}
@@ -361,14 +367,14 @@ export function WorkflowEditor({
                 </Button>
                 <Button
                   onClick={handleExecute}
-                  disabled={isExecuting || (inputRequired && triggerType === 'manual' && !executeInput.trim())}
+                  disabled={isExecuting || (needsInput && !executeInput.trim())}
                 >
                   {isExecuting ? (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   ) : (
                     <Play className="h-4 w-4 mr-2" />
                   )}
-                  {triggerType === 'manual' ? 'Start' : 'Test uitvoeren'}
+                  Start
                 </Button>
               </div>
             </div>
