@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
           }
         case 'imagen-3':
           return {
-            model: 'imagen-3.0-generate-002' as const,
+            model: 'imagen-3.0-generate-001' as const,
             provider: 'google' as const,
             size: '1024x1024' as const,
             quality: undefined,
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
           }
         case 'imagen-2':
           return {
-            model: 'imagegeneration@006' as const,
+            model: 'imagen-3.0-fast-generate-001' as const, // Imagen 2 uses fast variant
             provider: 'google' as const,
             size: '1024x1024' as const,
             quality: undefined,
@@ -139,19 +139,19 @@ export async function POST(request: NextRequest) {
 
     // Google Imagen generation
     if (provider === 'google') {
-      // Use Vertex AI / Gemini API for Imagen
-      const imagenUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelConfig.model}:predict?key=${googleApiKey}`
+      // Use Gemini API for Imagen 3
+      const imagenUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelConfig.model}:generateImages?key=${googleApiKey}`
 
       const imagenResponse = await fetch(imagenUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          instances: [{ prompt: prompt }],
-          parameters: {
-            sampleCount: 1,
+          prompt: prompt,
+          config: {
+            numberOfImages: 1,
             aspectRatio: '1:1',
-            personGeneration: 'allow_adult',
-            safetySetting: 'block_medium_and_above',
+            personGeneration: 'ALLOW_ADULT',
+            outputMimeType: 'image/png',
           },
         }),
       })
@@ -161,9 +161,17 @@ export async function POST(request: NextRequest) {
         console.error('Imagen API error:', errorText)
 
         // Check for safety filter
-        if (errorText.includes('SAFETY') || errorText.includes('blocked')) {
+        if (errorText.includes('SAFETY') || errorText.includes('blocked') || errorText.includes('policy')) {
           return NextResponse.json(
             { error: 'De prompt is geblokkeerd door veiligheidsfilters. Probeer een andere beschrijving.' },
+            { status: 400 }
+          )
+        }
+
+        // Check if model not found - suggest using OpenAI instead
+        if (errorText.includes('NOT_FOUND') || errorText.includes('not found')) {
+          return NextResponse.json(
+            { error: 'Google Imagen is niet beschikbaar. Probeer een OpenAI model (DALL-E 3).' },
             { status: 400 }
           )
         }
@@ -176,17 +184,27 @@ export async function POST(request: NextRequest) {
 
       const imagenData = await imagenResponse.json()
 
-      // Imagen returns base64 encoded images
-      const predictions = imagenData.predictions || []
-      if (predictions.length === 0 || !predictions[0].bytesBase64Encoded) {
+      // Imagen 3 returns generatedImages array
+      const generatedImages = imagenData.generatedImages || imagenData.predictions || []
+      if (generatedImages.length === 0) {
         return NextResponse.json(
           { error: 'Geen afbeelding gegenereerd door Imagen' },
           { status: 500 }
         )
       }
 
+      // Get base64 data from response
+      const imageResult = generatedImages[0]
+      const base64Data = imageResult.image?.imageBytes || imageResult.bytesBase64Encoded
+
+      if (!base64Data) {
+        return NextResponse.json(
+          { error: 'Geen afbeelding data ontvangen van Imagen' },
+          { status: 500 }
+        )
+      }
+
       // Decode base64 to ArrayBuffer
-      const base64Data = predictions[0].bytesBase64Encoded
       const binaryString = atob(base64Data)
       const bytes = new Uint8Array(binaryString.length)
       for (let i = 0; i < binaryString.length; i++) {
