@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import DOMPurify from 'dompurify'
 import { useSelectedClientId } from '@/stores/client-store'
-import { usePersistedState, useClientPersistedState } from '@/hooks/use-persisted-form'
+import { usePersistedState, useClientPersistedState, useOnClientChange } from '@/hooks/use-persisted-form'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -61,6 +61,12 @@ export default function SEOContentPage() {
   const [generatedContent, setGeneratedContent] = useClientPersistedState<string | null>('seo-content-result', null)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Reset state when client changes
+  useOnClientChange(useCallback(() => {
+    setGeneratedContent(null)
+    setError(null)
+  }, [setGeneratedContent]))
 
   const handleGenerate = async () => {
     setIsGenerating(true)

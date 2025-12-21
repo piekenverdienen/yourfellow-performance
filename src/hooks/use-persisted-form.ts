@@ -4,6 +4,31 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSelectedClientId } from '@/stores/client-store'
 
 /**
+ * Hook that calls a callback when the selected client changes
+ * Use this to refetch data or reset state when switching clients
+ */
+export function useOnClientChange(callback: () => void) {
+  const clientId = useSelectedClientId()
+  const prevClientId = useRef(clientId)
+  const isFirstRender = useRef(true)
+
+  useEffect(() => {
+    // Skip the first render
+    if (isFirstRender.current) {
+      isFirstRender.current = false
+      prevClientId.current = clientId
+      return
+    }
+
+    // Only call callback when clientId actually changes
+    if (prevClientId.current !== clientId) {
+      prevClientId.current = clientId
+      callback()
+    }
+  }, [clientId, callback])
+}
+
+/**
  * Hook that persists state to localStorage
  * Works correctly with SSR/hydration in Next.js
  */

@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { useSelectedClientId } from '@/stores/client-store'
+import { useOnClientChange } from '@/hooks/use-persisted-form'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -68,15 +69,11 @@ export default function ImageGeneratorPage() {
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Reset generated content when client changes
-  const prevClientId = useRef(clientId)
-  useEffect(() => {
-    if (prevClientId.current !== clientId) {
-      setGeneratedImage(null)
-      setError(null)
-      prevClientId.current = clientId
-    }
-  }, [clientId])
+  // Reset state when client changes
+  useOnClientChange(useCallback(() => {
+    setGeneratedImage(null)
+    setError(null)
+  }, []))
 
   const handleFileSelect = (file: File) => {
     // Validate file type

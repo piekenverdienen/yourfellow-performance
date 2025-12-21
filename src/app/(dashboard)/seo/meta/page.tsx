@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useSelectedClientId } from '@/stores/client-store'
-import { usePersistedState, useClientPersistedState } from '@/hooks/use-persisted-form'
+import { usePersistedState, useClientPersistedState, useOnClientChange } from '@/hooks/use-persisted-form'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -53,6 +53,12 @@ export default function SEOMetaPage() {
   const [generatedMeta, setGeneratedMeta] = useClientPersistedState<GeneratedMeta | null>('seo-meta-result', null)
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // Reset state when client changes
+  useOnClientChange(useCallback(() => {
+    setGeneratedMeta(null)
+    setError(null)
+  }, [setGeneratedMeta]))
 
   const handleGenerate = async () => {
     setIsGenerating(true)

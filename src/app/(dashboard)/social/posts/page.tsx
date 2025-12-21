@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { useSelectedClientId } from '@/stores/client-store'
-import { usePersistedState, useClientPersistedState } from '@/hooks/use-persisted-form'
+import { usePersistedState, useClientPersistedState, useOnClientChange } from '@/hooks/use-persisted-form'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -101,6 +101,14 @@ export default function SocialPostsPage() {
   const [referencePreview, setReferencePreview] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Reset state when client changes
+  useOnClientChange(useCallback(() => {
+    setGeneratedPost(null)
+    setGeneratedImage(null)
+    setError(null)
+    setImageError(null)
+  }, [setGeneratedPost, setGeneratedImage]))
 
   // Handle reference image file selection
   const handleFileSelect = (file: File) => {
