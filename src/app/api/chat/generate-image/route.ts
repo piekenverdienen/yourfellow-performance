@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
           }
         case 'imagen-3':
           return {
-            model: 'gemini-2.5-flash-preview-05-20' as const, // Gemini 2.5 Flash with native image generation
+            model: 'gemini-2.5-flash-image' as const, // Gemini 2.5 Flash Image (Nano Banana)
             provider: 'google' as const,
             size: '1024x1024' as const,
             aspectRatio: '1:1' as const,
@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
           }
         case 'imagen-2':
           return {
-            model: 'gemini-2.5-flash-preview-05-20' as const, // Gemini 2.5 Flash (fast)
+            model: 'gemini-2.5-flash-image' as const, // Gemini 2.5 Flash Image (fast)
             provider: 'google' as const,
             size: '1024x1024' as const,
             aspectRatio: '1:1' as const,
@@ -153,7 +153,7 @@ export async function POST(request: NextRequest) {
         },
         body: JSON.stringify({
           contents: [{
-            parts: [{ text: `Generate an image: ${prompt}` }]
+            parts: [{ text: prompt }]
           }],
           generationConfig: {
             responseModalities: ['TEXT', 'IMAGE'],
