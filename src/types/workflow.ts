@@ -25,6 +25,7 @@ export interface WebhookConfig {
   url?: string
   method?: 'GET' | 'POST'
   headers?: Record<string, string>
+  bodyTemplate?: string
   [key: string]: unknown
 }
 
@@ -36,6 +37,8 @@ export interface DelayConfig {
 
 export interface ConditionConfig {
   condition: string
+  mode?: 'contains' | 'equals' | 'not_equals' | 'regex'
+  caseSensitive?: boolean
   trueLabel?: string
   falseLabel?: string
   [key: string]: unknown
