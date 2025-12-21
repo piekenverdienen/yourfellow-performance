@@ -74,6 +74,11 @@ export default function ClientDetailPage() {
   const [newMemberRole, setNewMemberRole] = useState<ClientMemberRole>('viewer')
   const [addingMember, setAddingMember] = useState(false)
 
+  // Delete client state
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteConfirmName, setDeleteConfirmName] = useState('')
+
   const isAdmin = client && ['owner', 'admin'].includes(client.role)
   const isOwner = client?.role === 'owner'
 
@@ -224,6 +229,30 @@ export default function ClientDetailPage() {
     } catch (error) {
       console.error('Error removing member:', error)
       alert('Er ging iets mis')
+    }
+  }
+
+  const deleteClient = async () => {
+    if (deleteConfirmName !== client?.name) return
+
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/clients/${id}`, {
+        method: 'DELETE',
+      })
+
+      if (res.ok) {
+        fetchClients() // Refresh global client list
+        router.push('/clients')
+      } else {
+        const data = await res.json()
+        alert(data.error || 'Er ging iets mis bij het verwijderen')
+      }
+    } catch (error) {
+      console.error('Error deleting client:', error)
+      alert('Er ging iets mis bij het verwijderen')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -782,6 +811,91 @@ export default function ClientDetailPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Danger Zone */}
+          <Card className="border-red-200">
+            <CardHeader>
+              <CardTitle className="text-red-600">Gevaarzone</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <h4 className="font-medium text-surface-900 mb-1">
+                  Klant verwijderen
+                </h4>
+                <p className="text-sm text-surface-500 mb-4">
+                  Als je deze klant verwijdert, worden alle gegevens permanent verwijderd.
+                  Dit kan niet ongedaan worden gemaakt.
+                </p>
+                <Button
+                  variant="outline"
+                  className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400"
+                  onClick={() => setShowDeleteModal(true)}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Klant verwijderen
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Delete Client Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="fixed inset-0 bg-black/50"
+            onClick={() => {
+              setShowDeleteModal(false)
+              setDeleteConfirmName('')
+            }}
+          />
+          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md p-6 m-4">
+            <h2 className="text-xl font-bold text-red-600 mb-2">
+              Klant verwijderen
+            </h2>
+            <p className="text-surface-600 mb-4">
+              Weet je zeker dat je <strong>{client.name}</strong> wilt verwijderen?
+              Alle gegevens worden permanent verwijderd.
+            </p>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-surface-700 mb-1.5">
+                Typ <strong>{client.name}</strong> om te bevestigen
+              </label>
+              <Input
+                value={deleteConfirmName}
+                onChange={(e) => setDeleteConfirmName(e.target.value)}
+                placeholder={client.name}
+                autoFocus
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setShowDeleteModal(false)
+                  setDeleteConfirmName('')
+                }}
+              >
+                Annuleren
+              </Button>
+              <Button
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                onClick={deleteClient}
+                disabled={deleteConfirmName !== client.name || deleting}
+              >
+                {deleting ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4 mr-2" />
+                )}
+                Verwijderen
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

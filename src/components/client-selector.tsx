@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
 import { useClientStore } from '@/stores/client-store'
 import { Building2, ChevronDown, Check, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -17,6 +18,8 @@ export function ClientSelector({
   className,
 }: ClientSelectorProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const router = useRouter()
+  const pathname = usePathname()
   const {
     clients,
     selectedClient,
@@ -30,14 +33,28 @@ export function ClientSelector({
     fetchClients()
   }, [fetchClients])
 
+  // Check if we're on a client detail page (/clients/[id])
+  const clientDetailMatch = pathname.match(/^\/clients\/([^/]+)$/)
+  const isOnClientDetailPage = !!clientDetailMatch
+
   const handleSelect = (client: typeof selectedClient) => {
     selectClient(client)
     setIsOpen(false)
+
+    // If on a client detail page, navigate to the new client's page
+    if (isOnClientDetailPage && client) {
+      router.push(`/clients/${client.id}`)
+    }
   }
 
   const handleClearSelection = () => {
     clearSelectedClient()
     setIsOpen(false)
+
+    // If on a client detail page, navigate to clients overview
+    if (isOnClientDetailPage) {
+      router.push('/clients')
+    }
   }
 
   return (

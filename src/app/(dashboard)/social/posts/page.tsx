@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { useSelectedClientId } from '@/stores/client-store'
-import { usePersistedState } from '@/hooks/use-persisted-form'
+import { usePersistedState, useClientPersistedState, useOnClientChange } from '@/hooks/use-persisted-form'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -83,7 +83,7 @@ export default function SocialPostsPage() {
   const clientId = useSelectedClientId()
   const [isGenerating, setIsGenerating] = useState(false)
   const [formData, setFormData] = usePersistedState('social-posts-form', initialFormData)
-  const [generatedPost, setGeneratedPost] = usePersistedState<GeneratedPost | null>('social-posts-result', null)
+  const [generatedPost, setGeneratedPost] = useClientPersistedState<GeneratedPost | null>('social-posts-result', null)
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -93,7 +93,7 @@ export default function SocialPostsPage() {
   const [imageSize, setImageSize] = usePersistedState('social-posts-image-size', '1024x1024')
   const [isGeneratingImage, setIsGeneratingImage] = useState(false)
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false)
-  const [generatedImage, setGeneratedImage] = usePersistedState<GeneratedImage | null>('social-posts-image-result', null)
+  const [generatedImage, setGeneratedImage] = useClientPersistedState<GeneratedImage | null>('social-posts-image-result', null)
   const [imageError, setImageError] = useState<string | null>(null)
 
   // Reference image state
@@ -101,6 +101,14 @@ export default function SocialPostsPage() {
   const [referencePreview, setReferencePreview] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Reset state when client changes
+  useOnClientChange(useCallback(() => {
+    setGeneratedPost(null)
+    setGeneratedImage(null)
+    setError(null)
+    setImageError(null)
+  }, [setGeneratedPost, setGeneratedImage]))
 
   // Handle reference image file selection
   const handleFileSelect = (file: File) => {

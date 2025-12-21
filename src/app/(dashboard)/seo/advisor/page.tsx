@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -27,7 +27,7 @@ import {
 } from 'lucide-react'
 import { copyToClipboard, cn } from '@/lib/utils'
 import { useSelectedClient } from '@/stores/client-store'
-import { usePersistedState } from '@/hooks/use-persisted-form'
+import { useClientPersistedState, useOnClientChange } from '@/hooks/use-persisted-form'
 import type { ContentAdvisoryReport, RewriteSuggestion, FAQSuggestion } from '@/seo/types'
 
 // Extended query type from API
@@ -72,8 +72,13 @@ export default function SEOAdvisorPage() {
   const selectedClient = useSelectedClient()
   const clientScSettings = selectedClient?.settings?.searchConsole
 
-  // Persisted analysis results
-  const [analysis, setAnalysis] = usePersistedState<PersistedAnalysis>('seo-advisor-analysis', initialAnalysis)
+  // Persisted analysis results (client-scoped)
+  const [analysis, setAnalysis] = useClientPersistedState<PersistedAnalysis>('seo-advisor-analysis', initialAnalysis)
+
+  // Reset state when client changes
+  useOnClientChange(useCallback(() => {
+    setAnalysis(initialAnalysis)
+  }, [setAnalysis]))
 
   // Local UI state (not persisted)
   const [pageUrl, setPageUrl] = useState(analysis.pageUrl)
