@@ -12,6 +12,7 @@ import type {
   DelayConfig,
   ConditionConfig,
   EmailConfig,
+  TriggerConfig,
 } from '@/types/workflow'
 
 export async function POST(
@@ -29,11 +30,9 @@ export async function POST(
     }
 
     const body = await request.json()
-    const { input, clientId } = body
+    const { input = '', clientId } = body
 
-    if (!input) {
-      return NextResponse.json({ error: 'Input is required' }, { status: 400 })
-    }
+    // Input validation happens after we fetch the workflow to check trigger config
 
     // Get client context if clientId provided
     let clientContext: Record<string, unknown> | null = null
@@ -74,6 +73,16 @@ export async function POST(
 
     const nodes = workflow.nodes as WorkflowNode[]
     const edges = workflow.edges as WorkflowEdge[]
+
+    // Check if input is required based on trigger configuration
+    const triggerNode = nodes.find((n) => n.type === 'triggerNode')
+    const triggerConfig = triggerNode?.data?.config as TriggerConfig | undefined
+    const triggerType = triggerConfig?.triggerType || 'manual'
+    const inputRequired = triggerType === 'manual' && triggerConfig?.inputRequired !== false
+
+    if (inputRequired && !input) {
+      return NextResponse.json({ error: 'Input is required' }, { status: 400 })
+    }
 
     // Create a workflow run record
     const { data: run, error: runError } = await supabase
