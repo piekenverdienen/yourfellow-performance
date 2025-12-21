@@ -508,3 +508,56 @@ export interface UploadedFile {
   url?: string
   error?: string
 }
+
+// ===========================================
+// Customer Context Layer (AI Context)
+// ===========================================
+// Re-export context types from the context module
+export type {
+  AIContext,
+  Observation,
+  Goals,
+  Economics,
+  Competitor,
+  Competitors,
+  Access,
+  NextAction,
+  Confidence,
+  Gaps,
+  ContextSummary,
+  SourceMap,
+  ContextVersion,
+  ChannelType as AIChannelType,
+  ValidationResult,
+} from '@/lib/context'
+
+export type {
+  AIContextVersion,
+  ClientContext as ClientContextRecord,
+  SuggestedInput,
+  IntakeJobType,
+  IntakeJobStatus,
+  IntakeJobStep,
+  IntakeJobConfig,
+  IntakeJob,
+  ScrapedSourceType,
+  PageType,
+  ScrapedStructuredContent,
+  ScrapedSource,
+  IntakeAnswerSource,
+  IntakeAnswer,
+  GetContextResponse,
+  GenerateContextRequest,
+  GenerateContextResponse,
+  ActivateVersionRequest,
+  ActivateVersionResponse,
+  ContextVersionListItem,
+  GetVersionsResponse,
+  StartIntakeRequest,
+  StartIntakeResponse,
+  GetIntakeJobResponse,
+  SubmitIntakeAnswersRequest,
+  SubmitIntakeAnswersResponse,
+  EnrichmentSuggestion,
+  ContextEnrichmentResult,
+} from '@/lib/context'
