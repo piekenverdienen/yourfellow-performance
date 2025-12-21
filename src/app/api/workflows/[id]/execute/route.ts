@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getProviderAdapter, isProviderAvailable } from '@/lib/ai/providers'
 import { getModel } from '@/lib/ai/models'
+import { sendWorkflowEmail } from '@/lib/email'
 import type {
   WorkflowNode,
   WorkflowEdge,
@@ -10,6 +11,7 @@ import type {
   WebhookConfig,
   DelayConfig,
   ConditionConfig,
+  EmailConfig,
 } from '@/types/workflow'
 
 export async function POST(
@@ -609,15 +611,52 @@ async function executeNode(
         }
       }
 
-      case 'emailNode':
-        // Email sending would be implemented here
-        // For now, just pass through the data
+      case 'emailNode': {
+        const emailConfig = node.data.config as EmailConfig
+
+        if (!emailConfig.to) {
+          return {
+            status: 'failed',
+            error: 'Geen ontvanger geconfigureerd',
+            startedAt,
+            completedAt: new Date().toISOString(),
+          }
+        }
+
+        // Replace variables in template
+        let emailContent = emailConfig.template || '{{previous_output}}'
+        emailContent = emailContent.replace(/\{\{previous_output\}\}/g, previousOutput)
+        emailContent = emailContent.replace(/\{\{input\}\}/g, input || '')
+
+        // Replace node outputs
+        for (const [nodeId, result] of Object.entries(allResults || {})) {
+          const outputStr = typeof result.output === 'string' ? result.output : JSON.stringify(result.output)
+          emailContent = emailContent.replace(new RegExp(`\\{\\{${nodeId}_output\\}\\}`, 'g'), outputStr)
+        }
+
+        // Send the email
+        const emailResult = await sendWorkflowEmail({
+          to: emailConfig.to,
+          subject: emailConfig.subject || 'Workflow Output',
+          content: emailContent,
+        })
+
+        if (!emailResult.success) {
+          return {
+            status: 'failed',
+            error: emailResult.error || 'Email verzenden mislukt',
+            startedAt,
+            completedAt: new Date().toISOString(),
+          }
+        }
+
         return {
           status: 'completed',
-          output: `Email zou verzonden worden met content: ${previousOutput.slice(0, 200)}...`,
+          output: `Email verzonden naar ${emailConfig.to} (ID: ${emailResult.messageId})`,
           startedAt,
           completedAt: new Date().toISOString(),
         }
+      }
 
       case 'outputNode':
         return {
