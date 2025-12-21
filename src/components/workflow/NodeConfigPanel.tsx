@@ -11,6 +11,7 @@ import type {
   WebhookConfig,
   DelayConfig,
   ConditionConfig,
+  TriggerConfig,
 } from '@/types/workflow'
 
 interface NodeConfigPanelProps {
@@ -401,12 +402,137 @@ export function NodeConfigPanel({ node, onUpdate, onDelete, onClose }: NodeConfi
         )
 
       case 'triggerNode':
+        const triggerConfig = config as unknown as TriggerConfig
         return (
-          <div className="p-4 bg-green-50 rounded-lg">
-            <p className="text-sm text-green-700">
-              Dit is het startpunt van je workflow. De gebruiker voert hier de input in wanneer de workflow wordt uitgevoerd.
-            </p>
-          </div>
+          <>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-surface-700">Trigger type</label>
+              <select
+                value={triggerConfig.triggerType || 'manual'}
+                onChange={(e) => updateConfig('triggerType', e.target.value)}
+                className="w-full p-2 border border-surface-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="manual">Handmatig starten</option>
+                <option value="schedule">Gepland (cron)</option>
+                <option value="webhook">Webhook trigger</option>
+              </select>
+            </div>
+
+            {/* Manual trigger options */}
+            {(triggerConfig.triggerType === 'manual' || !triggerConfig.triggerType) && (
+              <>
+                <div className="flex items-center gap-2 mt-4">
+                  <input
+                    type="checkbox"
+                    id="inputRequired"
+                    checked={triggerConfig.inputRequired !== false}
+                    onChange={(e) => updateConfig('inputRequired', e.target.checked)}
+                    className="rounded border-surface-300"
+                  />
+                  <label htmlFor="inputRequired" className="text-sm text-surface-600">
+                    Vraag om input bij starten
+                  </label>
+                </div>
+
+                {triggerConfig.inputRequired !== false && (
+                  <div className="space-y-2 mt-4">
+                    <label className="text-sm font-medium text-surface-700">Input placeholder</label>
+                    <input
+                      type="text"
+                      value={triggerConfig.inputPlaceholder || ''}
+                      onChange={(e) => updateConfig('inputPlaceholder', e.target.value)}
+                      placeholder="Bijv. 'Voer een onderwerp in...'"
+                      className="w-full p-2 border border-surface-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                )}
+
+                <div className="p-3 bg-green-50 border border-green-200 rounded-lg mt-4">
+                  <p className="text-xs text-green-700">
+                    {triggerConfig.inputRequired !== false
+                      ? 'Gebruiker voert tekst in die beschikbaar is als {{input}} in volgende nodes.'
+                      : 'Workflow start direct zonder input. Gebruik bijv. webhooks of andere nodes als databron.'}
+                  </p>
+                </div>
+              </>
+            )}
+
+            {/* Schedule trigger options */}
+            {triggerConfig.triggerType === 'schedule' && (
+              <>
+                <div className="space-y-2 mt-4">
+                  <label className="text-sm font-medium text-surface-700">Schema beschrijving</label>
+                  <select
+                    value={triggerConfig.scheduleDescription || ''}
+                    onChange={(e) => {
+                      const presets: Record<string, string> = {
+                        'Elke dag om 9:00': '0 9 * * *',
+                        'Elke maandag om 8:00': '0 8 * * 1',
+                        'Elk uur': '0 * * * *',
+                        'Elke 15 minuten': '*/15 * * * *',
+                      }
+                      updateConfig('scheduleDescription', e.target.value)
+                      updateConfig('scheduleCron', presets[e.target.value] || '')
+                    }}
+                    className="w-full p-2 border border-surface-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="">Kies een schema...</option>
+                    <option value="Elke dag om 9:00">Elke dag om 9:00</option>
+                    <option value="Elke maandag om 8:00">Elke maandag om 8:00</option>
+                    <option value="Elk uur">Elk uur</option>
+                    <option value="Elke 15 minuten">Elke 15 minuten</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2 mt-4">
+                  <label className="text-sm font-medium text-surface-700">Cron expressie</label>
+                  <input
+                    type="text"
+                    value={triggerConfig.scheduleCron || ''}
+                    onChange={(e) => updateConfig('scheduleCron', e.target.value)}
+                    placeholder="0 9 * * *"
+                    className="w-full p-2 border border-surface-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary font-mono text-sm"
+                  />
+                  <p className="text-xs text-surface-400">
+                    Format: minuut uur dag maand weekdag
+                  </p>
+                </div>
+
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg mt-4">
+                  <p className="text-xs text-blue-700">
+                    <strong>Let op:</strong> Geplande workflows worden automatisch uitgevoerd.
+                    De {"{{input}}"} variabele is leeg bij scheduled runs.
+                  </p>
+                </div>
+              </>
+            )}
+
+            {/* Webhook trigger options */}
+            {triggerConfig.triggerType === 'webhook' && (
+              <>
+                <div className="space-y-2 mt-4">
+                  <label className="text-sm font-medium text-surface-700">Webhook pad</label>
+                  <div className="flex items-center gap-1">
+                    <span className="text-sm text-surface-500">/api/webhooks/</span>
+                    <input
+                      type="text"
+                      value={triggerConfig.webhookPath || ''}
+                      onChange={(e) => updateConfig('webhookPath', e.target.value.replace(/[^a-z0-9-]/g, ''))}
+                      placeholder="mijn-workflow"
+                      className="flex-1 p-2 border border-surface-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg mt-4">
+                  <p className="text-xs text-orange-700">
+                    Externe systemen kunnen deze URL aanroepen om de workflow te starten.
+                    De request body is beschikbaar als {"{{input}}"}.
+                  </p>
+                </div>
+              </>
+            )}
+          </>
         )
 
       case 'outputNode':

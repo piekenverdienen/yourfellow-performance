@@ -22,7 +22,7 @@ import { NodeConfigPanel } from './NodeConfigPanel'
 import { AIFlowBuilder, TodoChecklist } from './AIFlowBuilder'
 import { Button } from '@/components/ui/button'
 import { Save, Play, ArrowLeft, Loader2, Sparkles } from 'lucide-react'
-import type { WorkflowNode, WorkflowEdge, BaseNodeData } from '@/types/workflow'
+import type { WorkflowNode, WorkflowEdge, BaseNodeData, TriggerConfig } from '@/types/workflow'
 import Link from 'next/link'
 
 interface Todo {
@@ -299,35 +299,82 @@ export function WorkflowEditor({
       )}
 
       {/* Execute modal */}
-      {showExecuteModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 max-w-lg w-full mx-4 shadow-2xl">
-            <h3 className="text-lg font-semibold mb-4">Workflow uitvoeren</h3>
-            <p className="text-sm text-surface-600 mb-4">
-              Voer een input in om de workflow te starten:
-            </p>
-            <textarea
-              value={executeInput}
-              onChange={(e) => setExecuteInput(e.target.value)}
-              placeholder="Bijv. 'Schrijf een blog over AI marketing'"
-              className="w-full h-32 p-3 border border-surface-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-            />
-            <div className="flex justify-end gap-2 mt-4">
-              <Button variant="outline" onClick={() => setShowExecuteModal(false)}>
-                Annuleren
-              </Button>
-              <Button onClick={handleExecute} disabled={isExecuting || !executeInput.trim()}>
-                {isExecuting ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Play className="h-4 w-4 mr-2" />
-                )}
-                Start
-              </Button>
+      {showExecuteModal && (() => {
+        // Find trigger node to check configuration
+        const triggerNode = nodes.find((n) => n.type === 'triggerNode')
+        const triggerConfig = triggerNode?.data?.config as TriggerConfig | undefined
+        const triggerType = triggerConfig?.triggerType || 'manual'
+        const inputRequired = triggerConfig?.inputRequired !== false
+
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl p-6 max-w-lg w-full mx-4 shadow-2xl">
+              <h3 className="text-lg font-semibold mb-4">Workflow uitvoeren</h3>
+
+              {triggerType === 'schedule' && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-700">
+                    <strong>Gepland:</strong> {triggerConfig?.scheduleDescription || triggerConfig?.scheduleCron}
+                  </p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    Je kunt de workflow nu handmatig testen. In productie wordt deze automatisch uitgevoerd.
+                  </p>
+                </div>
+              )}
+
+              {triggerType === 'webhook' && (
+                <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                  <p className="text-sm text-orange-700">
+                    <strong>Webhook trigger:</strong> /api/webhooks/{triggerConfig?.webhookPath || 'workflow'}
+                  </p>
+                  <p className="text-xs text-orange-600 mt-1">
+                    Je kunt de workflow nu handmatig testen met simulatie-input.
+                  </p>
+                </div>
+              )}
+
+              {inputRequired || triggerType !== 'manual' ? (
+                <>
+                  <p className="text-sm text-surface-600 mb-4">
+                    {triggerType === 'manual'
+                      ? (triggerConfig?.inputPlaceholder ? `Input: ${triggerConfig.inputPlaceholder}` : 'Voer een input in om de workflow te starten:')
+                      : 'Voer test-input in (of laat leeg voor scheduled/webhook test):'}
+                  </p>
+                  <textarea
+                    value={executeInput}
+                    onChange={(e) => setExecuteInput(e.target.value)}
+                    placeholder={triggerConfig?.inputPlaceholder || "Bijv. 'Schrijf een blog over AI marketing'"}
+                    className="w-full h-32 p-3 border border-surface-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+                  />
+                </>
+              ) : (
+                <div className="p-4 bg-green-50 border border-green-200 rounded-lg mb-4">
+                  <p className="text-sm text-green-700">
+                    Deze workflow start direct zonder input.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 mt-4">
+                <Button variant="outline" onClick={() => setShowExecuteModal(false)}>
+                  Annuleren
+                </Button>
+                <Button
+                  onClick={handleExecute}
+                  disabled={isExecuting || (inputRequired && triggerType === 'manual' && !executeInput.trim())}
+                >
+                  {isExecuting ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Play className="h-4 w-4 mr-2" />
+                  )}
+                  {triggerType === 'manual' ? 'Start' : 'Test uitvoeren'}
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* AI Flow Builder modal */}
       {showAIBuilder && (

@@ -2,7 +2,15 @@ import type { Node, Edge } from '@xyflow/react'
 
 // Node configuration types
 export interface TriggerConfig {
+  triggerType: 'manual' | 'schedule' | 'webhook'
+  // Manual trigger options
+  inputRequired?: boolean
   inputPlaceholder?: string
+  // Schedule trigger options
+  scheduleCron?: string
+  scheduleDescription?: string
+  // Webhook trigger options
+  webhookPath?: string
   [key: string]: unknown
 }
 
@@ -159,7 +167,11 @@ export const NODE_DEFINITIONS: NodeDefinition[] = [
     description: 'Startpunt van de workflow',
     icon: 'Play',
     color: '#22C55E',
-    defaultConfig: { inputPlaceholder: 'Voer je input in...' },
+    defaultConfig: {
+      triggerType: 'manual',
+      inputRequired: true,
+      inputPlaceholder: 'Voer je input in...'
+    },
   },
   {
     type: 'aiAgentNode',
