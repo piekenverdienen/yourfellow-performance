@@ -70,6 +70,12 @@ const imageSizeOptions = [
   { value: '1024x1536', label: 'Portret (2:3)' },
 ]
 
+const imageModelOptions = [
+  { value: 'dall-e-3', label: 'DALL-E 3 (OpenAI)' },
+  { value: 'gpt-image', label: 'GPT Image (OpenAI)' },
+  { value: 'gemini-flash', label: 'Gemini 2.5 Flash Image (Google)' },
+]
+
 const initialFormData = {
   topic: '',
   context: '',
@@ -91,6 +97,7 @@ export default function SocialPostsPage() {
   const [wantsImage, setWantsImage] = usePersistedState('social-posts-wants-image', false)
   const [imagePrompt, setImagePrompt] = usePersistedState('social-posts-image-prompt', '')
   const [imageSize, setImageSize] = usePersistedState('social-posts-image-size', '1024x1024')
+  const [imageModel, setImageModel] = usePersistedState('social-posts-image-model', 'dall-e-3')
   const [isGeneratingImage, setIsGeneratingImage] = useState(false)
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false)
   const [generatedImage, setGeneratedImage] = useClientPersistedState<GeneratedImage | null>('social-posts-image-result', null)
@@ -300,7 +307,7 @@ Genereer een passende image prompt voor deze post.`
         // Use FormData when there's a reference image
         const formDataObj = new FormData()
         formDataObj.append('prompt', imagePrompt)
-        formDataObj.append('model', 'gpt-image')
+        formDataObj.append('model', imageModel)
         formDataObj.append('size', imageSize)
         formDataObj.append('quality', 'medium')
         formDataObj.append('referenceImage', referenceImage)
@@ -319,7 +326,7 @@ Genereer een passende image prompt voor deze post.`
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             prompt: imagePrompt,
-            model: 'gpt-image',
+            model: imageModel,
             size: imageSize,
             quality: 'medium',
             clientId: clientId || undefined,
@@ -744,6 +751,14 @@ Genereer een passende image prompt voor deze post.`
                       </div>
 
                       <div className="flex gap-3">
+                        <div className="flex-1">
+                          <label className="text-sm text-surface-600 mb-1 block">Model</label>
+                          <Select
+                            options={imageModelOptions}
+                            value={imageModel}
+                            onChange={(e) => setImageModel(e.target.value)}
+                          />
+                        </div>
                         <div className="flex-1">
                           <label className="text-sm text-surface-600 mb-1 block">Formaat</label>
                           <Select

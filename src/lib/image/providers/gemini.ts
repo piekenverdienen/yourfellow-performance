@@ -39,7 +39,7 @@ export class GeminiImageProvider implements ImageProviderAdapter {
       parts.push({ text: prompt })
 
       const response = await this.client.models.generateContent({
-        model: 'gemini-2.0-flash-exp',
+        model: 'gemini-2.5-flash-image',
         contents: [{ role: 'user', parts }],
         config: {
           responseModalities: ['IMAGE', 'TEXT'],

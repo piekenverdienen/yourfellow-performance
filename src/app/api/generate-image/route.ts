@@ -26,10 +26,12 @@ export async function POST(request: NextRequest) {
     let clientId: string | undefined
     let referenceImage: File | null = null
 
+    let model = 'gpt-image'
+
     if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData()
       prompt = formData.get('prompt') as string
-      const model = (formData.get('model') as string) || 'gpt-image'
+      model = (formData.get('model') as string) || 'gpt-image'
       provider = model === 'gemini-flash' ? 'gemini' : 'openai'
       size = (formData.get('size') as string) || '1024x1024'
       quality = (formData.get('quality') as string) || 'medium'
@@ -39,7 +41,7 @@ export async function POST(request: NextRequest) {
     } else {
       const body = await request.json()
       prompt = body.prompt
-      const model = body.model || 'gpt-image'
+      model = body.model || 'gpt-image'
       provider = model === 'gemini-flash' ? 'gemini' : 'openai'
       size = body.size || '1024x1024'
       quality = body.quality || 'medium'
@@ -68,10 +70,17 @@ export async function POST(request: NextRequest) {
       ? `${enhancedPrompt} High quality, suitable for business use.`
       : `Create a professional marketing image: ${enhancedPrompt} High quality, suitable for business use, clean design.`
 
+    // Determine the actual model to use
+    const actualModel = model === 'gemini-flash' ? 'gemini-2.5-flash-image'
+      : model === 'dall-e-3' ? 'dall-e-3'
+      : model === 'dall-e-2' ? 'dall-e-2'
+      : 'gpt-image-1'
+
     // Generate image via imageEngine
     const result = await imageEngine.generateImage({
       provider,
       prompt: enhancedPrompt,
+      model: actualModel,
       size: size as '1024x1024' | '1536x1024' | '1024x1536',
       quality: quality as 'low' | 'medium' | 'high',
       referenceImage,
@@ -101,7 +110,7 @@ export async function POST(request: NextRequest) {
       generationId,
       _image: {
         provider,
-        model: provider === 'openai' ? 'gpt-image-1' : 'gemini-2.0-flash-exp',
+        model: actualModel,
         size,
         quality,
       },

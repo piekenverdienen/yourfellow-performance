@@ -23,8 +23,9 @@ import {
 import { copyToClipboard } from '@/lib/utils'
 
 const modelOptions = [
+  { value: 'dall-e-3', label: 'DALL-E 3 (OpenAI)' },
   { value: 'gpt-image', label: 'GPT Image (OpenAI)' },
-  { value: 'gemini-flash', label: 'Gemini 2.0 Flash (Google)' },
+  { value: 'gemini-flash', label: 'Gemini 2.5 Flash Image (Google)' },
 ]
 
 const sizeOptions = [
