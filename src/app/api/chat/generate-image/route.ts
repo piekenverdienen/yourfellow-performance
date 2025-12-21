@@ -180,9 +180,17 @@ export async function POST(request: NextRequest) {
           )
         }
 
+        // Return the actual API error for debugging
+        let apiError = 'Google Imagen kon geen afbeelding genereren'
+        try {
+          const errorJson = JSON.parse(errorText)
+          apiError = `Imagen API: ${errorJson.error?.message || errorText}`
+        } catch {
+          apiError = `Imagen API: ${errorText.slice(0, 200)}`
+        }
         return NextResponse.json(
-          { error: 'Google Imagen kon geen afbeelding genereren' },
-          { status: 500 }
+          { error: apiError },
+          { status: imagenResponse.status }
         )
       }
 
