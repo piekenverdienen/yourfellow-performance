@@ -19,10 +19,18 @@ import '@xyflow/react/dist/style.css'
 import { nodeTypes } from './nodes'
 import { NodeSidebar } from './NodeSidebar'
 import { NodeConfigPanel } from './NodeConfigPanel'
+import { AIFlowBuilder, TodoChecklist } from './AIFlowBuilder'
 import { Button } from '@/components/ui/button'
-import { Save, Play, ArrowLeft, Loader2 } from 'lucide-react'
+import { Save, Play, ArrowLeft, Loader2, Sparkles } from 'lucide-react'
 import type { WorkflowNode, WorkflowEdge, BaseNodeData } from '@/types/workflow'
 import Link from 'next/link'
+
+interface Todo {
+  nodeId: string
+  field: string
+  reason: string
+  nodeLabel: string
+}
 
 interface WorkflowEditorProps {
   workflowId?: string
@@ -50,6 +58,9 @@ export function WorkflowEditor({
   const [isExecuting, setIsExecuting] = useState(false)
   const [executeInput, setExecuteInput] = useState('')
   const [showExecuteModal, setShowExecuteModal] = useState(false)
+  const [showAIBuilder, setShowAIBuilder] = useState(false)
+  const [todos, setTodos] = useState<Todo[]>([])
+  const [showTodos, setShowTodos] = useState(false)
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
@@ -146,6 +157,32 @@ export function WorkflowEditor({
     }
   }
 
+  const handleAIGenerate = useCallback(
+    (generatedNodes: WorkflowNode[], generatedEdges: WorkflowEdge[], generatedTodos: Todo[]) => {
+      // Replace current nodes and edges with generated ones
+      setNodes(generatedNodes as Node[])
+      setEdges(generatedEdges as Edge[])
+      setTodos(generatedTodos)
+      setShowAIBuilder(false)
+
+      // Show todos panel if there are any
+      if (generatedTodos.length > 0) {
+        setShowTodos(true)
+      }
+    },
+    [setNodes, setEdges]
+  )
+
+  const handleTodoClick = useCallback(
+    (nodeId: string) => {
+      const node = nodes.find((n) => n.id === nodeId)
+      if (node) {
+        setSelectedNode(node)
+      }
+    },
+    [nodes]
+  )
+
   return (
     <div className="flex h-[calc(100vh-120px)] bg-surface-50 rounded-xl overflow-hidden border border-surface-200">
       {/* Sidebar with node types */}
@@ -170,6 +207,14 @@ export function WorkflowEditor({
             />
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowAIBuilder(true)}
+              className="bg-gradient-to-r from-purple-50 to-pink-50 border-purple-200 hover:border-purple-300 text-purple-700"
+            >
+              <Sparkles className="h-4 w-4 mr-2" />
+              Bouw met AI
+            </Button>
             <Button variant="outline" onClick={handleSave} disabled={isSaving}>
               {isSaving ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -282,6 +327,23 @@ export function WorkflowEditor({
             </div>
           </div>
         </div>
+      )}
+
+      {/* AI Flow Builder modal */}
+      {showAIBuilder && (
+        <AIFlowBuilder
+          onGenerate={handleAIGenerate}
+          onClose={() => setShowAIBuilder(false)}
+        />
+      )}
+
+      {/* Todo checklist */}
+      {showTodos && todos.length > 0 && (
+        <TodoChecklist
+          todos={todos}
+          onTodoClick={handleTodoClick}
+          onClose={() => setShowTodos(false)}
+        />
       )}
     </div>
   )

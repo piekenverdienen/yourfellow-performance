@@ -95,6 +95,7 @@ export type WorkflowNode = Node<BaseNodeData, WorkflowNodeType>
 export interface WorkflowEdgeData {
   branch?: 'true' | 'false' | 'default'
   label?: string
+  [key: string]: unknown
 }
 
 export type WorkflowEdge = Edge<WorkflowEdgeData>
