@@ -39,8 +39,9 @@ function supportsImageAnalysis(modelId: string): boolean {
 }
 
 // Determine provider from model ID
-function getProvider(modelId: string): 'anthropic' | 'openai' {
+function getProvider(modelId: string): 'anthropic' | 'openai' | 'google' {
   if (modelId.startsWith('gpt-')) return 'openai'
+  if (modelId.startsWith('gemini')) return 'google'
   return 'anthropic'
 }
 
@@ -603,6 +604,100 @@ Verwijs naar specifieke documenten als je informatie daaruit haalt.`
             }
 
             // Estimate tokens if not provided (rough estimate: 4 chars per token)
+            if (totalTokens === 0) {
+              totalTokens = Math.ceil(fullResponse.length / 4)
+            }
+          } else if (provider === 'google') {
+            // Google Gemini streaming
+            const googleApiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY
+            if (!googleApiKey) {
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ type: 'error', message: 'Google API key niet geconfigureerd' })}\n\n`)
+              )
+              controller.close()
+              return
+            }
+
+            // Use the Gemini API via fetch (Edge compatible)
+            const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:streamGenerateContent?alt=sse&key=${googleApiKey}`
+
+            // Build contents array for Gemini
+            type GeminiContent = { role: 'user' | 'model'; parts: { text: string }[] }
+            const geminiContents: GeminiContent[] = []
+
+            // Add message history
+            for (const m of messageHistory) {
+              const textContent = typeof m.content === 'string'
+                ? m.content
+                : (m.content as { type: string; text?: string }[])
+                    .filter((c) => c.type === 'text' && c.text)
+                    .map((c) => c.text)
+                    .join('\n')
+
+              geminiContents.push({
+                role: m.role === 'assistant' ? 'model' : 'user',
+                parts: [{ text: textContent }],
+              })
+            }
+
+            const geminiResponse = await fetch(geminiUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: geminiContents,
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                generationConfig: {
+                  maxOutputTokens: assistant.max_tokens || 4096,
+                  temperature: Number(assistant.temperature) || 0.6,
+                },
+              }),
+            })
+
+            if (!geminiResponse.ok) {
+              const errorText = await geminiResponse.text()
+              console.error('Gemini API error:', errorText)
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ type: 'error', message: 'Gemini API fout' })}\n\n`)
+              )
+              controller.close()
+              return
+            }
+
+            const reader = geminiResponse.body?.getReader()
+            if (!reader) throw new Error('No reader available')
+
+            const decoder = new TextDecoder()
+
+            while (true) {
+              const { done, value } = await reader.read()
+              if (done) break
+
+              const chunk = decoder.decode(value)
+              const lines = chunk.split('\n')
+
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  try {
+                    const data = JSON.parse(line.slice(6))
+                    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+                    if (text) {
+                      fullResponse += text
+                      controller.enqueue(
+                        encoder.encode(`data: ${JSON.stringify({ type: 'text', content: text })}\n\n`)
+                      )
+                    }
+                    // Get token usage if available
+                    if (data.usageMetadata?.candidatesTokenCount) {
+                      totalTokens = data.usageMetadata.candidatesTokenCount
+                    }
+                  } catch {
+                    // Ignore JSON parse errors for incomplete chunks
+                  }
+                }
+              }
+            }
+
+            // Estimate tokens if not provided
             if (totalTokens === 0) {
               totalTokens = Math.ceil(fullResponse.length / 4)
             }
