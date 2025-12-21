@@ -120,10 +120,23 @@ export function NodeConfigPanel({ node, onUpdate, onDelete, onClose }: NodeConfi
                 onChange={(e) => updateConfig('model', e.target.value)}
                 className="w-full p-2 border border-surface-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
               >
-                <option value="claude-sonnet">Claude Sonnet</option>
-                <option value="claude-haiku">Claude Haiku (snel)</option>
-                <option value="gpt-4">GPT-4</option>
+                <optgroup label="Anthropic (Claude)">
+                  <option value="claude-sonnet">Claude Sonnet (aanbevolen)</option>
+                  <option value="claude-haiku">Claude Haiku (snel & goedkoop)</option>
+                  <option value="claude-opus">Claude Opus (beste kwaliteit)</option>
+                </optgroup>
+                <optgroup label="Google (Gemini)">
+                  <option value="gemini-flash">Gemini Flash (snel & goedkoop)</option>
+                  <option value="gemini-pro">Gemini Pro (hoge kwaliteit)</option>
+                </optgroup>
+                <optgroup label="OpenAI (GPT)">
+                  <option value="gpt-4o">GPT-4o (snel)</option>
+                  <option value="gpt-4o-mini">GPT-4o Mini (goedkoop)</option>
+                </optgroup>
               </select>
+              <p className="text-xs text-surface-400">
+                Kies een model op basis van snelheid, kwaliteit en kosten
+              </p>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-surface-700">

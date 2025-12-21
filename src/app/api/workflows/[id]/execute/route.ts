@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import Anthropic from '@anthropic-ai/sdk'
+import { getProviderAdapter, isProviderAvailable } from '@/lib/ai/providers'
+import { getModel } from '@/lib/ai/models'
 import type {
   WorkflowNode,
   WorkflowEdge,
@@ -10,11 +11,6 @@ import type {
   DelayConfig,
   ConditionConfig,
 } from '@/types/workflow'
-
-// Initialize Anthropic client
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || '',
-})
 
 export async function POST(
   request: NextRequest,
@@ -392,7 +388,29 @@ async function executeNode(
 
       case 'aiAgentNode': {
         const config = node.data.config as unknown as AIAgentConfig
+        const modelId = config.model || 'claude-sonnet'
         let prompt = config.prompt || ''
+
+        // Get model config from registry
+        const modelConfig = getModel(modelId)
+        if (!modelConfig) {
+          return {
+            status: 'failed',
+            error: `Onbekend model: ${modelId}`,
+            startedAt,
+            completedAt: new Date().toISOString(),
+          }
+        }
+
+        // Check if provider is available
+        if (!isProviderAvailable(modelConfig.provider)) {
+          return {
+            status: 'failed',
+            error: `Provider ${modelConfig.provider} is niet geconfigureerd. Controleer de API key.`,
+            startedAt,
+            completedAt: new Date().toISOString(),
+          }
+        }
 
         // Replace variables in prompt
         prompt = replaceTemplateVariables(prompt, input, previousOutput, allResults)
@@ -434,27 +452,22 @@ async function executeNode(
           systemPrompt = `CLIENT CONTEXT:\n${contextParts.join('\n')}`
         }
 
-        // Call Anthropic API
-        const response = await anthropic.messages.create({
-          model: config.model === 'claude-haiku' ? 'claude-3-haiku-20240307' : 'claude-sonnet-4-20250514',
-          max_tokens: config.maxTokens || 2048,
-          ...(systemPrompt ? { system: systemPrompt } : {}),
-          messages: [
-            {
-              role: 'user',
-              content: prompt,
-            },
-          ],
+        // Get provider adapter and generate text
+        const provider = getProviderAdapter(modelConfig.provider)
+        const response = await provider.generateText({
+          model: modelConfig.modelName,
+          systemPrompt,
+          userPrompt: prompt,
+          maxTokens: config.maxTokens || modelConfig.maxTokens || 2048,
+          temperature: config.temperature || 0.7,
         })
-
-        const aiOutput = response.content[0].type === 'text' ? response.content[0].text : ''
 
         return {
           status: 'completed',
-          output: aiOutput,
+          output: response.content,
           startedAt,
           completedAt: new Date().toISOString(),
-          tokensUsed: response.usage.input_tokens + response.usage.output_tokens,
+          tokensUsed: response.inputTokens + response.outputTokens,
         }
       }
 

@@ -7,7 +7,7 @@ export interface TriggerConfig {
 }
 
 export interface AIAgentConfig {
-  model: 'claude-sonnet' | 'claude-haiku' | 'gpt-4'
+  model: 'claude-sonnet' | 'claude-haiku' | 'claude-opus' | 'gpt-4o' | 'gpt-4o-mini' | 'gemini-flash' | 'gemini-pro'
   prompt: string
   temperature?: number
   maxTokens?: number
