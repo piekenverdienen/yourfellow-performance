@@ -145,9 +145,9 @@ export default function MiaPage() {
 
     if (messagesData) {
       // Merge attachments with their messages
-      const messagesWithAttachments = messagesData.map(message => {
+      const messagesWithAttachments = messagesData.map((message: Message) => {
         const messageAttachments = attachmentsData?.filter(
-          att => att.message_id === message.id
+          (att: MessageAttachment) => att.message_id === message.id
         ) || []
         return {
           ...message,

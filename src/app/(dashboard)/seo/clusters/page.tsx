@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -328,9 +329,11 @@ function ClustersView({
           <p className="text-surface-600 mb-4">
             Maak eerst topic clusters aan in SEO Instellingen.
           </p>
-          <Button href="/seo/settings" variant="outline">
-            Naar Instellingen
-          </Button>
+          <Link href="/seo/settings">
+            <Button variant="outline">
+              Naar Instellingen
+            </Button>
+          </Link>
         </CardContent>
       </Card>
     )
@@ -465,7 +468,7 @@ function ClustersView({
                       </div>
                       <Button
                         size="sm"
-                        variant={cacheInfo ? 'default' : 'outline'}
+                        variant={cacheInfo ? 'primary' : 'outline'}
                         onClick={() => onAnalyze(cluster)}
                         leftIcon={cacheInfo ? <CheckCircle2 className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
                         disabled={cluster.queryCount < 5}
@@ -877,7 +880,7 @@ function ContentGapsTab({ report }: { report: TopicalClusterReport }) {
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
                   <Badge
-                    variant={gap.priority === 'high' ? 'destructive' : gap.priority === 'medium' ? 'default' : 'secondary'}
+                    variant={gap.priority === 'high' ? 'error' : gap.priority === 'medium' ? 'warning' : 'secondary'}
                   >
                     {gap.priority}
                   </Badge>
@@ -945,7 +948,7 @@ function IssuesTab({ report }: { report: TopicalClusterReport }) {
                 <CardContent className="pt-4">
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-medium text-surface-900">"{issue.query}"</span>
-                    <Badge variant={issue.severity === 'high' ? 'destructive' : 'secondary'}>
+                    <Badge variant={issue.severity === 'high' ? 'error' : 'secondary'}>
                       {issue.impressions.toLocaleString()} impressies
                     </Badge>
                   </div>
@@ -988,7 +991,7 @@ function IssuesTab({ report }: { report: TopicalClusterReport }) {
                   <CardContent className="pt-4">
                     <div className="flex items-center gap-2 mb-2">
                       <Badge variant="outline">{issueLabels[issue.issue]}</Badge>
-                      <Badge variant={issue.priority === 'high' ? 'destructive' : 'secondary'}>
+                      <Badge variant={issue.priority === 'high' ? 'error' : 'secondary'}>
                         {issue.priority}
                       </Badge>
                     </div>
@@ -1088,7 +1091,7 @@ function RoadmapTab({ report }: { report: TopicalClusterReport }) {
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <Badge variant={item.priority === 'high' ? 'destructive' : item.priority === 'medium' ? 'default' : 'secondary'}>
+                    <Badge variant={item.priority === 'high' ? 'error' : item.priority === 'medium' ? 'default' : 'secondary'}>
                       {item.priority}
                     </Badge>
                     <Badge variant="outline">{categoryLabels[item.category]}</Badge>
@@ -1135,9 +1138,11 @@ function GroupsView({ groups }: { groups: ContentGroup[] }) {
           <p className="text-surface-600 mb-4">
             Maak eerst content groups aan in SEO Instellingen.
           </p>
-          <Button href="/seo/settings" variant="outline">
-            Naar Instellingen
-          </Button>
+          <Link href="/seo/settings">
+            <Button variant="outline">
+              Naar Instellingen
+            </Button>
+          </Link>
         </CardContent>
       </Card>
     )
