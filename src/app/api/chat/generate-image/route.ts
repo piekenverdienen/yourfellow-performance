@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
           }
         case 'imagen-3':
           return {
-            model: 'imagen-3.0-generate-002' as const,
+            model: 'imagen-3.0-generate-001' as const, // Imagen 3 via Gemini API
             provider: 'google' as const,
             size: '1024x1024' as const,
             aspectRatio: '1:1' as const,
@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
           }
         case 'imagen-2':
           return {
-            model: 'imagen-3.0-fast-generate-001' as const, // Fast variant for quicker generation
+            model: 'imagen-3.0-fast-generate-001' as const, // Imagen 3 Fast for quicker generation
             provider: 'google' as const,
             size: '1024x1024' as const,
             aspectRatio: '1:1' as const,
@@ -141,19 +141,19 @@ export async function POST(request: NextRequest) {
 
     // Google Imagen generation
     if (provider === 'google') {
-      // Use Gemini API for Imagen 3 with :predict endpoint
-      const imagenUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelConfig.model}:predict`
+      // Use Gemini API with generateImages endpoint for Imagen 3
+      // Docs: https://ai.google.dev/gemini-api/docs/imagen
+      const imagenUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelConfig.model}:generateImages?key=${googleApiKey}`
 
       const imagenResponse = await fetch(imagenUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-goog-api-key': googleApiKey!,
         },
         body: JSON.stringify({
-          instances: [{ prompt: prompt }],
-          parameters: {
-            sampleCount: 1,
+          prompt: prompt,
+          config: {
+            numberOfImages: 1,
             aspectRatio: '1:1',
             personGeneration: 'ALLOW_ADULT',
           },
@@ -188,18 +188,18 @@ export async function POST(request: NextRequest) {
 
       const imagenData = await imagenResponse.json()
 
-      // Imagen :predict endpoint returns predictions array
-      const predictions = imagenData.predictions || imagenData.generatedImages || []
-      if (predictions.length === 0) {
+      // Gemini generateImages endpoint returns generatedImages array
+      const generatedImages = imagenData.generatedImages || []
+      if (generatedImages.length === 0) {
         return NextResponse.json(
           { error: 'Geen afbeelding gegenereerd door Imagen' },
           { status: 500 }
         )
       }
 
-      // Get base64 data from response - :predict returns bytesBase64Encoded
-      const imageResult = predictions[0]
-      const base64Data = imageResult.bytesBase64Encoded || imageResult.image?.imageBytes
+      // Get base64 data from response - generateImages returns image.imageBytes
+      const imageResult = generatedImages[0]
+      const base64Data = imageResult.image?.imageBytes
 
       if (!base64Data) {
         return NextResponse.json(
