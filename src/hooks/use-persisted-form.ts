@@ -1,31 +1,30 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useSelectedClientId } from '@/stores/client-store'
+import { useClientStore, useSelectedClientId } from '@/stores/client-store'
 
 /**
  * Hook that calls a callback when the selected client changes
- * Use this to refetch data or reset state when switching clients
+ * Uses direct store subscription for reliable change detection
  */
 export function useOnClientChange(callback: () => void) {
-  const clientId = useSelectedClientId()
-  const prevClientId = useRef(clientId)
-  const isFirstRender = useRef(true)
+  const callbackRef = useRef(callback)
+  callbackRef.current = callback
 
   useEffect(() => {
-    // Skip the first render
-    if (isFirstRender.current) {
-      isFirstRender.current = false
-      prevClientId.current = clientId
-      return
-    }
+    let prevClientId = useClientStore.getState().selectedClient?.id || null
 
-    // Only call callback when clientId actually changes
-    if (prevClientId.current !== clientId) {
-      prevClientId.current = clientId
-      callback()
-    }
-  }, [clientId, callback])
+    const unsubscribe = useClientStore.subscribe((state) => {
+      const currentClientId = state.selectedClient?.id || null
+
+      if (prevClientId !== currentClientId) {
+        prevClientId = currentClientId
+        callbackRef.current()
+      }
+    })
+
+    return unsubscribe
+  }, [])
 }
 
 /**
