@@ -362,13 +362,51 @@ export async function POST(request: NextRequest) {
 
     const publicUrl = urlData.publicUrl
 
-    // Create attachment record
+    // Save messages and attachment to database
     let attachmentId: string | null = null
+    let userMessageId: string | null = null
+    let assistantMessageId: string | null = null
+
     if (conversationId) {
+      // Save user message (the prompt)
+      const { data: userMessage } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: conversationId,
+          role: 'user',
+          content: prompt,
+          content_type: 'image_generation',
+        })
+        .select('id')
+        .single()
+
+      if (userMessage) {
+        userMessageId = userMessage.id
+      }
+
+      // Save assistant message (with the generated image)
+      const { data: assistantMessage } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: conversationId,
+          role: 'assistant',
+          content: `Hier is de gegenereerde afbeelding op basis van je prompt: "${prompt}"`,
+          content_type: 'image_generation',
+          tokens_used: 0,
+        })
+        .select('id')
+        .single()
+
+      if (assistantMessage) {
+        assistantMessageId = assistantMessage.id
+      }
+
+      // Create attachment record linked to assistant message
       const { data: attachment, error: attachmentError } = await supabase
         .from('message_attachments')
         .insert({
           conversation_id: conversationId,
+          message_id: assistantMessageId,
           user_id: user.id,
           attachment_type: 'generated_image',
           file_name: `generated-${randomId}.png`,
@@ -386,6 +424,12 @@ export async function POST(request: NextRequest) {
       if (!attachmentError && attachment) {
         attachmentId = attachment.id
       }
+
+      // Update conversation's updated_at timestamp
+      await supabase
+        .from('conversations')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', conversationId)
     }
 
     // Log usage with model info
@@ -436,6 +480,8 @@ export async function POST(request: NextRequest) {
         width,
         height,
       },
+      userMessageId,
+      assistantMessageId,
     })
   } catch (error) {
     console.error('Image generation error:', error)
