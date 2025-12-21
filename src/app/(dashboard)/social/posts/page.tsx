@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { ImageModelSelector, type ImageModelId } from '@/components/chat/model-selector'
 import {
   Sparkles,
   Copy,
@@ -91,6 +92,7 @@ export default function SocialPostsPage() {
   const [wantsImage, setWantsImage] = usePersistedState('social-posts-wants-image', false)
   const [imagePrompt, setImagePrompt] = usePersistedState('social-posts-image-prompt', '')
   const [imageSize, setImageSize] = usePersistedState('social-posts-image-size', '1024x1024')
+  const [imageModel, setImageModel] = usePersistedState<ImageModelId>('social-posts-image-model', 'dall-e-3')
   const [isGeneratingImage, setIsGeneratingImage] = useState(false)
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false)
   const [generatedImage, setGeneratedImage] = useClientPersistedState<GeneratedImage | null>('social-posts-image-result', null)
@@ -300,7 +302,7 @@ Genereer een passende image prompt voor deze post.`
         // Use FormData when there's a reference image
         const formDataObj = new FormData()
         formDataObj.append('prompt', imagePrompt)
-        formDataObj.append('model', 'gpt-image')
+        formDataObj.append('model', imageModel)
         formDataObj.append('size', imageSize)
         formDataObj.append('quality', 'medium')
         formDataObj.append('referenceImage', referenceImage)
@@ -319,7 +321,7 @@ Genereer een passende image prompt voor deze post.`
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             prompt: imagePrompt,
-            model: 'gpt-image',
+            model: imageModel,
             size: imageSize,
             quality: 'medium',
             clientId: clientId || undefined,
@@ -743,25 +745,33 @@ Genereer een passende image prompt voor deze post.`
                         )}
                       </div>
 
-                      <div className="flex gap-3">
-                        <div className="flex-1">
-                          <label className="text-sm text-surface-600 mb-1 block">Formaat</label>
-                          <Select
-                            options={imageSizeOptions}
-                            value={imageSize}
-                            onChange={(e) => setImageSize(e.target.value)}
-                          />
+                      <div className="space-y-3">
+                        <div className="flex gap-3">
+                          <div>
+                            <label className="text-sm text-surface-600 mb-1 block">Model</label>
+                            <ImageModelSelector
+                              value={imageModel}
+                              onChange={setImageModel}
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <label className="text-sm text-surface-600 mb-1 block">Formaat</label>
+                            <Select
+                              options={imageSizeOptions}
+                              value={imageSize}
+                              onChange={(e) => setImageSize(e.target.value)}
+                            />
+                          </div>
                         </div>
-                        <div className="flex items-end">
-                          <Button
-                            onClick={handleGenerateImage}
-                            isLoading={isGeneratingImage}
-                            disabled={!imagePrompt.trim() || isGeneratingPrompt}
-                            leftIcon={<Wand2 className="h-4 w-4" />}
-                          >
-                            {isGeneratingImage ? 'Genereren...' : 'Genereer afbeelding'}
-                          </Button>
-                        </div>
+                        <Button
+                          onClick={handleGenerateImage}
+                          isLoading={isGeneratingImage}
+                          disabled={!imagePrompt.trim() || isGeneratingPrompt}
+                          leftIcon={<Wand2 className="h-4 w-4" />}
+                          className="w-full"
+                        >
+                          {isGeneratingImage ? 'Genereren...' : 'Genereer afbeelding'}
+                        </Button>
                       </div>
 
                       {imageError && (

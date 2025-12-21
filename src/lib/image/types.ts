@@ -7,9 +7,13 @@
 
 export type ImageProvider = 'openai' | 'gemini'
 
+export type OpenAIImageModel = 'dall-e-3' | 'dall-e-2' | 'gpt-image-1'
+export type GeminiImageModel = 'gemini-2.5-flash-image'
+
 export interface ImageGenerateRequest {
   provider: ImageProvider
   prompt: string
+  model?: OpenAIImageModel | GeminiImageModel
   size?: '1024x1024' | '1536x1024' | '1024x1536'
   quality?: 'low' | 'medium' | 'high'
   referenceImage?: File | null
@@ -29,6 +33,7 @@ export interface ImageProviderAdapter {
 
 export interface ProviderGenerateParams {
   prompt: string
+  model?: string
   size: string
   quality: string
   referenceImage?: File | null

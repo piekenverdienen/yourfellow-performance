@@ -7,6 +7,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
+import { ImageModelSelector, type ImageModelId } from '@/components/chat/model-selector'
 import {
   Sparkles,
   Download,
@@ -18,14 +19,8 @@ import {
   Maximize,
   Upload,
   X,
-  Cpu,
 } from 'lucide-react'
 import { copyToClipboard } from '@/lib/utils'
-
-const modelOptions = [
-  { value: 'gpt-image', label: 'GPT Image (OpenAI)' },
-  { value: 'gemini-flash', label: 'Gemini 2.0 Flash (Google)' },
-]
 
 const sizeOptions = [
   { value: '1024x1024', label: 'Vierkant (1024x1024)' },
@@ -52,10 +47,10 @@ export default function ImageGeneratorPage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [formData, setFormData] = useState({
     prompt: '',
-    model: 'gpt-image',
     size: '1024x1024',
     quality: 'medium',
   })
+  const [selectedModel, setSelectedModel] = useState<ImageModelId>('dall-e-3')
   const [generatedImage, setGeneratedImage] = useState<{
     url: string
     revisedPrompt: string
@@ -138,7 +133,7 @@ export default function ImageGeneratorPage() {
         // Use FormData when there's a reference image
         const formDataObj = new FormData()
         formDataObj.append('prompt', formData.prompt)
-        formDataObj.append('model', formData.model)
+        formDataObj.append('model', selectedModel)
         formDataObj.append('size', formData.size)
         formDataObj.append('quality', formData.quality)
         formDataObj.append('referenceImage', referenceImage)
@@ -159,7 +154,7 @@ export default function ImageGeneratorPage() {
           },
           body: JSON.stringify({
             prompt: formData.prompt,
-            model: formData.model,
+            model: selectedModel,
             size: formData.size,
             quality: formData.quality,
             clientId: clientId || undefined,
@@ -247,20 +242,11 @@ export default function ImageGeneratorPage() {
             <CardContent className="space-y-5">
               {/* Model Selector */}
               <div>
-                <label className="label flex items-center gap-2">
-                  <Cpu className="h-4 w-4" />
-                  AI Model
-                </label>
-                <Select
-                  options={modelOptions}
-                  value={formData.model}
-                  onChange={(e) => setFormData({ ...formData, model: e.target.value })}
+                <label className="label">AI Model</label>
+                <ImageModelSelector
+                  value={selectedModel}
+                  onChange={setSelectedModel}
                 />
-                <p className="text-xs text-surface-500 mt-1">
-                  {formData.model === 'gpt-image'
-                    ? 'Beste voor complexe instructies en tekst in afbeeldingen'
-                    : 'Sneller en goedkoper, goed voor fotorealisme (beperkte regio-beschikbaarheid)'}
-                </p>
               </div>
 
               <div>
@@ -335,7 +321,7 @@ export default function ImageGeneratorPage() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className={selectedModel === 'gpt-image-1' ? 'grid grid-cols-2 gap-4' : ''}>
                 <div>
                   <label className="label flex items-center gap-2">
                     <Maximize className="h-4 w-4" />
@@ -347,14 +333,16 @@ export default function ImageGeneratorPage() {
                     onChange={(e) => setFormData({ ...formData, size: e.target.value })}
                   />
                 </div>
-                <div>
-                  <label className="label">Kwaliteit</label>
-                  <Select
-                    options={qualityOptions}
-                    value={formData.quality}
-                    onChange={(e) => setFormData({ ...formData, quality: e.target.value })}
-                  />
-                </div>
+                {selectedModel === 'gpt-image-1' && (
+                  <div>
+                    <label className="label">Kwaliteit</label>
+                    <Select
+                      options={qualityOptions}
+                      value={formData.quality}
+                      onChange={(e) => setFormData({ ...formData, quality: e.target.value })}
+                    />
+                  </div>
+                )}
               </div>
 
               <Button
@@ -441,10 +429,10 @@ export default function ImageGeneratorPage() {
                   <Sparkles className="h-8 w-8 text-primary animate-pulse" />
                 </div>
                 <p className="text-surface-600 font-medium">
-                  {formData.model === 'gpt-image' ? 'GPT Image' : 'Gemini Flash'} is aan het creëren...
+                  Afbeelding wordt gegenereerd...
                 </p>
                 <p className="text-sm text-surface-400 mt-1">
-                  Dit duurt meestal {formData.model === 'gpt-image' ? '10-20' : '5-15'} seconden
+                  Dit duurt meestal 10-20 seconden
                 </p>
                 <div className="mt-4 w-48 h-1 bg-surface-200 rounded-full overflow-hidden">
                   <div className="h-full bg-primary animate-pulse" style={{ width: '60%' }} />

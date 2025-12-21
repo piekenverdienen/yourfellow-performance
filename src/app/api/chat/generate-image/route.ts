@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
           }
         case 'imagen-3':
           return {
-            model: 'imagen-3.0-generate-002' as const,
+            model: 'gemini-2.5-flash-image' as const, // Gemini 2.5 Flash Image (Nano Banana)
             provider: 'google' as const,
             size: '1024x1024' as const,
             aspectRatio: '1:1' as const,
@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
           }
         case 'imagen-2':
           return {
-            model: 'imagen-3.0-fast-generate-001' as const, // Fast variant for quicker generation
+            model: 'gemini-2.5-flash-image' as const, // Gemini 2.5 Flash Image (fast)
             provider: 'google' as const,
             size: '1024x1024' as const,
             aspectRatio: '1:1' as const,
@@ -139,30 +139,31 @@ export async function POST(request: NextRequest) {
     let revisedPrompt: string | undefined
     let actualModelUsed = modelConfig.model
 
-    // Google Imagen generation
+    // Google Gemini native image generation
     if (provider === 'google') {
-      // Use Gemini API for Imagen 3 with :predict endpoint
-      const imagenUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelConfig.model}:predict`
+      // Use Gemini API with generateContent endpoint for native image generation
+      // Docs: https://ai.google.dev/gemini-api/docs/image-generation
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelConfig.model}:generateContent`
 
-      const imagenResponse = await fetch(imagenUrl, {
+      const geminiResponse = await fetch(geminiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-goog-api-key': googleApiKey!,
         },
         body: JSON.stringify({
-          instances: [{ prompt: prompt }],
-          parameters: {
-            sampleCount: 1,
-            aspectRatio: '1:1',
-            personGeneration: 'ALLOW_ADULT',
+          contents: [{
+            parts: [{ text: prompt }]
+          }],
+          generationConfig: {
+            responseModalities: ['TEXT', 'IMAGE'],
           },
         }),
       })
 
-      if (!imagenResponse.ok) {
-        const errorText = await imagenResponse.text()
-        console.error('Imagen API error:', errorText)
+      if (!geminiResponse.ok) {
+        const errorText = await geminiResponse.text()
+        console.error('Gemini API error:', errorText)
 
         // Check for safety filter
         if (errorText.includes('SAFETY') || errorText.includes('blocked') || errorText.includes('policy')) {
@@ -175,35 +176,54 @@ export async function POST(request: NextRequest) {
         // Check if model not found - suggest using OpenAI instead
         if (errorText.includes('NOT_FOUND') || errorText.includes('not found')) {
           return NextResponse.json(
-            { error: 'Google Imagen is niet beschikbaar. Probeer een OpenAI model (DALL-E 3).' },
+            { error: 'Google Gemini image model is niet beschikbaar. Probeer een OpenAI model (DALL-E 3).' },
             { status: 400 }
           )
         }
 
+        // Return the actual API error for debugging
+        let apiError = 'Google Gemini kon geen afbeelding genereren'
+        try {
+          const errorJson = JSON.parse(errorText)
+          apiError = `Gemini API: ${errorJson.error?.message || errorText}`
+        } catch {
+          apiError = `Gemini API: ${errorText.slice(0, 200)}`
+        }
         return NextResponse.json(
-          { error: 'Google Imagen kon geen afbeelding genereren' },
+          { error: apiError },
+          { status: geminiResponse.status }
+        )
+      }
+
+      const geminiData = await geminiResponse.json()
+      console.log('Gemini response:', JSON.stringify(geminiData, null, 2))
+
+      // Find the image part in the response
+      const candidates = geminiData.candidates || []
+      if (candidates.length === 0) {
+        return NextResponse.json(
+          { error: 'Geen response van Gemini ontvangen' },
           { status: 500 }
         )
       }
 
-      const imagenData = await imagenResponse.json()
+      const parts = candidates[0]?.content?.parts || []
+      let base64Data: string | undefined
+      let textResponse: string | undefined
 
-      // Imagen :predict endpoint returns predictions array
-      const predictions = imagenData.predictions || imagenData.generatedImages || []
-      if (predictions.length === 0) {
-        return NextResponse.json(
-          { error: 'Geen afbeelding gegenereerd door Imagen' },
-          { status: 500 }
-        )
+      for (const part of parts) {
+        if (part.inlineData?.mimeType?.startsWith('image/')) {
+          base64Data = part.inlineData.data
+        }
+        if (part.text) {
+          textResponse = part.text
+        }
       }
-
-      // Get base64 data from response - :predict returns bytesBase64Encoded
-      const imageResult = predictions[0]
-      const base64Data = imageResult.bytesBase64Encoded || imageResult.image?.imageBytes
 
       if (!base64Data) {
+        // If no image was generated, return the text response as error
         return NextResponse.json(
-          { error: 'Geen afbeelding data ontvangen van Imagen' },
+          { error: textResponse || 'Geen afbeelding gegenereerd door Gemini' },
           { status: 500 }
         )
       }
@@ -215,7 +235,7 @@ export async function POST(request: NextRequest) {
         bytes[i] = binaryString.charCodeAt(i)
       }
       imageArrayBuffer = bytes.buffer
-      revisedPrompt = undefined // Imagen doesn't return revised prompts
+      revisedPrompt = textResponse // Use any text response as revised prompt
     } else {
       // OpenAI models (DALL-E, GPT Image)
       const openai = new OpenAI({
@@ -342,13 +362,51 @@ export async function POST(request: NextRequest) {
 
     const publicUrl = urlData.publicUrl
 
-    // Create attachment record
+    // Save messages and attachment to database
     let attachmentId: string | null = null
+    let userMessageId: string | null = null
+    let assistantMessageId: string | null = null
+
     if (conversationId) {
+      // Save user message (the prompt)
+      const { data: userMessage } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: conversationId,
+          role: 'user',
+          content: prompt,
+          content_type: 'image_generation',
+        })
+        .select('id')
+        .single()
+
+      if (userMessage) {
+        userMessageId = userMessage.id
+      }
+
+      // Save assistant message (with the generated image)
+      const { data: assistantMessage } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: conversationId,
+          role: 'assistant',
+          content: `Hier is de gegenereerde afbeelding op basis van je prompt: "${prompt}"`,
+          content_type: 'image_generation',
+          tokens_used: 0,
+        })
+        .select('id')
+        .single()
+
+      if (assistantMessage) {
+        assistantMessageId = assistantMessage.id
+      }
+
+      // Create attachment record linked to assistant message
       const { data: attachment, error: attachmentError } = await supabase
         .from('message_attachments')
         .insert({
           conversation_id: conversationId,
+          message_id: assistantMessageId,
           user_id: user.id,
           attachment_type: 'generated_image',
           file_name: `generated-${randomId}.png`,
@@ -366,6 +424,12 @@ export async function POST(request: NextRequest) {
       if (!attachmentError && attachment) {
         attachmentId = attachment.id
       }
+
+      // Update conversation's updated_at timestamp
+      await supabase
+        .from('conversations')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', conversationId)
     }
 
     // Log usage with model info
@@ -416,6 +480,8 @@ export async function POST(request: NextRequest) {
         width,
         height,
       },
+      userMessageId,
+      assistantMessageId,
     })
   } catch (error) {
     console.error('Image generation error:', error)

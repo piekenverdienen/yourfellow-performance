@@ -26,11 +26,13 @@ export async function POST(request: NextRequest) {
     let clientId: string | undefined
     let referenceImage: File | null = null
 
+    let model = 'gpt-image'
+
     if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData()
       prompt = formData.get('prompt') as string
-      const model = (formData.get('model') as string) || 'gpt-image'
-      provider = model === 'gemini-flash' ? 'gemini' : 'openai'
+      model = (formData.get('model') as string) || 'dall-e-3'
+      provider = ['gemini-flash', 'imagen-3', 'imagen-2'].includes(model) ? 'gemini' : 'openai'
       size = (formData.get('size') as string) || '1024x1024'
       quality = (formData.get('quality') as string) || 'medium'
       tool = (formData.get('tool') as string) || 'social-image'
@@ -39,8 +41,8 @@ export async function POST(request: NextRequest) {
     } else {
       const body = await request.json()
       prompt = body.prompt
-      const model = body.model || 'gpt-image'
-      provider = model === 'gemini-flash' ? 'gemini' : 'openai'
+      model = body.model || 'dall-e-3'
+      provider = ['gemini-flash', 'imagen-3', 'imagen-2'].includes(model) ? 'gemini' : 'openai'
       size = body.size || '1024x1024'
       quality = body.quality || 'medium'
       tool = body.tool || 'social-image'
@@ -68,10 +70,18 @@ export async function POST(request: NextRequest) {
       ? `${enhancedPrompt} High quality, suitable for business use.`
       : `Create a professional marketing image: ${enhancedPrompt} High quality, suitable for business use, clean design.`
 
+    // Determine the actual model to use
+    const actualModel = ['gemini-flash', 'imagen-3', 'imagen-2'].includes(model) ? 'gemini-2.5-flash-image'
+      : model === 'dall-e-3' ? 'dall-e-3'
+      : model === 'dall-e-2' ? 'dall-e-2'
+      : model === 'gpt-image-1' ? 'gpt-image-1'
+      : 'gpt-image-1'
+
     // Generate image via imageEngine
     const result = await imageEngine.generateImage({
       provider,
       prompt: enhancedPrompt,
+      model: actualModel,
       size: size as '1024x1024' | '1536x1024' | '1024x1536',
       quality: quality as 'low' | 'medium' | 'high',
       referenceImage,
@@ -101,7 +111,7 @@ export async function POST(request: NextRequest) {
       generationId,
       _image: {
         provider,
-        model: provider === 'openai' ? 'gpt-image-1' : 'gemini-2.0-flash-exp',
+        model: actualModel,
         size,
         quality,
       },

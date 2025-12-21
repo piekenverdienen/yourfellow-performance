@@ -39,21 +39,55 @@ export class GeminiImageProvider implements ImageProviderAdapter {
       parts.push({ text: prompt })
 
       const response = await this.client.models.generateContent({
-        model: 'gemini-2.0-flash-exp',
+        model: 'gemini-2.5-flash-image',
         contents: [{ role: 'user', parts }],
         config: {
           responseModalities: ['IMAGE', 'TEXT'],
         },
       })
 
+      // Log response for debugging
+      console.log('Gemini response candidates:', response.candidates?.length)
+      console.log('Gemini response promptFeedback:', response.promptFeedback)
+
+      // Check for content filtering
+      if (response.promptFeedback?.blockReason) {
+        console.log('Content blocked:', response.promptFeedback)
+        return {
+          success: false,
+          error: `Verzoek geblokkeerd door veiligheidsfilter: ${response.promptFeedback.blockReason}`,
+        }
+      }
+
       // Extract image from response
       const candidate = response.candidates?.[0]
+
+      // Check finish reason
+      if (candidate?.finishReason && candidate.finishReason !== 'STOP') {
+        console.log('Unexpected finish reason:', candidate.finishReason)
+        if (candidate.finishReason === 'SAFETY') {
+          return {
+            success: false,
+            error: 'Afbeelding geblokkeerd door veiligheidsfilter. Probeer een andere beschrijving.',
+          }
+        }
+        if (candidate.finishReason === 'IMAGE_SAFETY') {
+          return {
+            success: false,
+            error: 'De referentie afbeelding is geblokkeerd door veiligheidsfilter.',
+          }
+        }
+      }
+
       if (!candidate?.content?.parts) {
+        console.log('No candidate parts found. Full response:', JSON.stringify(response, null, 2))
         return {
           success: false,
           error: 'Geen afbeelding ontvangen van Gemini',
         }
       }
+
+      console.log('Found parts:', candidate.content.parts.length)
 
       let imageUrl: string | undefined
       let textResponse: string | undefined

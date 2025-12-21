@@ -20,7 +20,10 @@ export class OpenAIImageProvider implements ImageProviderAdapter {
 
   async generate(params: ProviderGenerateParams): Promise<ImageGenerateResult> {
     try {
-      const { prompt, size, quality, referenceImage } = params
+      const { prompt, model = 'gpt-image-1', size, quality, referenceImage } = params
+
+      // Determine actual model to use
+      const actualModel = model === 'dall-e-3' ? 'dall-e-3' : model === 'dall-e-2' ? 'dall-e-2' : 'gpt-image-1'
 
       // Map sizes for backwards compatibility
       const sizeMapping: Record<string, string> = {
@@ -32,7 +35,7 @@ export class OpenAIImageProvider implements ImageProviderAdapter {
       let response: OpenAI.Images.ImagesResponse
 
       if (referenceImage) {
-        // Use images.edit when there's a reference image
+        // Use images.edit when there's a reference image (only gpt-image-1 supports this)
         const imageBuffer = await referenceImage.arrayBuffer()
         const imageFile = await toFile(imageBuffer, referenceImage.name, {
           type: referenceImage.type,
@@ -45,7 +48,27 @@ export class OpenAIImageProvider implements ImageProviderAdapter {
           n: 1,
           size: mappedSize as '1024x1024' | '1536x1024' | '1024x1536',
         })
+      } else if (actualModel === 'dall-e-3') {
+        // DALL-E 3 uses different parameters
+        response = await this.client.images.generate({
+          model: 'dall-e-3',
+          prompt,
+          n: 1,
+          size: mappedSize as '1024x1024' | '1792x1024' | '1024x1792',
+          quality: quality === 'high' ? 'hd' : 'standard',
+          style: 'vivid',
+        })
+      } else if (actualModel === 'dall-e-2') {
+        // DALL-E 2 has limited sizes
+        const dalle2Size = ['256x256', '512x512', '1024x1024'].includes(size) ? size : '1024x1024'
+        response = await this.client.images.generate({
+          model: 'dall-e-2',
+          prompt,
+          n: 1,
+          size: dalle2Size as '256x256' | '512x512' | '1024x1024',
+        })
       } else {
+        // GPT Image 1
         response = await this.client.images.generate({
           model: 'gpt-image-1',
           prompt,

@@ -42,6 +42,7 @@ export async function generateImage(request: ImageGenerateRequest): Promise<Imag
   const {
     provider,
     prompt,
+    model,
     size = '1024x1024',
     quality = 'medium',
     referenceImage = null,
@@ -52,6 +53,7 @@ export async function generateImage(request: ImageGenerateRequest): Promise<Imag
 
     return await providerAdapter.generate({
       prompt,
+      model,
       size,
       quality,
       referenceImage,

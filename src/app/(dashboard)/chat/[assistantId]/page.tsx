@@ -109,6 +109,7 @@ export default function ChatInterfacePage() {
   }
 
   const fetchMessages = async (convId: string) => {
+    // Fetch messages with their attachments
     const { data: messagesData } = await supabase
       .from('messages')
       .select('*')
@@ -116,7 +117,19 @@ export default function ChatInterfacePage() {
       .order('created_at', { ascending: true })
 
     if (messagesData) {
-      setMessages(messagesData)
+      // Fetch attachments for this conversation
+      const { data: attachmentsData } = await supabase
+        .from('message_attachments')
+        .select('*')
+        .eq('conversation_id', convId)
+
+      // Map attachments to their messages
+      const messagesWithAttachments = messagesData.map(msg => ({
+        ...msg,
+        attachments: attachmentsData?.filter(att => att.message_id === msg.id) || []
+      }))
+
+      setMessages(messagesWithAttachments)
     }
   }
 
@@ -273,18 +286,37 @@ export default function ChatInterfacePage() {
 
       const generatedImage = await handleImageGeneration(message, imageModel)
 
+      // Remove temp message first
+      setMessages(prev => prev.filter(m => m.id !== tempUserMessage.id))
+
       if (generatedImage) {
-        const assistantMessage: Message = {
-          id: `assistant-${Date.now()}`,
-          conversation_id: conversationId || '',
-          role: 'assistant',
-          content: `Hier is de gegenereerde afbeelding op basis van je prompt: "${message}"`,
-          content_type: 'image_generation',
-          tokens_used: 0,
-          created_at: new Date().toISOString(),
-          attachments: [generatedImage],
+        // Messages are now saved in the database by the API
+        // Fetch the updated messages to show them with correct IDs
+        if (conversationId) {
+          await fetchMessages(conversationId)
+        } else {
+          // Fallback for new conversations - add to local state
+          const userMessage: Message = {
+            id: `user-${Date.now()}`,
+            conversation_id: conversationId || '',
+            role: 'user',
+            content: message,
+            content_type: 'image_generation',
+            tokens_used: 0,
+            created_at: new Date().toISOString(),
+          }
+          const assistantMessage: Message = {
+            id: `assistant-${Date.now()}`,
+            conversation_id: conversationId || '',
+            role: 'assistant',
+            content: `Hier is de gegenereerde afbeelding op basis van je prompt: "${message}"`,
+            content_type: 'image_generation',
+            tokens_used: 0,
+            created_at: new Date().toISOString(),
+            attachments: [generatedImage],
+          }
+          setMessages(prev => [...prev, userMessage, assistantMessage])
         }
-        setMessages(prev => [...prev, assistantMessage])
       } else {
         const errorMessage: Message = {
           id: `assistant-${Date.now()}`,
