@@ -82,27 +82,51 @@ export type ChatModelId = typeof CHAT_MODELS[number]['id']
 
 // Image model definitions
 export const IMAGE_MODELS = [
+  // OpenAI models
   {
     id: 'dall-e-3' as const,
     displayName: 'DALL-E 3',
+    provider: 'openai' as const,
     description: 'Highest quality',
     qualityScore: 5,
   },
   {
     id: 'dall-e-2' as const,
     displayName: 'DALL-E 2',
+    provider: 'openai' as const,
     description: 'Fast & simple',
     qualityScore: 3,
   },
   {
     id: 'gpt-image-1' as const,
     displayName: 'GPT Image',
+    provider: 'openai' as const,
     description: 'Latest model',
+    qualityScore: 4,
+  },
+  // Google Imagen models
+  {
+    id: 'imagen-3' as const,
+    displayName: 'Imagen 3',
+    provider: 'google' as const,
+    description: 'Highest quality',
+    qualityScore: 5,
+  },
+  {
+    id: 'imagen-2' as const,
+    displayName: 'Imagen 2',
+    provider: 'google' as const,
+    description: 'Fast iteration',
     qualityScore: 4,
   },
 ] as const
 
 export type ImageModelId = typeof IMAGE_MODELS[number]['id']
+
+const IMAGE_PROVIDER_LABELS = {
+  openai: 'OpenAI',
+  google: 'Google',
+}
 
 const PROVIDER_COLORS = {
   anthropic: 'bg-orange-100 text-orange-700 border-orange-200',
@@ -264,6 +288,13 @@ export function ImageModelSelector({ value, onChange, disabled, compact }: Image
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // Group image models by provider
+  const imageModelsByProvider = IMAGE_MODELS.reduce((acc, model) => {
+    if (!acc[model.provider]) acc[model.provider] = []
+    acc[model.provider].push(model)
+    return acc
+  }, {} as Record<string, typeof IMAGE_MODELS[number][]>)
+
   return (
     <div className="relative" ref={dropdownRef}>
       <button
@@ -279,7 +310,12 @@ export function ImageModelSelector({ value, onChange, disabled, compact }: Image
           isOpen && 'ring-2 ring-primary/20 border-primary'
         )}
       >
-        <Sparkles className="h-4 w-4 text-primary" />
+        <span className={cn(
+          'px-1.5 py-0.5 rounded text-xs font-medium border',
+          PROVIDER_COLORS[selectedModel.provider]
+        )}>
+          {IMAGE_PROVIDER_LABELS[selectedModel.provider]}
+        </span>
         <span className="font-medium text-surface-900">{selectedModel.displayName}</span>
         <ChevronDown className={cn(
           'h-4 w-4 text-surface-400 transition-transform',
@@ -288,57 +324,61 @@ export function ImageModelSelector({ value, onChange, disabled, compact }: Image
       </button>
 
       {isOpen && (
-        <div className="absolute bottom-full left-0 mb-2 w-56 bg-white rounded-xl shadow-lg border border-surface-200 py-2 z-50">
-          <div className="px-3 py-1.5 text-xs font-semibold text-surface-500 uppercase tracking-wide">
-            Image Models
-          </div>
-          {IMAGE_MODELS.map(model => {
-            const isSelected = model.id === value
-            return (
-              <button
-                key={model.id}
-                type="button"
-                onClick={() => {
-                  onChange(model.id)
-                  setIsOpen(false)
-                }}
-                className={cn(
-                  'w-full px-3 py-2 text-left hover:bg-surface-50 transition-colors flex items-center gap-3',
-                  isSelected && 'bg-primary/5'
-                )}
-              >
-                <div className={cn(
-                  'p-1.5 rounded-lg',
-                  isSelected ? 'bg-primary/10 text-primary' : 'bg-surface-100 text-surface-500'
-                )}>
-                  <Sparkles className="h-4 w-4" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className={cn(
-                    'font-medium text-sm',
-                    isSelected && 'text-primary'
-                  )}>
-                    {model.displayName}
-                  </div>
-                  <div className="text-xs text-surface-500 flex items-center gap-2">
-                    <span>{model.description}</span>
-                    <span className="text-surface-300">•</span>
-                    <span className="flex items-center gap-0.5">
-                      {Array.from({ length: model.qualityScore }).map((_, i) => (
-                        <span key={i} className="w-1 h-1 rounded-full bg-primary" />
-                      ))}
-                      {Array.from({ length: 5 - model.qualityScore }).map((_, i) => (
-                        <span key={i} className="w-1 h-1 rounded-full bg-surface-200" />
-                      ))}
-                    </span>
-                  </div>
-                </div>
-                {isSelected && (
-                  <Check className="h-4 w-4 text-primary shrink-0" />
-                )}
-              </button>
-            )
-          })}
+        <div className="absolute bottom-full left-0 mb-2 w-64 bg-white rounded-xl shadow-lg border border-surface-200 py-2 z-50 max-h-80 overflow-y-auto">
+          {Object.entries(imageModelsByProvider).map(([provider, models]) => (
+            <div key={provider}>
+              <div className="px-3 py-1.5 text-xs font-semibold text-surface-500 uppercase tracking-wide">
+                {IMAGE_PROVIDER_LABELS[provider as keyof typeof IMAGE_PROVIDER_LABELS]}
+              </div>
+              {models.map(model => {
+                const isSelected = model.id === value
+                return (
+                  <button
+                    key={model.id}
+                    type="button"
+                    onClick={() => {
+                      onChange(model.id)
+                      setIsOpen(false)
+                    }}
+                    className={cn(
+                      'w-full px-3 py-2 text-left hover:bg-surface-50 transition-colors flex items-center gap-3',
+                      isSelected && 'bg-primary/5'
+                    )}
+                  >
+                    <div className={cn(
+                      'p-1.5 rounded-lg',
+                      isSelected ? 'bg-primary/10 text-primary' : 'bg-surface-100 text-surface-500'
+                    )}>
+                      <Sparkles className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className={cn(
+                        'font-medium text-sm',
+                        isSelected && 'text-primary'
+                      )}>
+                        {model.displayName}
+                      </div>
+                      <div className="text-xs text-surface-500 flex items-center gap-2">
+                        <span>{model.description}</span>
+                        <span className="text-surface-300">•</span>
+                        <span className="flex items-center gap-0.5">
+                          {Array.from({ length: model.qualityScore }).map((_, i) => (
+                            <span key={i} className="w-1 h-1 rounded-full bg-primary" />
+                          ))}
+                          {Array.from({ length: 5 - model.qualityScore }).map((_, i) => (
+                            <span key={i} className="w-1 h-1 rounded-full bg-surface-200" />
+                          ))}
+                        </span>
+                      </div>
+                    </div>
+                    {isSelected && (
+                      <Check className="h-4 w-4 text-primary shrink-0" />
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          ))}
         </div>
       )}
     </div>
