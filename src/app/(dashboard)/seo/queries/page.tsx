@@ -124,9 +124,9 @@ export default function QueriesPage() {
       }
 
       // Add boolean filters
-      for (const filter of activeFilters) {
+      Array.from(activeFilters).forEach(filter => {
         params.set(filter, 'true')
-      }
+      })
 
       // Add position filter
       if (positionFilter?.min) {

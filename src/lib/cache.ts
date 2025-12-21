@@ -52,11 +52,11 @@ class SimpleCache {
    */
   invalidatePattern(pattern: string): void {
     const regex = new RegExp(pattern)
-    for (const key of this.cache.keys()) {
+    Array.from(this.cache.keys()).forEach(key => {
       if (regex.test(key)) {
         this.cache.delete(key)
       }
-    }
+    })
   }
 
   /**

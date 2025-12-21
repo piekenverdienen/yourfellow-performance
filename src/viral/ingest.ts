@@ -254,17 +254,18 @@ export async function getRecentSignals(
     .limit(limit)
 
   if (error) throw error
+  interface SignalRow { source_type: string; external_id: string; url: string; title: string; author: string | null; community: string | null; created_at_external: string | null; metrics: unknown; raw_excerpt: string | null; industry: string }
 
-  return (data || []).map(row => ({
+  return (data as SignalRow[] || []).map((row: SignalRow) => ({
     sourceType: row.source_type as ViralSourceType,
     externalId: row.external_id,
     url: row.url,
     title: row.title,
-    author: row.author,
-    community: row.community,
+    author: row.author ?? undefined,
+    community: row.community ?? undefined,
     createdAtExternal: row.created_at_external ? new Date(row.created_at_external) : undefined,
     metrics: row.metrics as NormalizedSignal['metrics'],
-    rawExcerpt: row.raw_excerpt,
+    rawExcerpt: row.raw_excerpt ?? undefined,
     industry: row.industry,
   }))
 }

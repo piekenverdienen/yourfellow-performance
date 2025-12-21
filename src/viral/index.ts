@@ -16,5 +16,53 @@ export * from './briefs'
 // SEO Intelligence (V2)
 export * from './seo-intelligence'
 
-// Schemas
-export * from './schemas'
+// Schemas - explicitly re-export to avoid BriefRecord collision with briefs.ts
+export {
+  BriefStatusSchema,
+  SearchContextSchema,
+  CanonicalBriefSchema,
+  EvidenceItemSchema,
+  EvidenceSchema,
+  SourceDateRangeSchema,
+  BriefRecordSchema,
+  YouTubeScriptOutputSchema,
+  BlogPostOutputSchema,
+  InstagramOutputSchema,
+  ChannelSchema,
+  GenerationOutputSchema,
+  GenerationRecordSchema,
+  GenerateBriefRequestSchema,
+  ApproveBriefRequestSchema,
+  RejectBriefRequestSchema,
+  RegenerateAngleRequestSchema,
+  GenerateContentRequestSchema,
+  parseCanonicalBrief,
+  safeParseCanonicalBrief,
+  parseYouTubeOutput,
+  parseBlogOutput,
+  parseInstagramOutput,
+  parseGenerationOutput,
+  isValidBrief,
+  getBriefValidationErrors,
+} from './schemas'
+
+export type {
+  BriefStatus,
+  SearchContext,
+  CanonicalBrief,
+  EvidenceItem,
+  Evidence,
+  SourceDateRange,
+  BriefRecord as SchemaBriefRecord, // Renamed to avoid collision with briefs.ts
+  YouTubeScriptOutput,
+  BlogPostOutput,
+  InstagramOutput,
+  Channel,
+  GenerationOutput,
+  GenerationRecord,
+  GenerateBriefRequest,
+  ApproveBriefRequest,
+  RejectBriefRequest,
+  RegenerateAngleRequest,
+  GenerateContentRequest,
+} from './schemas'

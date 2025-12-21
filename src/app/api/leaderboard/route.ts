@@ -153,12 +153,19 @@ async function getMonthlyLeaderboardData(
       .in('user_id', topUserIds)
 
     const streakMap: Record<string, number> = {}
-    streaks?.forEach(s => {
+    streaks?.forEach((s: { user_id: string; current_streak: number | null }) => {
       streakMap[s.user_id] = s.current_streak || 0
     })
 
     // Build leaderboard with pre-sorted order
-    const profileMap = new Map(profiles?.map(p => [p.id, p]) || [])
+    interface Profile {
+      id: string
+      full_name: string | null
+      avatar_url: string | null
+      level: number | null
+      xp: number | null
+    }
+    const profileMap = new Map<string, Profile>(profiles?.map((p: Profile) => [p.id, p]) || [])
     return topUserIds.map((userId, index) => {
       const profile = profileMap.get(userId)
       return {
@@ -192,13 +199,21 @@ async function getAlltimeLeaderboardData(
     .order('xp', { ascending: false })
     .limit(limit)
 
-  return profiles?.map((p, index) => ({
+  interface LeaderboardProfile {
+    id: string
+    full_name: string | null
+    avatar_url: string | null
+    xp: number | null
+    level: number | null
+    total_generations: number | null
+  }
+  return (profiles as LeaderboardProfile[] | null)?.map((p, index) => ({
     user_id: p.id,
-    full_name: p.full_name,
+    full_name: p.full_name || 'Unknown',
     avatar_url: p.avatar_url,
-    xp: p.xp,
-    level: p.level,
-    total_generations: p.total_generations,
+    xp: p.xp || 0,
+    level: p.level || 1,
+    total_generations: p.total_generations || 0,
     current_streak: 0,
     longest_streak: 0,
     achievement_count: 0,

@@ -38,7 +38,21 @@ export async function GET(
       .eq('query_id', id)
       .order('impressions', { ascending: false })
 
-    const pages = (pagesData || []).map(p => ({
+    interface QueryPageData {
+      id: string
+      query_id: string
+      page_url: string
+      impressions: number
+      clicks: number
+      position: number
+      ctr: number
+      mention_count: number | null
+      in_title: boolean | null
+      in_h1: boolean | null
+      in_h2: boolean | null
+      last_analyzed_at: string | null
+    }
+    const pages = (pagesData as QueryPageData[] || []).map((p: QueryPageData) => ({
       id: p.id,
       queryId: p.query_id,
       pageUrl: p.page_url,
@@ -59,7 +73,15 @@ export async function GET(
       .select('cluster_id, topic_clusters(id, name, color)')
       .eq('query_id', id)
 
-    const clusters = (clusterData || []).map(c => ({
+    interface ClusterQueryData {
+      cluster_id: string
+      topic_clusters: {
+        id: string
+        name: string
+        color: string
+      } | null
+    }
+    const clusters = (clusterData as ClusterQueryData[] || []).map((c: ClusterQueryData) => ({
       id: c.topic_clusters?.id,
       name: c.topic_clusters?.name,
       color: c.topic_clusters?.color,

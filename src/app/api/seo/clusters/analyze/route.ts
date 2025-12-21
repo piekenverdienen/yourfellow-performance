@@ -24,6 +24,21 @@ import { TopicalClusterAnalyzer } from '@/seo/topical'
 import type { ClusterQueryData, ClusterUrlData, ClusterAnalysisResponse } from '@/seo/topical'
 import type { TopicClusterRow } from '@/types/search-console'
 
+interface ClusterQueryRow {
+  query_id: string
+  matched_by: string
+  search_console_queries: {
+    id: string
+    query: string
+    unique_impressions: number
+    total_clicks: number
+    best_position: number | null
+    average_ctr: number | null
+    is_question: boolean
+    is_buyer_keyword: boolean
+  } | null
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse<ClusterAnalysisResponse>> {
   const startTime = performance.now()
   let dataFetchTime = 0
@@ -96,8 +111,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<ClusterAn
     }
 
     // Get query IDs for fetching pages
-    const queryIds = clusterQueries
-      .map((cq) => (cq.search_console_queries as { id: string } | null)?.id)
+    const queryIds = (clusterQueries as ClusterQueryRow[])
+      .map((cq: ClusterQueryRow) => cq.search_console_queries?.id)
       .filter((id): id is string => !!id)
 
     // Fetch all pages for these queries
@@ -126,18 +141,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<ClusterAn
       queryUrlMap.set(page.query_id, existing)
     }
 
-    const queries: ClusterQueryData[] = clusterQueries
-      .map((cq) => {
-        const q = cq.search_console_queries as {
-          id: string
-          query: string
-          unique_impressions: number
-          total_clicks: number
-          best_position: number | null
-          average_ctr: number | null
-          is_question: boolean
-          is_buyer_keyword: boolean
-        } | null
+    const queries: ClusterQueryData[] = (clusterQueries as ClusterQueryRow[])
+      .map((cq: ClusterQueryRow) => {
+        const q = cq.search_console_queries
 
         if (!q) return null
 

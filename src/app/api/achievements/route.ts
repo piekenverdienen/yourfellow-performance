@@ -1,6 +1,17 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
+interface Achievement {
+  id: string
+  name: string
+  description: string
+  icon: string
+  category: string
+  xp_reward: number
+  is_active: boolean
+  sort_order: number
+}
+
 // GET - Fetch all achievements and user's earned achievements
 export async function GET() {
   try {
@@ -41,11 +52,11 @@ export async function GET() {
     }
 
     // Build earned set
-    const earnedSet = new Set(userAchievements?.map(ua => ua.achievement_id) || [])
-    const earnedMap = new Map(userAchievements?.map(ua => [ua.achievement_id, ua.earned_at]) || [])
+    const earnedSet = new Set(userAchievements?.map((ua: { achievement_id: string; earned_at: string }) => ua.achievement_id) || [])
+    const earnedMap = new Map(userAchievements?.map((ua: { achievement_id: string; earned_at: string }) => [ua.achievement_id, ua.earned_at]) || [])
 
     // Combine achievements with earned status
-    const achievements = allAchievements?.map(ach => ({
+    const achievements = (allAchievements as Achievement[] | null)?.map((ach: Achievement) => ({
       ...ach,
       earned: earnedSet.has(ach.id),
       earned_at: earnedMap.get(ach.id) || null,

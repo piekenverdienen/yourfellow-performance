@@ -148,6 +148,31 @@ const defaultConfig: IngestConfig = {
   query: '',
 }
 
+// Helper component to render keywords section (avoids TypeScript issues with unknown types in JSX)
+function KeywordsSection({
+  primaryKeyword,
+  secondaryKeywords,
+}: {
+  primaryKeyword: string | null
+  secondaryKeywords: string[] | null
+}) {
+  if (primaryKeyword === null && secondaryKeywords === null) return null
+
+  return (
+    <div>
+      <h5 className="text-sm font-medium mb-2">Keywords</h5>
+      <div className="flex flex-wrap gap-1">
+        {primaryKeyword !== null && (
+          <Badge className="bg-primary text-white">{primaryKeyword}</Badge>
+        )}
+        {secondaryKeywords !== null && secondaryKeywords.map((kw, idx) => (
+          <Badge key={idx} variant="secondary">{kw}</Badge>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ============================================
 // Types for AI Suggestions
 // ============================================
@@ -1356,7 +1381,7 @@ export default function ViralHubPage() {
                           return (
                             <Button
                               key={channel}
-                              variant={hasContent ? 'outline' : 'default'}
+                              variant={hasContent ? 'outline' : 'primary'}
                               size="sm"
                               onClick={() => handleGenerateContentFromBrief(channel)}
                               disabled={isGeneratingContent}
@@ -1865,7 +1890,8 @@ function GeneratedContentView({
   }
 
   const generation = generations[0]
-  const output = generation.output as Record<string, unknown>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const output = generation.output as any
 
   if (channel === 'instagram') {
     return (
@@ -2080,7 +2106,7 @@ function BriefGeneratedContentView({
   channel: 'youtube' | 'instagram' | 'blog'
   onCopy: (text: string, label: string) => void
   copiedText: string | null
-}) {
+}): JSX.Element {
   if (generations.length === 0) {
     return (
       <div className="text-center py-6 text-surface-500">
@@ -2090,7 +2116,8 @@ function BriefGeneratedContentView({
   }
 
   const generation = generations[0]
-  const output = generation.output as Record<string, unknown>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const output = generation.output as any
 
   if (channel === 'instagram') {
     return (
@@ -2228,17 +2255,24 @@ function BriefGeneratedContentView({
   }
 
   if (channel === 'blog') {
+    // Extract typed values from output
+    const seoTitle = typeof output.seo_title === 'string' ? output.seo_title : null
+    const titles = Array.isArray(output.titles) ? (output.titles as string[]) : null
+    const metaDesc = typeof output.meta_description === 'string' ? output.meta_description : null
+    const primaryKeyword = typeof output.primary_keyword === 'string' ? output.primary_keyword : null
+    const secondaryKeywords = Array.isArray(output.secondary_keywords) ? (output.secondary_keywords as string[]) : null
+
     return (
       <div className="space-y-4">
         {/* SEO Title */}
-        {typeof output.seo_title === 'string' && (
+        {seoTitle !== null && (
           <div>
             <div className="flex items-center justify-between mb-2">
               <h5 className="text-sm font-medium">SEO Title</h5>
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => onCopy(output.seo_title as string, 'brief-seo-title')}
+                onClick={() => onCopy(seoTitle, 'brief-seo-title')}
               >
                 {copiedText === 'brief-seo-title' ? (
                   <CheckCircle className="h-4 w-4 text-green-500" />
@@ -2248,15 +2282,15 @@ function BriefGeneratedContentView({
               </Button>
             </div>
             <div className="bg-surface-50 rounded p-3 text-sm font-medium">
-              {String(output.seo_title)}
+              {seoTitle}
             </div>
           </div>
         )}
         {/* Fallback for titles array */}
-        {!output.seo_title && Array.isArray(output.titles) && (
+        {seoTitle === null && titles !== null && titles.length > 0 && (
           <div>
             <h5 className="text-sm font-medium mb-2">Title Opties</h5>
-            {(output.titles as string[]).map((title, idx) => (
+            {titles.map((title, idx) => (
               <div key={idx} className="flex items-center gap-2 bg-surface-50 rounded p-2 mb-1">
                 <span className="text-xs font-bold text-primary">{idx + 1}</span>
                 <p className="text-sm flex-1">{title}</p>
@@ -2276,14 +2310,14 @@ function BriefGeneratedContentView({
           </div>
         )}
         {/* Meta Description */}
-        {typeof output.meta_description === 'string' && (
+        {metaDesc !== null && (
           <div>
             <div className="flex items-center justify-between mb-2">
               <h5 className="text-sm font-medium">Meta Description</h5>
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => onCopy(output.meta_description as string, 'brief-meta-desc')}
+                onClick={() => onCopy(metaDesc, 'brief-meta-desc')}
               >
                 {copiedText === 'brief-meta-desc' ? (
                   <CheckCircle className="h-4 w-4 text-green-500" />
@@ -2293,24 +2327,14 @@ function BriefGeneratedContentView({
               </Button>
             </div>
             <div className="bg-surface-50 rounded p-3 text-sm">
-              {String(output.meta_description)}
+              {metaDesc}
             </div>
           </div>
         )}
-        {/* Keywords */}
-        {(output.primary_keyword || output.secondary_keywords) && (
-          <div>
-            <h5 className="text-sm font-medium mb-2">Keywords</h5>
-            <div className="flex flex-wrap gap-1">
-              {typeof output.primary_keyword === 'string' && (
-                <Badge className="bg-primary text-white">{output.primary_keyword}</Badge>
-              )}
-              {Array.isArray(output.secondary_keywords) && (output.secondary_keywords as string[]).map((kw, idx) => (
-                <Badge key={idx} variant="secondary">{kw}</Badge>
-              ))}
-            </div>
-          </div>
-        )}
+        <KeywordsSection
+          primaryKeyword={primaryKeyword}
+          secondaryKeywords={secondaryKeywords}
+        />
         {/* Outline */}
         {Array.isArray(output.outline) && (
           <div>

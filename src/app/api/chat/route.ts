@@ -274,7 +274,7 @@ export async function POST(request: NextRequest) {
     const rawMessages = messages || []
 
     // Filter empty messages and ensure alternating roles
-    const filteredMessages = rawMessages.filter(m => m.content && m.content.trim() !== '')
+    const filteredMessages = rawMessages.filter((m: { content: string; role: string }) => m.content && m.content.trim() !== '')
 
     // Normalize: ensure alternating user/assistant pattern (remove consecutive same-role messages)
     const normalizedMessages: { role: 'user' | 'assistant'; content: string }[] = []

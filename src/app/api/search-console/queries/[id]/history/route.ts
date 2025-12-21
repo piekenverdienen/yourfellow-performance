@@ -26,7 +26,18 @@ export async function GET(
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    const history = (data || []).map(h => ({
+    interface HistoryData {
+      id: string
+      query_id: string
+      date_start: string
+      date_end: string
+      impressions: number
+      clicks: number
+      position: number
+      ctr: number
+      synced_at: string
+    }
+    const history = (data as HistoryData[] || []).map((h: HistoryData) => ({
       id: h.id,
       queryId: h.query_id,
       dateStart: h.date_start,
