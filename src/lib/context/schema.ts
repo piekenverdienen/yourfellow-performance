@@ -185,7 +185,7 @@ export type Economics = z.infer<typeof EconomicsSchema>
 // ===========================================
 export const CompetitorSchema = z.object({
   name: z.string(),
-  website: z.string().url().optional(),
+  website: z.string().optional(), // Relaxed - LLM might generate partial URLs
   description: z.string().optional(),
 
   // Positioning
