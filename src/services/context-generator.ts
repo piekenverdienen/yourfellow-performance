@@ -11,6 +11,7 @@ import {
   AIContext,
   ContextSummary,
   SourceMap,
+  ChannelType,
   validateContext,
   formatValidationErrors,
   CONFIDENCE_OVERWRITE_THRESHOLD,
@@ -380,11 +381,25 @@ export async function generateContextFromSources(
       return { success: false, error: 'Invalid JSON in LLM response' }
     }
 
+    // Pre-process to fix common LLM output issues
+    const VALID_CHANNELS = [
+      'google_ads', 'meta', 'seo', 'klaviyo', 'cro', 'linkedin',
+      'tiktok', 'pinterest', 'youtube', 'email', 'content',
+      'affiliate', 'influencer', 'podcast', 'display', 'native',
+      'pr', 'events', 'partnerships', 'other'
+    ]
+
+    // Fix activeChannels - filter out invalid values or replace with 'other'
+    if (parsedContext.access?.activeChannels) {
+      parsedContext.access.activeChannels = (parsedContext.access.activeChannels as string[])
+        .map((channel: string) => VALID_CHANNELS.includes(channel) ? channel : 'other')
+        .filter((channel: string, index: number, self: string[]) => self.indexOf(channel) === index) as ChannelType[]
+    }
+
     // Validate against schema
     const validation = validateContext(parsedContext)
     if (!validation.success) {
       console.error('Context validation failed:', formatValidationErrors(validation.errors!))
-      console.error('Parsed context was:', JSON.stringify(parsedContext, null, 2))
 
       // Try to fix common issues by merging with empty context
       const fixedContext = {
@@ -405,13 +420,19 @@ export async function generateContextFromSources(
           missingFields: [],
           lastUpdated: new Date().toISOString(),
         },
+        // Fix access channels again after merge
+        access: {
+          ...(parsedContext.access || {}),
+          activeChannels: ((parsedContext.access?.activeChannels || []) as string[])
+            .map((channel: string) => VALID_CHANNELS.includes(channel) ? channel : 'other')
+            .filter((channel: string, index: number, self: string[]) => self.indexOf(channel) === index) as ChannelType[],
+        },
       }
 
       // Validate again
       const revalidation = validateContext(fixedContext)
       if (!revalidation.success) {
         console.error('Revalidation also failed:', formatValidationErrors(revalidation.errors!))
-        console.error('Fixed context was:', JSON.stringify(fixedContext, null, 2))
         return { success: false, error: 'Context schema validation failed: ' + formatValidationErrors(revalidation.errors!) }
       }
       parsedContext = revalidation.data!

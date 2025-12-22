@@ -229,6 +229,15 @@ export const ChannelTypeSchema = z.enum([
   'youtube',
   'email',
   'content',
+  'affiliate',
+  'influencer',
+  'podcast',
+  'display',
+  'native',
+  'pr',
+  'events',
+  'partnerships',
+  'other', // Catch-all for unknown channels
 ])
 export type ChannelType = z.infer<typeof ChannelTypeSchema>
 
@@ -333,7 +342,7 @@ export const GapsSchema = z.object({
     z.object({
       questionKey: z.string(),
       questionText: z.string(),
-      fieldPath: z.string(),
+      fieldPath: z.string().optional(), // Made optional - LLM doesn't always provide this
       priority: z.enum(['high', 'medium', 'low']),
     })
   ).default([]),

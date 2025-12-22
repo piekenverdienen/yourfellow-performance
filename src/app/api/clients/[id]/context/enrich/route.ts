@@ -159,7 +159,7 @@ export async function POST(
       missingFields: result.context?.confidence.missingFields || [],
       lowConfidenceFields: result.context?.confidence.lowConfidenceFields || [],
       suggestedNextInputs: result.context?.gaps?.questionsToAsk?.map((q) => ({
-        field: q.fieldPath,
+        field: q.fieldPath || q.questionKey || 'unknown',
         question: q.questionText,
         priority: q.priority,
       })) || [],
