@@ -1051,7 +1051,7 @@ export class AIGateway {
 
   /**
    * Fetch client context from database
-   * Uses existing clients table and settings.context
+   * Uses new AI Context Layer (client_context table) with fallback to legacy settings.context
    */
   private async getClientContext(clientId: string): Promise<AIClientContext | null> {
     try {
@@ -1063,31 +1063,92 @@ export class AIGateway {
 
       if (!hasAccess) return null
 
+      // Get client name
       const { data: client } = await supabase
         .from('clients')
         .select('name, settings')
         .eq('id', clientId)
         .single()
 
-      if (!client?.settings?.context) return null
+      if (!client) return null
 
-      const ctx = client.settings.context as Record<string, unknown>
+      // Try to get new AI Context first
+      const { data: clientContext } = await supabase
+        .from('client_context')
+        .select('current_context_json, current_summary_json')
+        .eq('client_id', clientId)
+        .single()
 
-      return {
-        clientId,
-        clientName: client.name,
-        brandVoice: (ctx.brandVoice as string) || '',
-        toneOfVoice: (ctx.toneOfVoice as string) || '',
-        proposition: (ctx.proposition as string) || '',
-        targetAudience: (ctx.targetAudience as string) || '',
-        usps: (ctx.usps as string[]) || [],
-        bestsellers: ctx.bestsellers as string[] | undefined,
-        seasonality: ctx.seasonality as string[] | undefined,
-        margins: ctx.margins as { min: number; target: number } | undefined,
-        doNotUse: (ctx.doNots as string[]) || [],
-        mustHave: (ctx.mustHaves as string[]) || [],
-        activeChannels: (ctx.activeChannels as string[]) || [],
+      // Use new AI Context if available
+      if (clientContext?.current_context_json) {
+        const ctx = clientContext.current_context_json as Record<string, unknown>
+        const obs = ctx.observations as Record<string, unknown> | undefined
+        const goals = ctx.goals as Record<string, unknown> | undefined
+        const economics = ctx.economics as Record<string, unknown> | undefined
+        const access = ctx.access as Record<string, unknown> | undefined
+        const brandVoice = obs?.brandVoice as Record<string, unknown> | undefined
+        const targetAudience = obs?.targetAudience as Record<string, unknown> | undefined
+
+        // Extract USPs as strings
+        const usps = ((obs?.usps as Array<{ text: string }>) || []).map(u => u.text)
+
+        // Extract products/bestsellers
+        const products = (obs?.products as Array<{ name: string; isBestseller?: boolean }>) || []
+        const bestsellers = products.filter(p => p.isBestseller).map(p => p.name)
+        if (bestsellers.length === 0 && obs?.bestsellers) {
+          bestsellers.push(...(obs.bestsellers as string[]))
+        }
+
+        // Extract seasonality
+        const seasonality = ((economics?.seasonality as Array<{ period: string; impact: string }>) || [])
+          .map(s => `${s.period} (${s.impact})`)
+
+        return {
+          clientId,
+          clientName: client.name,
+          // Rich context from AI intake
+          proposition: (obs?.proposition as string) || '',
+          targetAudience: typeof targetAudience === 'string'
+            ? targetAudience
+            : (targetAudience?.primary as string) || '',
+          usps,
+          toneOfVoice: (brandVoice?.toneOfVoice as string) || '',
+          brandVoice: (brandVoice?.personality as string[])?.join(', ') || '',
+          bestsellers: bestsellers.length > 0 ? bestsellers : undefined,
+          seasonality: seasonality.length > 0 ? seasonality : undefined,
+          margins: economics?.margins as { min: number; target: number } | undefined,
+          doNotUse: (brandVoice?.doNots as string[]) || [],
+          mustHave: (brandVoice?.mustHaves as string[]) || [],
+          activeChannels: (access?.activeChannels as string[]) || [],
+          // Additional rich context
+          industry: (obs?.industry as string) || undefined,
+          tagline: (obs?.tagline as string) || undefined,
+          companyName: (obs?.companyName as string) || client.name,
+          primaryGoals: (goals?.primary as string[]) || [],
+        }
       }
+
+      // Fallback to legacy settings.context
+      if (client.settings?.context) {
+        const ctx = client.settings.context as Record<string, unknown>
+        return {
+          clientId,
+          clientName: client.name,
+          brandVoice: (ctx.brandVoice as string) || '',
+          toneOfVoice: (ctx.toneOfVoice as string) || '',
+          proposition: (ctx.proposition as string) || '',
+          targetAudience: (ctx.targetAudience as string) || '',
+          usps: (ctx.usps as string[]) || [],
+          bestsellers: ctx.bestsellers as string[] | undefined,
+          seasonality: ctx.seasonality as string[] | undefined,
+          margins: ctx.margins as { min: number; target: number } | undefined,
+          doNotUse: (ctx.doNots as string[]) || [],
+          mustHave: (ctx.mustHaves as string[]) || [],
+          activeChannels: (ctx.activeChannels as string[]) || [],
+        }
+      }
+
+      return null
     } catch (error) {
       console.error('Error fetching client context:', error)
       return null
@@ -1096,26 +1157,41 @@ export class AIGateway {
 
   /**
    * Inject client context into system prompt
+   * Uses rich context from AI Context Layer
    */
   private injectClientContext(systemPrompt: string, context: AIClientContext): string {
-    const contextParts = [`\n\nKLANT CONTEXT (${context.clientName}):`]
+    const contextParts = [`\n\n## KLANT CONTEXT: ${context.companyName || context.clientName}`]
 
+    // Core identity
+    if (context.industry) contextParts.push(`Industrie: ${context.industry}`)
     if (context.proposition) contextParts.push(`Propositie: ${context.proposition}`)
+    if (context.tagline) contextParts.push(`Tagline: "${context.tagline}"`)
+
+    // Target audience
     if (context.targetAudience) contextParts.push(`Doelgroep: ${context.targetAudience}`)
-    if (context.usps.length > 0) contextParts.push(`USP's: ${context.usps.join(', ')}`)
+
+    // USPs
+    if (context.usps.length > 0) contextParts.push(`USP's: ${context.usps.join(' | ')}`)
+
+    // Brand voice
     if (context.toneOfVoice) contextParts.push(`Tone of Voice: ${context.toneOfVoice}`)
-    if (context.brandVoice) contextParts.push(`Brand Voice: ${context.brandVoice}`)
+    if (context.brandVoice) contextParts.push(`Persoonlijkheid: ${context.brandVoice}`)
+
+    // Products & offerings
     if (context.bestsellers?.length) contextParts.push(`Bestsellers: ${context.bestsellers.join(', ')}`)
+
+    // Business context
+    if (context.primaryGoals?.length) contextParts.push(`Doelen: ${context.primaryGoals.join(', ')}`)
     if (context.seasonality?.length) contextParts.push(`Seizoensgebonden: ${context.seasonality.join(', ')}`)
     if (context.margins) contextParts.push(`Marges: min ${context.margins.min}%, target ${context.margins.target}%`)
     if (context.activeChannels.length > 0) contextParts.push(`Actieve kanalen: ${context.activeChannels.join(', ')}`)
 
-    // Compliance rules are critical
+    // Compliance rules - CRITICAL
     if (context.doNotUse.length > 0) {
-      contextParts.push(`\n⚠️ VERBODEN (gebruik deze woorden/claims NOOIT): ${context.doNotUse.join(', ')}`)
+      contextParts.push(`\n⚠️ VERBODEN (gebruik NOOIT): ${context.doNotUse.join(', ')}`)
     }
     if (context.mustHave.length > 0) {
-      contextParts.push(`✓ VERPLICHT (altijd toevoegen waar relevant): ${context.mustHave.join(', ')}`)
+      contextParts.push(`✓ VERPLICHT (altijd toevoegen): ${context.mustHave.join(', ')}`)
     }
 
     return systemPrompt + contextParts.join('\n')

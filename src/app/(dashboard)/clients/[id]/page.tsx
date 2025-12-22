@@ -26,7 +26,7 @@ import {
 } from 'lucide-react'
 import { useUser } from '@/hooks/use-user'
 import { useClientStore } from '@/stores/client-store'
-import { ClientContextForm } from '@/components/client-context-form'
+import { AIContextIntake } from '@/components/ai-context-intake'
 import { LogoUpload, ClientLogoFallback } from '@/components/logo-upload'
 import { ClickUpTasks } from '@/components/clickup-tasks'
 import { ClickUpSetup } from '@/components/clickup-setup'
@@ -423,20 +423,10 @@ export default function ClientDetailPage() {
       )}
 
       {activeTab === 'context' && (
-        <ClientContextForm
+        <AIContextIntake
           clientId={id}
-          initialContext={client.settings?.context}
+          clientName={client.name}
           canEdit={isAdmin || false}
-          onSave={(context) => {
-            setClient((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    settings: { ...prev.settings, context },
-                  }
-                : prev
-            )
-          }}
         />
       )}
 
