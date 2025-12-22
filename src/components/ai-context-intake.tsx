@@ -30,6 +30,10 @@ import {
   Lightbulb,
   HelpCircle,
   ExternalLink,
+  PenLine,
+  Plus,
+  X,
+  Save,
 } from 'lucide-react'
 import type { GetContextResponse, IntakeJob } from '@/lib/context/types'
 import type { AIContext, ContextSummary } from '@/lib/context'
@@ -117,6 +121,20 @@ export function AIContextIntake({ clientId, clientName, canEdit }: AIContextInta
   // UI state
   const [showVersions, setShowVersions] = useState(false)
   const [versions, setVersions] = useState<{ version: number; generatedAt: string; isActive: boolean }[]>([])
+
+  // Enrichment state
+  const [showEnrichForm, setShowEnrichForm] = useState(false)
+  const [enriching, setEnriching] = useState(false)
+  const [answers, setAnswers] = useState<Record<string, string>>({})
+  const [newCompetitor, setNewCompetitor] = useState({ name: '', website: '' })
+  const [manualCompetitors, setManualCompetitors] = useState<Array<{ name: string; website: string }>>([])
+  const [socialLinks, setSocialLinks] = useState({
+    linkedin: '',
+    instagram: '',
+    facebook: '',
+    twitter: '',
+    youtube: '',
+  })
 
   // Fetch current context
   const fetchContext = useCallback(async () => {
@@ -279,6 +297,101 @@ export function AIContextIntake({ clientId, clientName, canEdit }: AIContextInta
       }
     } catch (err) {
       console.error('Error activating version:', err)
+    }
+  }
+
+  // Add competitor to manual list
+  const addCompetitor = () => {
+    if (newCompetitor.name.trim()) {
+      setManualCompetitors([...manualCompetitors, { ...newCompetitor }])
+      setNewCompetitor({ name: '', website: '' })
+    }
+  }
+
+  // Remove competitor from manual list
+  const removeCompetitor = (index: number) => {
+    setManualCompetitors(manualCompetitors.filter((_, i) => i !== index))
+  }
+
+  // Save enrichment data
+  const saveEnrichment = async () => {
+    setEnriching(true)
+    setError(null)
+
+    try {
+      // First, save the intake answers
+      const answersToSave = Object.entries(answers)
+        .filter(([_, value]) => value.trim())
+        .map(([questionKey, answerText]) => ({
+          questionKey,
+          answerText,
+          source: 'user_input' as const,
+        }))
+
+      if (answersToSave.length > 0) {
+        await fetch(`/api/clients/${clientId}/intake-answers`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ answers: answersToSave }),
+        })
+      }
+
+      // Then trigger enrichment with additional data
+      const enrichData: Record<string, unknown> = {}
+
+      // Add competitors
+      if (manualCompetitors.length > 0) {
+        enrichData.competitors = {
+          direct: manualCompetitors.map(c => ({
+            name: c.name,
+            website: c.website || undefined,
+          })),
+        }
+      }
+
+      // Add social links
+      const filledSocialLinks = Object.entries(socialLinks)
+        .filter(([_, url]) => url.trim())
+        .reduce((acc, [platform, url]) => ({ ...acc, [platform]: url }), {})
+
+      if (Object.keys(filledSocialLinks).length > 0) {
+        enrichData.access = {
+          social: filledSocialLinks,
+        }
+      }
+
+      // Add answers as observations
+      if (answersToSave.length > 0) {
+        enrichData.intakeAnswers = answersToSave
+      }
+
+      // Trigger re-enrichment
+      const res = await fetch(`/api/clients/${clientId}/context/enrich`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          additionalData: enrichData,
+          regenerate: true,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (data.success) {
+        // Refresh context
+        await fetchContext()
+        setShowEnrichForm(false)
+        // Clear form
+        setAnswers({})
+        setManualCompetitors([])
+        setSocialLinks({ linkedin: '', instagram: '', facebook: '', twitter: '', youtube: '' })
+      } else {
+        setError(data.error || 'Kon context niet verrijken')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Er ging iets mis')
+    } finally {
+      setEnriching(false)
     }
   }
 
@@ -879,59 +992,176 @@ export function AIContextIntake({ clientId, clientName, canEdit }: AIContextInta
             </ContextSection>
           )}
 
-          {/* Gaps & Questions */}
-          {context.gaps && (
-            <ContextSection title="Ontbrekende Informatie" icon={HelpCircle}>
-              <div className="space-y-4">
-                {context.gaps.critical && context.gaps.critical.length > 0 && (
-                  <Field label="Kritieke gaps">
-                    <ul className="space-y-2">
-                      {context.gaps.critical.map((gap: { field: string; reason: string }, i: number) => (
-                        <li key={i} className="p-2 bg-red-50 rounded-lg text-sm">
-                          <span className="font-medium text-red-700">{gap.field}</span>
-                          <p className="text-red-600">{gap.reason}</p>
-                        </li>
-                      ))}
-                    </ul>
-                  </Field>
-                )}
-                {context.gaps.questionsToAsk && context.gaps.questionsToAsk.length > 0 && (
-                  <Field label="Vragen om te stellen">
-                    <ul className="space-y-2">
-                      {context.gaps.questionsToAsk.map((q: { questionKey: string; questionText: string; priority: string }, i: number) => (
-                        <li key={i} className="flex items-start gap-2 p-2 bg-yellow-50 rounded-lg text-sm">
-                          <HelpCircle className="h-4 w-4 text-yellow-600 mt-0.5" />
-                          <div>
-                            <p className="text-yellow-800">{q.questionText}</p>
-                            <Badge variant="outline" className="text-xs mt-1">{q.priority}</Badge>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </Field>
-                )}
-              </div>
-            </ContextSection>
-          )}
+          {/* Manual Enrichment Section */}
+          {canEdit && (context.gaps || context.confidence?.missingFields?.length) && (
+            <Card className="border-primary/30">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2 text-base font-medium">
+                    <PenLine className="h-5 w-5 text-primary" />
+                    Handmatig Aanvullen
+                  </CardTitle>
+                  <Button
+                    variant={showEnrichForm ? 'primary' : 'outline'}
+                    size="sm"
+                    onClick={() => setShowEnrichForm(!showEnrichForm)}
+                  >
+                    {showEnrichForm ? 'Sluiten' : 'Informatie Toevoegen'}
+                  </Button>
+                </div>
+              </CardHeader>
 
-          {/* Missing Fields */}
-          {context.confidence?.missingFields && context.confidence.missingFields.length > 0 && (
-            <Card className="border-yellow-200 bg-yellow-50/50">
-              <CardContent className="py-4">
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5" />
-                  <div>
-                    <p className="font-medium text-yellow-800">Ontbrekende velden</p>
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {context.confidence.missingFields.map((field: string, i: number) => (
-                        <Badge key={i} variant="outline" className="text-yellow-700 border-yellow-300 text-xs">
-                          {field}
-                        </Badge>
+              {!showEnrichForm && (
+                <CardContent className="pt-0">
+                  <div className="space-y-3">
+                    {/* Show gaps summary */}
+                    {context.gaps?.critical && context.gaps.critical.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {context.gaps.critical.map((gap: { field: string }, i: number) => (
+                          <Badge key={i} variant="outline" className="text-red-600 border-red-300">
+                            {gap.field}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                    {context.confidence?.missingFields && context.confidence.missingFields.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {context.confidence.missingFields.slice(0, 5).map((field: string, i: number) => (
+                          <Badge key={i} variant="outline" className="text-yellow-600 border-yellow-300">
+                            {field}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              )}
+
+              {showEnrichForm && (
+                <CardContent className="space-y-6 pt-0">
+                  {/* Questions to answer */}
+                  {context.gaps?.questionsToAsk && context.gaps.questionsToAsk.length > 0 && (
+                    <div className="space-y-4">
+                      <h4 className="font-medium text-surface-900">Beantwoord deze vragen</h4>
+                      {context.gaps.questionsToAsk.map((q: { questionKey: string; questionText: string; priority: string }) => (
+                        <div key={q.questionKey} className="space-y-1">
+                          <label className="text-sm text-surface-700 flex items-center gap-2">
+                            {q.questionText}
+                            <Badge variant={q.priority === 'high' ? 'error' : 'secondary'} className="text-xs">
+                              {q.priority}
+                            </Badge>
+                          </label>
+                          <textarea
+                            value={answers[q.questionKey] || ''}
+                            onChange={(e) => setAnswers({ ...answers, [q.questionKey]: e.target.value })}
+                            placeholder="Typ je antwoord..."
+                            className="w-full px-3 py-2 border border-surface-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary resize-none text-sm"
+                            rows={2}
+                          />
+                        </div>
                       ))}
                     </div>
+                  )}
+
+                  {/* Add competitors */}
+                  <div className="space-y-3">
+                    <h4 className="font-medium text-surface-900">Concurrenten toevoegen</h4>
+                    <div className="flex gap-2">
+                      <Input
+                        value={newCompetitor.name}
+                        onChange={(e) => setNewCompetitor({ ...newCompetitor, name: e.target.value })}
+                        placeholder="Naam concurrent"
+                        className="flex-1"
+                      />
+                      <Input
+                        value={newCompetitor.website}
+                        onChange={(e) => setNewCompetitor({ ...newCompetitor, website: e.target.value })}
+                        placeholder="Website (optioneel)"
+                        className="flex-1"
+                      />
+                      <Button variant="outline" size="sm" onClick={addCompetitor} className="px-3">
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    {manualCompetitors.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {manualCompetitors.map((comp, i) => (
+                          <Badge key={i} variant="secondary" className="flex items-center gap-1">
+                            {comp.name}
+                            <button onClick={() => removeCompetitor(i)} className="ml-1 hover:text-red-500">
+                              <X className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </div>
-              </CardContent>
+
+                  {/* Social links */}
+                  <div className="space-y-3">
+                    <h4 className="font-medium text-surface-900">Social media links</h4>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="text-xs text-surface-500">LinkedIn</label>
+                        <Input
+                          value={socialLinks.linkedin}
+                          onChange={(e) => setSocialLinks({ ...socialLinks, linkedin: e.target.value })}
+                          placeholder="https://linkedin.com/company/..."
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-surface-500">Instagram</label>
+                        <Input
+                          value={socialLinks.instagram}
+                          onChange={(e) => setSocialLinks({ ...socialLinks, instagram: e.target.value })}
+                          placeholder="https://instagram.com/..."
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-surface-500">Facebook</label>
+                        <Input
+                          value={socialLinks.facebook}
+                          onChange={(e) => setSocialLinks({ ...socialLinks, facebook: e.target.value })}
+                          placeholder="https://facebook.com/..."
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-surface-500">YouTube</label>
+                        <Input
+                          value={socialLinks.youtube}
+                          onChange={(e) => setSocialLinks({ ...socialLinks, youtube: e.target.value })}
+                          placeholder="https://youtube.com/@..."
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Error display */}
+                  {error && (
+                    <div className="flex items-center gap-2 text-red-600 text-sm">
+                      <AlertCircle className="h-4 w-4" />
+                      {error}
+                    </div>
+                  )}
+
+                  {/* Save button */}
+                  <div className="flex justify-end pt-2">
+                    <Button onClick={saveEnrichment} disabled={enriching}>
+                      {enriching ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Opslaan...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="h-4 w-4 mr-2" />
+                          Opslaan & Verrijken
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </CardContent>
+              )}
             </Card>
           )}
         </>
