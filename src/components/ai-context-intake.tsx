@@ -167,16 +167,29 @@ export function AIContextIntake({ clientId, clientName, canEdit }: AIContextInta
         throw new Error(jobData.error || 'Kon intake niet starten')
       }
 
-      // Start processing
+      // Start processing and wait for response
       const processRes = await fetch(`/api/intake-jobs/${jobData.jobId}/process`, {
         method: 'POST',
       })
+      const processData = await processRes.json()
+
+      if (!processData.success) {
+        // Show detailed error from the processing
+        throw new Error(processData.error || processData.details || 'Intake verwerking gefaald')
+      }
 
       // Set job and start polling
       const statusRes = await fetch(`/api/intake-jobs/${jobData.jobId}`)
       const statusData = await statusRes.json()
       if (statusData.success) {
         setCurrentJob(statusData.job)
+        // If already completed/failed, update step
+        if (statusData.job.status === 'completed') {
+          setStep('completed')
+          fetchContext()
+        } else if (statusData.job.status === 'failed') {
+          throw new Error(statusData.job.error_message || 'Intake gefaald')
+        }
       }
     } catch (err) {
       setStep('error')

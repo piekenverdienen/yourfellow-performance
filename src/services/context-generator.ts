@@ -384,18 +384,35 @@ export async function generateContextFromSources(
     const validation = validateContext(parsedContext)
     if (!validation.success) {
       console.error('Context validation failed:', formatValidationErrors(validation.errors!))
-      // Try to fix common issues
-      parsedContext = {
+      console.error('Parsed context was:', JSON.stringify(parsedContext, null, 2))
+
+      // Try to fix common issues by merging with empty context
+      const fixedContext = {
         ...createEmptyContext(clientName),
         ...parsedContext,
         schemaVersion: '1.0',
         lastUpdated: new Date().toISOString(),
+        // Ensure observations has required companyName
+        observations: {
+          ...createEmptyContext(clientName).observations,
+          ...(parsedContext.observations || {}),
+          companyName: parsedContext.observations?.companyName || clientName,
+        },
+        // Ensure confidence exists
+        confidence: parsedContext.confidence || {
+          overall: 0.5,
+          bySection: {},
+          missingFields: [],
+          lastUpdated: new Date().toISOString(),
+        },
       }
 
       // Validate again
-      const revalidation = validateContext(parsedContext)
+      const revalidation = validateContext(fixedContext)
       if (!revalidation.success) {
-        return { success: false, error: 'Context schema validation failed' }
+        console.error('Revalidation also failed:', formatValidationErrors(revalidation.errors!))
+        console.error('Fixed context was:', JSON.stringify(fixedContext, null, 2))
+        return { success: false, error: 'Context schema validation failed: ' + formatValidationErrors(revalidation.errors!) }
       }
       parsedContext = revalidation.data!
     } else {
@@ -430,7 +447,14 @@ export async function generateContextFromSources(
 
     if (versionError) {
       console.error('Error creating context version:', versionError)
-      return { success: false, error: 'Failed to save context version' }
+      // Check if it's a missing table/function error
+      if (versionError.message?.includes('does not exist') || versionError.code === '42883') {
+        return {
+          success: false,
+          error: 'Database migration not run. Please run the customer-context-layer.sql migration first.'
+        }
+      }
+      return { success: false, error: 'Failed to save context version: ' + versionError.message }
     }
 
     return {
