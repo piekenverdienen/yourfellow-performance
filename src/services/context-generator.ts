@@ -30,7 +30,7 @@ interface GenerateContextInput {
   intakeAnswers: IntakeAnswer[]
   existingContext: AIContext | null
   userId: string
-  jobId: string
+  jobId: string | null
 }
 
 interface GenerateContextResult {
@@ -573,6 +573,6 @@ export async function enrichContext(
     intakeAnswers: allAnswers || newAnswers,
     existingContext: existingData.current_context_json as AIContext,
     userId,
-    jobId: '', // No job for enrichment
+    jobId: null, // No job for enrichment - null instead of empty string to avoid UUID parse error
   })
 }
