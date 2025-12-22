@@ -125,6 +125,7 @@ export function AIContextIntake({ clientId, clientName, canEdit }: AIContextInta
   // Enrichment state
   const [showEnrichForm, setShowEnrichForm] = useState(false)
   const [enriching, setEnriching] = useState(false)
+  const [loadingAnswers, setLoadingAnswers] = useState(false)
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [newCompetitor, setNewCompetitor] = useState({ name: '', website: '' })
   const [manualCompetitors, setManualCompetitors] = useState<Array<{ name: string; website: string }>>([])
@@ -298,6 +299,52 @@ export function AIContextIntake({ clientId, clientName, canEdit }: AIContextInta
     } catch (err) {
       console.error('Error activating version:', err)
     }
+  }
+
+  // Load existing answers and pre-fill form from context
+  const loadExistingData = async () => {
+    setLoadingAnswers(true)
+    try {
+      // Fetch existing intake answers
+      const res = await fetch(`/api/clients/${clientId}/intake-answers`)
+      const data = await res.json()
+
+      if (data.success && data.answers) {
+        // Convert answers array to Record
+        const existingAnswers: Record<string, string> = {}
+        data.answers.forEach((a: { question_key: string; answer_text: string }) => {
+          existingAnswers[a.question_key] = a.answer_text
+        })
+        setAnswers(existingAnswers)
+      }
+
+      // Pre-fill social links from current context
+      if (context?.access?.social) {
+        const social = context.access.social as Record<string, string>
+        setSocialLinks({
+          linkedin: social.linkedin || '',
+          instagram: social.instagram || '',
+          facebook: social.facebook || '',
+          twitter: social.twitter || '',
+          youtube: social.youtube || '',
+        })
+      }
+
+      // Note: We don't pre-fill competitors because they're already shown in the context
+      // and the form is for adding NEW competitors
+    } catch (err) {
+      console.error('Error loading existing answers:', err)
+    } finally {
+      setLoadingAnswers(false)
+    }
+  }
+
+  // Load existing data when enrichment form opens
+  const handleOpenEnrichForm = () => {
+    if (!showEnrichForm) {
+      loadExistingData()
+    }
+    setShowEnrichForm(!showEnrichForm)
   }
 
   // Add competitor to manual list
@@ -1004,9 +1051,15 @@ export function AIContextIntake({ clientId, clientName, canEdit }: AIContextInta
                   <Button
                     variant={showEnrichForm ? 'primary' : 'outline'}
                     size="sm"
-                    onClick={() => setShowEnrichForm(!showEnrichForm)}
+                    onClick={handleOpenEnrichForm}
+                    disabled={loadingAnswers}
                   >
-                    {showEnrichForm ? 'Sluiten' : 'Informatie Toevoegen'}
+                    {loadingAnswers ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                        Laden...
+                      </>
+                    ) : showEnrichForm ? 'Sluiten' : 'Informatie Toevoegen'}
                   </Button>
                 </div>
               </CardHeader>
@@ -1043,23 +1096,34 @@ export function AIContextIntake({ clientId, clientName, canEdit }: AIContextInta
                   {context.gaps?.questionsToAsk && context.gaps.questionsToAsk.length > 0 && (
                     <div className="space-y-4">
                       <h4 className="font-medium text-surface-900">Beantwoord deze vragen</h4>
-                      {context.gaps.questionsToAsk.map((q: { questionKey: string; questionText: string; priority: string }) => (
-                        <div key={q.questionKey} className="space-y-1">
-                          <label className="text-sm text-surface-700 flex items-center gap-2">
-                            {q.questionText}
-                            <Badge variant={q.priority === 'high' ? 'error' : 'secondary'} className="text-xs">
-                              {q.priority}
-                            </Badge>
-                          </label>
-                          <textarea
-                            value={answers[q.questionKey] || ''}
-                            onChange={(e) => setAnswers({ ...answers, [q.questionKey]: e.target.value })}
-                            placeholder="Typ je antwoord..."
-                            className="w-full px-3 py-2 border border-surface-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary resize-none text-sm"
-                            rows={2}
-                          />
-                        </div>
-                      ))}
+                      {context.gaps.questionsToAsk.map((q: { questionKey: string; questionText: string; priority: string }) => {
+                        const hasExistingAnswer = answers[q.questionKey]?.trim()
+                        return (
+                          <div key={q.questionKey} className="space-y-1">
+                            <label className="text-sm text-surface-700 flex items-center gap-2 flex-wrap">
+                              {q.questionText}
+                              <Badge variant={q.priority === 'high' ? 'error' : 'secondary'} className="text-xs">
+                                {q.priority}
+                              </Badge>
+                              {hasExistingAnswer && (
+                                <Badge variant="success" className="text-xs">
+                                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                                  Beantwoord
+                                </Badge>
+                              )}
+                            </label>
+                            <textarea
+                              value={answers[q.questionKey] || ''}
+                              onChange={(e) => setAnswers({ ...answers, [q.questionKey]: e.target.value })}
+                              placeholder="Typ je antwoord..."
+                              className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-primary resize-none text-sm ${
+                                hasExistingAnswer ? 'border-green-300 bg-green-50/30' : 'border-surface-200'
+                              }`}
+                              rows={2}
+                            />
+                          </div>
+                        )
+                      })}
                     </div>
                   )}
 
