@@ -122,6 +122,11 @@ export interface AIClientContext {
   mustHave: string[]  // Required disclaimers
   // Active channels for context
   activeChannels: string[]
+  // Extended fields from AI Context Layer
+  industry?: string
+  tagline?: string
+  companyName?: string
+  primaryGoals?: string[]
 }
 
 // ============================================
