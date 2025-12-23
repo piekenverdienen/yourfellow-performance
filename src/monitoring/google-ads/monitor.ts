@@ -5,6 +5,7 @@ import { GOOGLE_ADS_CHECKS } from '../checks/google-ads';
 import { createLogger, Logger, LogLevel } from '../utils/logger';
 import type {
   GoogleAdsCredentials,
+  GoogleAdsServiceAccountCredentials,
   GoogleAdsMonitoringClientConfig,
   MonitoringRunResult,
   CheckResult,
@@ -23,9 +24,7 @@ interface DatabaseClient {
   is_active: boolean;
   settings: {
     googleAds?: {
-      status: 'connected' | 'pending' | 'not_connected';
       customerId?: string;
-      refreshToken?: string;
       monitoringEnabled?: boolean;
       lastCheckAt?: string;
       thresholds?: {
@@ -35,14 +34,27 @@ interface DatabaseClient {
   };
 }
 
+interface AppSettings {
+  key: string;
+  value: {
+    type: 'service_account';
+    developerToken: string;
+    serviceAccountEmail: string;
+    privateKey: string;
+    customerId?: string;
+    loginCustomerId?: string;
+  };
+}
+
 /**
  * Google Ads Anomaly Monitor
  * Runs checks for all connected Google Ads accounts
+ * Uses global service account credentials from app_settings
  */
 export class GoogleAdsMonitor {
   private logger: Logger;
   private alertEngine: AlertEngine;
-  private credentials: GoogleAdsCredentials;
+  private credentials: GoogleAdsServiceAccountCredentials | null = null;
   private dryRun: boolean;
   private checkIds?: string[];
   private supabaseUrl: string;
@@ -57,14 +69,6 @@ export class GoogleAdsMonitor {
     this.supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     this.supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY!;
 
-    this.credentials = {
-      developerToken: process.env.GOOGLE_ADS_DEVELOPER_TOKEN!,
-      clientId: process.env.GOOGLE_ADS_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_ADS_CLIENT_SECRET!,
-      refreshToken: '', // Will be set per client
-      loginCustomerId: process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID,
-    };
-
     this.alertEngine = new AlertEngine({
       supabaseUrl: this.supabaseUrl,
       supabaseServiceKey: this.supabaseServiceKey,
@@ -74,6 +78,39 @@ export class GoogleAdsMonitor {
     if (this.dryRun) {
       this.logger.info('🔍 DRY RUN MODE - No alerts will be created');
     }
+  }
+
+  /**
+   * Load global Google Ads credentials from app_settings
+   */
+  private async loadGlobalCredentials(): Promise<GoogleAdsServiceAccountCredentials | null> {
+    const supabase = createClient(this.supabaseUrl, this.supabaseServiceKey);
+
+    const { data, error } = await supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'google_ads_credentials')
+      .single();
+
+    if (error || !data?.value) {
+      this.logger.warn('No Google Ads credentials found in app_settings');
+      return null;
+    }
+
+    const settings = data.value as AppSettings['value'];
+
+    if (!settings.developerToken || !settings.serviceAccountEmail || !settings.privateKey) {
+      this.logger.warn('Incomplete Google Ads credentials in app_settings');
+      return null;
+    }
+
+    return {
+      type: 'service_account',
+      developerToken: settings.developerToken,
+      serviceAccountEmail: settings.serviceAccountEmail,
+      privateKey: settings.privateKey,
+      loginCustomerId: settings.loginCustomerId || settings.customerId,
+    };
   }
 
   /**
@@ -91,11 +128,21 @@ export class GoogleAdsMonitor {
 
     this.logger.info('Starting Google Ads monitoring run...');
 
+    // Load global credentials from app_settings
+    this.credentials = await this.loadGlobalCredentials();
+
+    if (!this.credentials) {
+      this.logger.warn('Google Ads not configured - skipping monitoring');
+      return result;
+    }
+
+    this.logger.info('Loaded Google Ads credentials from app_settings');
+
     // Load clients from database
     const clients = await this.loadConnectedClients();
 
     if (clients.length === 0) {
-      this.logger.info('No clients with connected Google Ads found');
+      this.logger.info('No clients with Google Ads Customer ID configured');
       return result;
     }
 
@@ -132,7 +179,8 @@ export class GoogleAdsMonitor {
   }
 
   /**
-   * Load clients with connected Google Ads from database
+   * Load clients with Google Ads Customer ID from database
+   * Uses global service account credentials for all clients
    */
   private async loadConnectedClients(): Promise<GoogleAdsMonitoringClientConfig[]> {
     const supabase = createClient(this.supabaseUrl, this.supabaseServiceKey);
@@ -147,14 +195,12 @@ export class GoogleAdsMonitor {
       throw error;
     }
 
-    // Filter for connected clients with monitoring enabled
+    // Filter for clients with a Google Ads Customer ID configured
     return (clients as DatabaseClient[])
       .filter(client => {
         const googleAds = client.settings?.googleAds;
         return (
-          googleAds?.status === 'connected' &&
           googleAds?.customerId &&
-          googleAds?.refreshToken &&
           googleAds?.monitoringEnabled !== false
         );
       })
@@ -162,11 +208,8 @@ export class GoogleAdsMonitor {
         clientId: client.id,
         clientName: client.name,
         customerId: client.settings.googleAds!.customerId!,
-        status: client.settings.googleAds!.status,
-        credentials: {
-          ...this.credentials,
-          refreshToken: client.settings.googleAds!.refreshToken!,
-        },
+        status: 'connected' as const,
+        credentials: this.credentials!, // Use global service account credentials
         thresholds: client.settings.googleAds!.thresholds,
       }));
   }

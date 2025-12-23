@@ -23,20 +23,8 @@ export async function GET(request: NextRequest) {
 
     console.log('[Cron] Starting Google Ads monitoring job...');
 
-    // Check if Google Ads API is configured
-    if (
-      !process.env.GOOGLE_ADS_DEVELOPER_TOKEN ||
-      !process.env.GOOGLE_ADS_CLIENT_ID ||
-      !process.env.GOOGLE_ADS_CLIENT_SECRET
-    ) {
-      console.warn('[Cron] Google Ads API not configured, skipping monitoring');
-      return NextResponse.json({
-        success: true,
-        skipped: true,
-        reason: 'Google Ads API not configured',
-        timestamp: new Date().toISOString(),
-      });
-    }
+    // Credentials are now loaded from app_settings database
+    // No need to check environment variables
 
     // Run monitoring
     const result = await runGoogleAdsMonitoring({
