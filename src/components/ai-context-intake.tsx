@@ -34,6 +34,8 @@ import {
   Plus,
   X,
   Save,
+  Download,
+  Undo2,
 } from 'lucide-react'
 import type { GetContextResponse, IntakeJob } from '@/lib/context/types'
 import type { AIContext, ContextSummary } from '@/lib/context'
@@ -299,6 +301,42 @@ export function AIContextIntake({ clientId, clientName, canEdit }: AIContextInta
     } catch (err) {
       console.error('Error activating version:', err)
     }
+  }
+
+  // Rollback to previous version
+  const [rollingBack, setRollingBack] = useState(false)
+  const rollback = async () => {
+    if (contextVersion <= 1) {
+      setError('Dit is de eerste versie, kan niet terugdraaien')
+      return
+    }
+
+    setRollingBack(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/clients/${clientId}/context/rollback`, {
+        method: 'POST',
+      })
+      const data = await res.json()
+
+      if (data.success) {
+        fetchContext()
+        fetchVersions()
+      } else {
+        setError(data.error || 'Kon niet terugdraaien')
+      }
+    } catch (err) {
+      console.error('Error rolling back:', err)
+      setError('Er ging iets mis bij terugdraaien')
+    } finally {
+      setRollingBack(false)
+    }
+  }
+
+  // Export context as JSON
+  const exportContext = () => {
+    // Open in new tab to trigger download
+    window.open(`/api/clients/${clientId}/context/export?format=pretty`, '_blank')
   }
 
   // Load existing answers and pre-fill form from context
@@ -648,8 +686,31 @@ export function AIContextIntake({ clientId, clientName, canEdit }: AIContextInta
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={exportContext}
+                title="Download context als JSON"
+              >
+                <Download className="h-4 w-4 mr-1" />
+                Export
+              </Button>
               {canEdit && (
                 <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={rollback}
+                    disabled={rollingBack || contextVersion <= 1}
+                    title={contextVersion <= 1 ? 'Dit is de eerste versie' : 'Ga terug naar vorige versie'}
+                  >
+                    {rollingBack ? (
+                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                    ) : (
+                      <Undo2 className="h-4 w-4 mr-1" />
+                    )}
+                    Rollback
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"

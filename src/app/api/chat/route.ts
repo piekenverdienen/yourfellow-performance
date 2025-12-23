@@ -208,7 +208,7 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id)
       .single()
 
-    // Get client context if clientId provided
+    // Get client context if clientId provided (uses new AI Context Layer)
     let clientContext: Record<string, unknown> | null = null
     let clientName: string | null = null
 
@@ -224,16 +224,62 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // Fetch client with context
+      // Fetch client name
       const { data: client } = await supabase
         .from('clients')
-        .select('name, settings')
+        .select('name')
         .eq('id', clientId)
         .single()
 
       if (client) {
         clientName = client.name
-        clientContext = (client.settings as { context?: Record<string, unknown> })?.context || null
+
+        // Get context from new AI Context Layer (client_context table)
+        const { data: contextData } = await supabase
+          .from('client_context')
+          .select('current_context_json')
+          .eq('client_id', clientId)
+          .single()
+
+        if (contextData?.current_context_json) {
+          // Transform AI Context to the format expected by the chat
+          const ctx = contextData.current_context_json as Record<string, unknown>
+          const obs = ctx.observations as Record<string, unknown> | undefined
+          const economics = ctx.economics as Record<string, unknown> | undefined
+          const access = ctx.access as Record<string, unknown> | undefined
+          const brandVoice = obs?.brandVoice as Record<string, unknown> | undefined
+          const targetAudience = obs?.targetAudience as Record<string, unknown> | undefined
+
+          // Extract USPs as strings
+          const usps = ((obs?.usps as Array<{ text: string }>) || []).map(u => u.text)
+
+          // Extract products/bestsellers
+          const products = (obs?.products as Array<{ name: string; isBestseller?: boolean }>) || []
+          const bestsellers = products.filter(p => p.isBestseller).map(p => p.name)
+
+          // Extract seasonality
+          const seasonality = ((economics?.seasonality as Array<{ period: string; impact: string }>) || [])
+            .map(s => `${s.period} (${s.impact})`)
+
+          clientContext = {
+            proposition: (obs?.proposition as string) || '',
+            targetAudience: typeof targetAudience === 'string'
+              ? targetAudience
+              : (targetAudience?.primary as string) || '',
+            usps,
+            toneOfVoice: (brandVoice?.toneOfVoice as string) || '',
+            brandVoice: (brandVoice?.personality as string[])?.join(', ') || '',
+            bestsellers: bestsellers.length > 0 ? bestsellers : undefined,
+            seasonality: seasonality.length > 0 ? seasonality : undefined,
+            margins: economics?.margins as { min?: number; target?: number } | undefined,
+            doNots: (brandVoice?.doNots as string[]) || [],
+            mustHaves: (brandVoice?.mustHaves as string[]) || [],
+            activeChannels: (access?.activeChannels as string[]) || [],
+            // Additional rich context
+            industry: (obs?.industry as string) || undefined,
+            tagline: (obs?.tagline as string) || undefined,
+          }
+        }
       }
     }
 
