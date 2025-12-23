@@ -13,6 +13,10 @@
     {
       "path": "/api/cron/meta-ads-sync",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/google-ads-monitoring",
+      "schedule": "0,30 * * * *"
     }
   ]
 }

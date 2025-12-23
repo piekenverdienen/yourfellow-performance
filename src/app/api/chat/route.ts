@@ -484,6 +484,37 @@ export async function POST(request: NextRequest) {
       }
 
       systemPrompt = `${systemPrompt}\n\nCLIENT CONTEXT (${clientName}):\n${clientContextParts.join('\n')}`
+
+      // Add monitoring alerts context if available
+      try {
+        const { data: alertData } = await supabase
+          .from('alerts')
+          .select('id, channel, title, short_description, severity')
+          .eq('client_id', clientId)
+          .eq('status', 'open')
+          .eq('type', 'fundamental')
+          .in('severity', ['critical', 'high'])
+          .order('detected_at', { ascending: false })
+          .limit(5)
+
+        if (alertData && alertData.length > 0) {
+          const alertLines = ['', '⚠️ ACTIEVE MONITORING ALERTS:']
+          for (const alert of alertData) {
+            const severity = alert.severity === 'critical' ? '🚨' : '⚠️'
+            alertLines.push(`${severity} [${alert.channel.toUpperCase()}] ${alert.title}`)
+            if (alert.short_description) {
+              alertLines.push(`   ${alert.short_description}`)
+            }
+          }
+          alertLines.push('')
+          alertLines.push('Je kunt de gebruiker helpen met het begrijpen en oplossen van deze issues.')
+
+          systemPrompt = `${systemPrompt}\n${alertLines.join('\n')}`
+        }
+      } catch (alertError) {
+        // Silently continue if alerts fetch fails
+        console.warn('Could not fetch monitoring alerts:', alertError)
+      }
     }
 
     // Add knowledge base context for Mia

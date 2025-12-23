@@ -319,12 +319,115 @@ export interface MetaAdsSettings {
   }
 }
 
+// Google Ads Connection Status
+export type GoogleAdsConnectionStatus = 'connected' | 'pending' | 'not_connected'
+
+// Google Ads Settings per client
+export interface GoogleAdsSettings {
+  // Connection
+  status: GoogleAdsConnectionStatus
+  customerId?: string           // Google Ads Customer ID (xxx-xxx-xxxx)
+  loginCustomerId?: string      // MCC account ID (if applicable)
+  refreshToken?: string         // OAuth refresh token (encrypted)
+  lastVerifiedAt?: string       // ISO timestamp
+
+  // Monitoring
+  monitoringEnabled?: boolean
+  checkInterval?: number        // Default: 30 minutes (in minutes)
+  lastCheckAt?: string          // ISO timestamp
+
+  // Thresholds
+  thresholds?: {
+    noDeliveryHours?: number    // Default: 24 hours
+  }
+}
+
+// Alert Types
+export type AlertType = 'fundamental' | 'performance' | 'tracking'
+export type AlertChannel = 'google_ads' | 'meta' | 'website' | 'tracking' | 'seo'
+export type AlertSeverity = 'critical' | 'high' | 'medium' | 'low'
+export type AlertStatus = 'open' | 'acknowledged' | 'resolved'
+
+export interface Alert {
+  id: string
+  client_id: string
+
+  // Alert identification
+  type: AlertType
+  channel: AlertChannel
+  check_id: string
+
+  // Severity & Status
+  severity: AlertSeverity
+  status: AlertStatus
+
+  // Content
+  title: string
+  short_description: string | null
+  impact: string | null
+  suggested_actions: string[]
+  details: Record<string, unknown>
+
+  // Deduplication
+  fingerprint: string
+
+  // Timestamps
+  detected_at: string
+  acknowledged_at: string | null
+  resolved_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface AlertSummary {
+  total_critical: number
+  by_channel: {
+    [key in AlertChannel]?: {
+      count: number
+      items: Pick<Alert, 'id' | 'title' | 'short_description' | 'severity' | 'check_id' | 'detected_at'>[]
+    }
+  }
+}
+
+// Google Ads Check Types
+export interface GoogleAdsCheckResult {
+  status: 'ok' | 'warning' | 'error'
+  count: number
+  platform: 'google_ads'
+  details: Record<string, unknown>
+  alertData?: {
+    title: string
+    short_description: string
+    impact: string
+    suggested_actions: string[]
+    severity: AlertSeverity
+  }
+}
+
+export interface DisapprovedAd {
+  ad_id: string
+  ad_name: string
+  ad_group_name: string
+  campaign_name: string
+  approval_status: string
+  policy_topics: string[]
+}
+
+export interface NoDeliveryCampaign {
+  campaign_id: string
+  campaign_name: string
+  status: string
+  start_date: string
+  impressions: number
+}
+
 export interface ClientSettings {
   context?: ClientContext
   clickup?: ClickUpSettings
   ga4Monitoring?: GA4MonitoringSettings
   searchConsole?: SearchConsoleSettings
   meta?: MetaAdsSettings
+  googleAds?: GoogleAdsSettings
   [key: string]: unknown
 }
 
