@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import {
   Loader2,
   ExternalLink,
@@ -160,7 +159,9 @@ export function GoogleAdsSetup({
 
       {/* Customer ID Input */}
       <div className="space-y-2">
-        <Label htmlFor="customerId">Google Ads Customer ID</Label>
+        <label htmlFor="customerId" className="block text-sm font-medium text-surface-700">
+          Google Ads Customer ID
+        </label>
         <div className="flex gap-2">
           <Input
             id="customerId"
