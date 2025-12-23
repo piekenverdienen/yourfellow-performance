@@ -425,6 +425,9 @@ async function getLegacyTemplate(
   }
 }
 
+/**
+ * Get client context from new AI Context Layer (client_context table)
+ */
 async function getClientContext(
   supabase: Awaited<ReturnType<typeof createClient>>,
   clientId: string
@@ -435,50 +438,88 @@ async function getClientContext(
 
     if (!clientAccess) return null
 
+    // Get client name
     const { data: client } = await supabase
       .from('clients')
-      .select('name, settings')
+      .select('name')
       .eq('id', clientId)
       .single()
 
     if (!client) return null
 
     const clientName = client.name
-    const clientContext = (client.settings as { context?: Record<string, unknown> })?.context
 
-    if (!clientContext) return null
+    // Get context from new AI Context Layer
+    const { data: contextData } = await supabase
+      .from('client_context')
+      .select('current_context_json')
+      .eq('client_id', clientId)
+      .single()
 
-    const ctx = clientContext as {
-      proposition?: string
-      targetAudience?: string
-      usps?: string[]
-      toneOfVoice?: string
-      brandVoice?: string
-      doNots?: string[]
-      mustHaves?: string[]
-      bestsellers?: string[]
-      seasonality?: string[]
-      margins?: { min?: number; target?: number }
-      activeChannels?: string[]
-    }
+    if (!contextData?.current_context_json) return null
 
+    // Transform AI Context to readable format
+    const ctx = contextData.current_context_json as Record<string, unknown>
+    const obs = ctx.observations as Record<string, unknown> | undefined
+    const economics = ctx.economics as Record<string, unknown> | undefined
+    const access = ctx.access as Record<string, unknown> | undefined
+    const goals = ctx.goals as Record<string, unknown> | undefined
+    const brandVoice = obs?.brandVoice as Record<string, unknown> | undefined
+    const targetAudience = obs?.targetAudience as Record<string, unknown> | undefined
+
+    // Extract USPs as strings
+    const usps = ((obs?.usps as Array<{ text: string }>) || []).map(u => u.text)
+
+    // Extract products/bestsellers
+    const products = (obs?.products as Array<{ name: string; isBestseller?: boolean }>) || []
+    const bestsellers = products.filter(p => p.isBestseller).map(p => p.name)
+
+    // Extract seasonality
+    const seasonality = ((economics?.seasonality as Array<{ period: string; impact: string }>) || [])
+      .map(s => `${s.period} (${s.impact})`)
+
+    // Build context string
     const contextParts = [`Je werkt nu voor klant: ${clientName}`]
 
-    if (ctx.proposition) contextParts.push(`Propositie: ${ctx.proposition}`)
-    if (ctx.targetAudience) contextParts.push(`Doelgroep: ${ctx.targetAudience}`)
-    if (ctx.usps?.length) contextParts.push(`USP's: ${ctx.usps.join(', ')}`)
-    if (ctx.toneOfVoice) contextParts.push(`Tone of Voice: ${ctx.toneOfVoice}`)
-    if (ctx.brandVoice) contextParts.push(`Brand Voice: ${ctx.brandVoice}`)
-    if (ctx.bestsellers?.length) contextParts.push(`Bestsellers: ${ctx.bestsellers.join(', ')}`)
-    if (ctx.seasonality?.length) contextParts.push(`Seizoensgebonden: ${ctx.seasonality.join(', ')}`)
-    if (ctx.margins) contextParts.push(`Marges: min ${ctx.margins.min || 0}%, target ${ctx.margins.target || 0}%`)
-    if (ctx.activeChannels?.length) contextParts.push(`Actieve kanalen: ${ctx.activeChannels.join(', ')}`)
+    // Core identity
+    if (obs?.industry) contextParts.push(`Industrie: ${obs.industry}`)
+    if (obs?.proposition) contextParts.push(`Propositie: ${obs.proposition}`)
+    if (obs?.tagline) contextParts.push(`Tagline: "${obs.tagline}"`)
 
-    if (ctx.doNots?.length) {
-      contextParts.push(`\n⚠️ VERBODEN (gebruik deze woorden/claims NOOIT): ${ctx.doNots.join(', ')}`)
+    // Target audience
+    const targetAudienceStr = typeof targetAudience === 'string'
+      ? targetAudience
+      : (targetAudience?.primary as string) || ''
+    if (targetAudienceStr) contextParts.push(`Doelgroep: ${targetAudienceStr}`)
+
+    // USPs
+    if (usps.length > 0) contextParts.push(`USP's: ${usps.join(' | ')}`)
+
+    // Brand voice
+    if (brandVoice?.toneOfVoice) contextParts.push(`Tone of Voice: ${brandVoice.toneOfVoice}`)
+    const personality = (brandVoice?.personality as string[])?.join(', ')
+    if (personality) contextParts.push(`Persoonlijkheid: ${personality}`)
+
+    // Products & offerings
+    if (bestsellers.length > 0) contextParts.push(`Bestsellers: ${bestsellers.join(', ')}`)
+
+    // Business context
+    const primaryGoals = (goals?.primary as string[]) || []
+    if (primaryGoals.length > 0) contextParts.push(`Doelen: ${primaryGoals.join(', ')}`)
+    if (seasonality.length > 0) contextParts.push(`Seizoensgebonden: ${seasonality.join(', ')}`)
+    const margins = economics?.margins as { min?: number; target?: number } | undefined
+    if (margins) contextParts.push(`Marges: min ${margins.min || 0}%, target ${margins.target || 0}%`)
+    const activeChannels = (access?.activeChannels as string[]) || []
+    if (activeChannels.length > 0) contextParts.push(`Actieve kanalen: ${activeChannels.join(', ')}`)
+
+    // Compliance rules - CRITICAL
+    const doNots = (brandVoice?.doNots as string[]) || []
+    if (doNots.length > 0) {
+      contextParts.push(`\n⚠️ VERBODEN (gebruik deze woorden/claims NOOIT): ${doNots.join(', ')}`)
     }
-    if (ctx.mustHaves?.length) {
-      contextParts.push(`✓ VERPLICHT (altijd toevoegen waar relevant): ${ctx.mustHaves.join(', ')}`)
+    const mustHaves = (brandVoice?.mustHaves as string[]) || []
+    if (mustHaves.length > 0) {
+      contextParts.push(`✓ VERPLICHT (altijd toevoegen waar relevant): ${mustHaves.join(', ')}`)
     }
 
     return `KLANT CONTEXT (${clientName}):\n${contextParts.join('\n')}`
