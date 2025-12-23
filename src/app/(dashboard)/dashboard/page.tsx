@@ -30,6 +30,7 @@ import {
 } from 'lucide-react'
 import { ClickUpTasks } from '@/components/clickup-tasks'
 import { ClientControlRoom } from '@/components/client-control-room'
+import { CriticalIssues } from '@/components/critical-issues'
 import { getGreeting } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import type { ClientWithRole } from '@/types'
@@ -268,6 +269,13 @@ export default function DashboardPage() {
               </div>
             )}
           </section>
+
+          {/* Critical Issues - Google Ads Monitoring Alerts */}
+          {selectedClient && (
+            <section>
+              <CriticalIssues clientId={selectedClient.id} />
+            </section>
+          )}
 
           {/* Client Control Room - GA4 & More */}
           {selectedClient && (
