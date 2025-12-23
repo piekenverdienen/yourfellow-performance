@@ -33,6 +33,7 @@ import { ClickUpSetup } from '@/components/clickup-setup'
 import { GA4MonitoringSetup } from '@/components/ga4-monitoring-setup'
 import { SearchConsoleSetup } from '@/components/search-console-setup'
 import { MetaAdsSetup } from '@/components/meta-ads-setup'
+import { GoogleAdsSetup } from '@/components/google-ads-setup'
 import type { Client, ClientMemberRole, ClientContext, User, GA4MonitoringSettings, SearchConsoleSettings, MetaAdsSettings } from '@/types'
 
 interface ClientMember {
@@ -716,6 +717,39 @@ export default function ClientDetailPage() {
                     const data = await res.json()
                     setClient(data.client)
                     fetchClients() // Refresh global client list to sync settings
+                  } else {
+                    const error = await res.json()
+                    throw new Error(error.error || 'Fout bij opslaan')
+                  }
+                }}
+                disabled={saving}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Google Ads */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Google Ads Monitoring</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <GoogleAdsSetup
+                clientId={id}
+                currentSettings={client.settings?.googleAds}
+                onSave={async (googleAdsSettings) => {
+                  const newSettings = {
+                    ...client.settings,
+                    googleAds: googleAdsSettings,
+                  }
+                  const res = await fetch(`/api/clients/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ settings: newSettings }),
+                  })
+                  if (res.ok) {
+                    const data = await res.json()
+                    setClient(data.client)
+                    fetchClients()
                   } else {
                     const error = await res.json()
                     throw new Error(error.error || 'Fout bij opslaan')

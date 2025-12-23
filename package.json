@@ -12,6 +12,9 @@
     "monitor": "tsx src/monitoring/run.ts",
     "monitor:dry": "tsx src/monitoring/run.ts --dry-run",
     "monitor:debug": "tsx src/monitoring/run.ts --log-level debug",
+    "monitor:google-ads": "tsx src/monitoring/google-ads/run.ts",
+    "monitor:google-ads:dry": "tsx src/monitoring/google-ads/run.ts --dry",
+    "monitor:google-ads:debug": "tsx src/monitoring/google-ads/run.ts --debug",
     "seo:run": "tsx src/seo/run.ts",
     "seo:dry": "tsx src/seo/run.ts --dry-run",
     "seo:help": "tsx src/seo/run.ts --help"

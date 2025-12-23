@@ -69,6 +69,12 @@ const navigation: NavItem[] = [
     color: 'text-emerald-600 bg-emerald-100'
   },
   {
+    name: 'Alerts',
+    href: '/alerts',
+    icon: AlertTriangle,
+    color: 'text-red-600 bg-red-100'
+  },
+  {
     name: 'AI Chat',
     href: '/chat',
     icon: MessageSquare,
