@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import {
   AlertTriangle,
+  CheckCircle2,
   ChevronRight,
   Loader2,
   RefreshCw,
@@ -60,11 +61,6 @@ export function CriticalIssues({ clientId }: CriticalIssuesProps) {
     fetchSummary()
   }, [clientId])
 
-  // Don't render if no critical issues
-  if (!loading && summary?.total_critical === 0) {
-    return null
-  }
-
   if (loading) {
     return (
       <div className="bg-white border border-surface-200 rounded-xl p-6">
@@ -89,8 +85,21 @@ export function CriticalIssues({ clientId }: CriticalIssuesProps) {
     )
   }
 
+  // Show positive message when no critical issues
   if (!summary || summary.total_critical === 0) {
-    return null
+    return (
+      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-6">
+        <div className="flex items-center gap-3">
+          <div className="flex-shrink-0 w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
+            <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-emerald-900">Geen kritieke issues</h3>
+            <p className="text-sm text-emerald-700">Alles ziet er goed uit! De monitoring draait elke 30 minuten.</p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
