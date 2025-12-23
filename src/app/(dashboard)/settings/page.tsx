@@ -9,6 +9,7 @@ import {
   Palette,
   ChevronRight,
   Building2,
+  Megaphone,
 } from 'lucide-react'
 
 const settingsItems = [
@@ -23,6 +24,13 @@ const settingsItems = [
     description: 'Branche, doelgroep en merkstem instellingen',
     href: '/settings/profile',
     icon: Building2,
+  },
+  {
+    title: 'Google Ads',
+    description: 'API koppeling voor monitoring en alerts',
+    href: '/settings/google-ads',
+    icon: Megaphone,
+    adminOnly: true,
   },
   {
     title: 'Notificaties',
