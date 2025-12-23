@@ -1,7 +1,29 @@
 import type { GoogleAdsConnectionStatus, AlertSeverity } from '@/types';
 
-// Google Ads API types
-export interface GoogleAdsCredentials {
+// Google Ads API types - OAuth credentials
+export interface GoogleAdsOAuthCredentials {
+  type: 'oauth';
+  developerToken: string;
+  clientId: string;
+  clientSecret: string;
+  refreshToken: string;
+  loginCustomerId?: string;
+}
+
+// Google Ads API types - Service Account credentials
+export interface GoogleAdsServiceAccountCredentials {
+  type: 'service_account';
+  developerToken: string;
+  serviceAccountEmail: string;
+  privateKey: string;
+  loginCustomerId?: string;
+}
+
+// Union type for all credential types
+export type GoogleAdsCredentials = GoogleAdsOAuthCredentials | GoogleAdsServiceAccountCredentials;
+
+// Legacy type for backward compatibility
+export interface GoogleAdsCredentialsLegacy {
   developerToken: string;
   clientId: string;
   clientSecret: string;

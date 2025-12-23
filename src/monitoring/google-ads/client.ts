@@ -5,11 +5,14 @@ import type {
   GaqlResponse,
   GoogleAdsOAuthTokens,
   GoogleAdsCustomerInfo,
+  GoogleAdsServiceAccountCredentials,
+  GoogleAdsOAuthCredentials,
 } from './types';
 
 const GOOGLE_ADS_API_VERSION = 'v17';
 const GOOGLE_ADS_API_BASE = `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}`;
 const OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
+const GOOGLE_ADS_SCOPE = 'https://www.googleapis.com/auth/adwords';
 
 export class GoogleAdsClientError extends Error {
   constructor(
@@ -60,8 +63,28 @@ export class GoogleAdsClient {
       return this.accessToken;
     }
 
-    // Refresh the token
-    this.logger.debug('Refreshing Google Ads access token');
+    // Determine auth type and get token accordingly
+    if (this.isServiceAccountCredentials(this.credentials)) {
+      return this.getServiceAccountToken(this.credentials);
+    } else {
+      return this.getOAuthToken(this.credentials as GoogleAdsOAuthCredentials);
+    }
+  }
+
+  /**
+   * Check if credentials are for a service account
+   */
+  private isServiceAccountCredentials(
+    creds: GoogleAdsCredentials
+  ): creds is GoogleAdsServiceAccountCredentials {
+    return 'type' in creds && creds.type === 'service_account';
+  }
+
+  /**
+   * Get access token using OAuth refresh token
+   */
+  private async getOAuthToken(credentials: GoogleAdsOAuthCredentials): Promise<string> {
+    this.logger.debug('Refreshing Google Ads access token via OAuth');
 
     const response = await fetch(OAUTH_TOKEN_URL, {
       method: 'POST',
@@ -69,9 +92,9 @@ export class GoogleAdsClient {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: new URLSearchParams({
-        client_id: this.credentials.clientId,
-        client_secret: this.credentials.clientSecret,
-        refresh_token: this.credentials.refreshToken,
+        client_id: credentials.clientId,
+        client_secret: credentials.clientSecret,
+        refresh_token: credentials.refreshToken,
         grant_type: 'refresh_token',
       }),
     });
@@ -90,6 +113,131 @@ export class GoogleAdsClient {
     this.tokenExpiresAt = Date.now() + (data.expires_in * 1000);
 
     return this.accessToken!;
+  }
+
+  /**
+   * Get access token using service account JWT
+   */
+  private async getServiceAccountToken(
+    credentials: GoogleAdsServiceAccountCredentials
+  ): Promise<string> {
+    this.logger.debug('Getting Google Ads access token via Service Account');
+
+    // Create JWT
+    const now = Math.floor(Date.now() / 1000);
+    const jwt = await this.createServiceAccountJWT(
+      credentials.serviceAccountEmail,
+      credentials.privateKey,
+      now
+    );
+
+    // Exchange JWT for access token
+    const response = await fetch(OAUTH_TOKEN_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+        assertion: jwt,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new GoogleAdsClientError(
+        `Failed to get service account token: ${response.status}`,
+        response.status,
+        error
+      );
+    }
+
+    const data = await response.json();
+    this.accessToken = data.access_token;
+    this.tokenExpiresAt = Date.now() + (data.expires_in * 1000);
+
+    return this.accessToken!;
+  }
+
+  /**
+   * Create a signed JWT for service account authentication
+   */
+  private async createServiceAccountJWT(
+    email: string,
+    privateKey: string,
+    now: number
+  ): Promise<string> {
+    const header = {
+      alg: 'RS256',
+      typ: 'JWT',
+    };
+
+    const payload = {
+      iss: email,
+      scope: GOOGLE_ADS_SCOPE,
+      aud: OAUTH_TOKEN_URL,
+      iat: now,
+      exp: now + 3600, // 1 hour
+    };
+
+    const headerB64 = this.base64UrlEncode(JSON.stringify(header));
+    const payloadB64 = this.base64UrlEncode(JSON.stringify(payload));
+    const unsignedToken = `${headerB64}.${payloadB64}`;
+
+    // Sign the token
+    const signature = await this.signWithRS256(unsignedToken, privateKey);
+
+    return `${unsignedToken}.${signature}`;
+  }
+
+  /**
+   * Base64 URL encode a string
+   */
+  private base64UrlEncode(str: string): string {
+    const base64 = Buffer.from(str).toString('base64');
+    return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  /**
+   * Sign data with RS256 using the private key
+   */
+  private async signWithRS256(data: string, privateKey: string): Promise<string> {
+    // Use Web Crypto API for signing
+    const encoder = new TextEncoder();
+    const dataBuffer = encoder.encode(data);
+
+    // Parse the PEM private key
+    const pemContents = privateKey
+      .replace(/-----BEGIN PRIVATE KEY-----/, '')
+      .replace(/-----END PRIVATE KEY-----/, '')
+      .replace(/-----BEGIN RSA PRIVATE KEY-----/, '')
+      .replace(/-----END RSA PRIVATE KEY-----/, '')
+      .replace(/\s/g, '');
+
+    const binaryKey = Buffer.from(pemContents, 'base64');
+
+    // Import the key
+    const cryptoKey = await crypto.subtle.importKey(
+      'pkcs8',
+      binaryKey,
+      {
+        name: 'RSASSA-PKCS1-v1_5',
+        hash: 'SHA-256',
+      },
+      false,
+      ['sign']
+    );
+
+    // Sign the data
+    const signature = await crypto.subtle.sign(
+      'RSASSA-PKCS1-v1_5',
+      cryptoKey,
+      dataBuffer
+    );
+
+    // Convert to base64url
+    const signatureB64 = Buffer.from(signature).toString('base64');
+    return signatureB64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   }
 
   /**
