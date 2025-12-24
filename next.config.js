@@ -41,9 +41,9 @@ const nextConfig = {
             value: [
               "default-src 'self'",
               "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // Next.js needs these
-              "style-src 'self' 'unsafe-inline'", // React inline styles
-              "img-src 'self' data: blob: https://*.supabase.co",
-              "font-src 'self' data:",
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", // React inline styles + Google Fonts
+              "img-src 'self' data: blob: https://*.supabase.co https://unpkg.com",
+              "font-src 'self' data: https://fonts.gstatic.com",
               "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
               "frame-ancestors 'none'",
               "form-action 'self'",
