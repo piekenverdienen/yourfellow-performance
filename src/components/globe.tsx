@@ -73,8 +73,8 @@ export function Globe({ className }: GlobeProps) {
       const height = containerRef.current.offsetHeight
 
       globe = GlobeGL.default()
-        .globeImageUrl('//unpkg.com/three-globe/example/img/earth-dark.jpg')
-        .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
+        .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-dark.jpg')
+        .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
         .backgroundColor('rgba(0,0,0,0)')
         .width(width)
         .height(height)
