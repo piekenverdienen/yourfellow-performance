@@ -52,14 +52,14 @@ function LoginContent() {
     <div className="min-h-screen bg-surface-950 flex">
       {/* Left side - Globe & Branding */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-surface-950">
-        {/* Globe background */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <Globe className="w-[140%] max-w-none opacity-60" />
+        {/* Globe background - full container */}
+        <div className="absolute inset-0">
+          <Globe className="w-full h-full" />
         </div>
 
         {/* Gradient overlay for text readability */}
-        <div className="absolute inset-0 bg-gradient-to-r from-surface-950/90 via-surface-950/50 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-t from-surface-950 via-transparent to-surface-950/80" />
+        <div className="absolute inset-0 bg-gradient-to-r from-surface-950/80 via-surface-950/40 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-surface-950/90 via-transparent to-surface-950/60" />
 
         {/* Content */}
         <div className="relative z-10 flex flex-col justify-between p-12 w-full">
