@@ -1,7 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
-import dynamic from 'next/dynamic'
+import { useEffect, useRef, useState } from 'react'
 
 interface GlobeProps {
   className?: string
@@ -9,7 +8,7 @@ interface GlobeProps {
 
 // Data points - cities with connections
 const points = [
-  { id: 'ams', name: 'Amsterdam', lat: 52.3676, lng: 4.9041, size: 0.8 },      // HQ
+  { id: 'ams', name: 'Amsterdam', lat: 52.3676, lng: 4.9041, size: 0.8 },
   { id: 'ber', name: 'Berlin', lat: 52.52, lng: 13.405, size: 0.5 },
   { id: 'lon', name: 'London', lat: 51.5074, lng: -0.1278, size: 0.5 },
   { id: 'par', name: 'Paris', lat: 48.8566, lng: 2.3522, size: 0.5 },
@@ -23,33 +22,57 @@ const points = [
 
 // Connections from Amsterdam HQ to other cities
 const arcs = [
-  { startLat: 52.3676, startLng: 4.9041, endLat: 40.7128, endLng: -74.006 },      // AMS -> NYC
-  { startLat: 52.3676, startLng: 4.9041, endLat: 37.7749, endLng: -122.4194 },    // AMS -> SFO
-  { startLat: 52.3676, startLng: 4.9041, endLat: 35.6762, endLng: 139.6503 },     // AMS -> Tokyo
-  { startLat: 52.3676, startLng: 4.9041, endLat: 1.3521, endLng: 103.8198 },      // AMS -> Singapore
-  { startLat: 52.3676, startLng: 4.9041, endLat: -33.8688, endLng: 151.2093 },    // AMS -> Sydney
-  { startLat: 52.3676, startLng: 4.9041, endLat: 51.5074, endLng: -0.1278 },      // AMS -> London
-  { startLat: 52.3676, startLng: 4.9041, endLat: 48.8566, endLng: 2.3522 },       // AMS -> Paris
-  { startLat: 40.7128, startLng: -74.006, endLat: 37.7749, endLng: -122.4194 },   // NYC -> SFO
-  { startLat: 51.5074, startLng: -0.1278, endLat: 40.7128, endLng: -74.006 },     // London -> NYC
-  { startLat: 1.3521, startLng: 103.8198, endLat: 35.6762, endLng: 139.6503 },    // Singapore -> Tokyo
+  { startLat: 52.3676, startLng: 4.9041, endLat: 40.7128, endLng: -74.006 },
+  { startLat: 52.3676, startLng: 4.9041, endLat: 37.7749, endLng: -122.4194 },
+  { startLat: 52.3676, startLng: 4.9041, endLat: 35.6762, endLng: 139.6503 },
+  { startLat: 52.3676, startLng: 4.9041, endLat: 1.3521, endLng: 103.8198 },
+  { startLat: 52.3676, startLng: 4.9041, endLat: -33.8688, endLng: 151.2093 },
+  { startLat: 52.3676, startLng: 4.9041, endLat: 51.5074, endLng: -0.1278 },
+  { startLat: 52.3676, startLng: 4.9041, endLat: 48.8566, endLng: 2.3522 },
+  { startLat: 40.7128, startLng: -74.006, endLat: 37.7749, endLng: -122.4194 },
+  { startLat: 51.5074, startLng: -0.1278, endLat: 40.7128, endLng: -74.006 },
+  { startLat: 1.3521, startLng: 103.8198, endLat: 35.6762, endLng: 139.6503 },
 ]
 
 export function Globe({ className }: GlobeProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const globeRef = useRef<any>(null)
+  const [isReady, setIsReady] = useState(false)
 
+  // Wait for container to have dimensions
   useEffect(() => {
-    if (!containerRef.current || typeof window === 'undefined') return
+    if (!containerRef.current) return
 
-    // Dynamic import for globe.gl (client-side only)
+    const checkReady = () => {
+      if (containerRef.current) {
+        const { offsetWidth, offsetHeight } = containerRef.current
+        if (offsetWidth > 0 && offsetHeight > 0) {
+          setIsReady(true)
+        }
+      }
+    }
+
+    checkReady()
+    // Also check after a short delay in case of layout shifts
+    const timeout = setTimeout(checkReady, 100)
+
+    return () => clearTimeout(timeout)
+  }, [])
+
+  // Initialize globe when ready
+  useEffect(() => {
+    if (!isReady || !containerRef.current || typeof window === 'undefined') return
+
+    let globe: any = null
+    let resizeHandler: (() => void) | null = null
+
     import('globe.gl').then((GlobeGL) => {
       if (!containerRef.current) return
 
       const width = containerRef.current.offsetWidth
       const height = containerRef.current.offsetHeight
 
-      const globe = GlobeGL.default()
+      globe = GlobeGL.default()
         .globeImageUrl('//unpkg.com/three-globe/example/img/earth-dark.jpg')
         .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
         .backgroundColor('rgba(0,0,0,0)')
@@ -91,32 +114,37 @@ export function Globe({ className }: GlobeProps) {
         if (containerRef.current) {
           containerRef.current.style.opacity = '1'
         }
-      }, 100)
+      }, 300)
 
       // Handle resize
-      const handleResize = () => {
-        if (containerRef.current && globeRef.current) {
+      resizeHandler = () => {
+        if (containerRef.current && globe) {
           const newWidth = containerRef.current.offsetWidth
           const newHeight = containerRef.current.offsetHeight
-          globeRef.current.width(newWidth).height(newHeight)
+          globe.width(newWidth).height(newHeight)
         }
       }
-      window.addEventListener('resize', handleResize)
-
-      return () => {
-        window.removeEventListener('resize', handleResize)
-        if (globeRef.current) {
-          globeRef.current._destructor?.()
-        }
-      }
+      window.addEventListener('resize', resizeHandler)
     })
-  }, [])
+
+    return () => {
+      if (resizeHandler) {
+        window.removeEventListener('resize', resizeHandler)
+      }
+      if (globe) {
+        globe._destructor?.()
+      }
+    }
+  }, [isReady])
 
   return (
     <div
       ref={containerRef}
-      className={`${className}`}
+      className={className}
       style={{
+        width: '100%',
+        height: '100%',
+        minHeight: '400px',
         opacity: 0,
         transition: 'opacity 1.5s ease',
       }}

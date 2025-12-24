@@ -49,9 +49,9 @@ function LoginContent() {
   }
 
   return (
-    <div className="min-h-screen bg-surface-950 flex">
+    <div className="h-screen bg-surface-950 flex">
       {/* Left side - Globe & Branding */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-surface-950">
+      <div className="hidden lg:flex lg:w-1/2 h-full relative overflow-hidden bg-surface-950">
         {/* Globe background - full container */}
         <div className="absolute inset-0">
           <Globe className="w-full h-full" />
