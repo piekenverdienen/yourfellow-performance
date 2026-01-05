@@ -17,6 +17,8 @@ import type {
   MetaFatigueSignal,
   MetaFatigueSeverity,
   MetaInsightDaily,
+  MetaPerformanceTargets,
+  MetaAlertThresholds,
 } from '@/types/meta-ads'
 import type { MetaAdsSettings } from '@/types'
 
@@ -93,6 +95,71 @@ export class MetaFatigueDetector {
   }
 
   /**
+   * Get client-specific targets and alert thresholds from settings
+   */
+  private async getClientTargets(clientId: string): Promise<{
+    targets: MetaPerformanceTargets
+    alertThresholds: MetaAlertThresholds
+  }> {
+    const supabase = await this.getSupabase()
+
+    const { data } = await supabase
+      .from('clients')
+      .select('settings')
+      .eq('id', clientId)
+      .single()
+
+    const metaSettings = data?.settings?.meta as MetaAdsSettings | undefined
+
+    // Return client targets with fallbacks to defaults
+    return {
+      targets: metaSettings?.targets || {},
+      alertThresholds: metaSettings?.alertThresholds || {},
+    }
+  }
+
+  /**
+   * Build fatigue thresholds from client settings
+   */
+  private buildThresholdsFromClientSettings(
+    targets: MetaPerformanceTargets,
+    alertThresholds: MetaAlertThresholds,
+    overrides?: Partial<FatigueThresholds>
+  ): FatigueThresholds {
+    return {
+      // Use client's maxFrequency or alertThreshold, fall back to default
+      frequencyWarning: overrides?.frequencyWarning
+        ?? alertThresholds.frequencyWarning
+        ?? targets.maxFrequency
+        ?? DEFAULT_THRESHOLDS.frequencyWarning,
+
+      // Use client's alert thresholds or defaults
+      ctrDropWarning: overrides?.ctrDropWarning
+        ?? alertThresholds.ctrDropWarning
+        ?? DEFAULT_THRESHOLDS.ctrDropWarning,
+
+      cpcIncreaseWarning: overrides?.cpcIncreaseWarning
+        ?? alertThresholds.cpcIncreaseWarning
+        ?? DEFAULT_THRESHOLDS.cpcIncreaseWarning,
+
+      roasDropWarning: overrides?.roasDropWarning
+        ?? alertThresholds.roasDropWarning
+        ?? DEFAULT_THRESHOLDS.roasDropWarning,
+
+      cpaIncreaseWarning: overrides?.cpaIncreaseWarning
+        ?? alertThresholds.cpaIncreaseWarning
+        ?? DEFAULT_THRESHOLDS.cpaIncreaseWarning,
+
+      minSpendForAlert: overrides?.minSpendForAlert
+        ?? alertThresholds.minSpendForAlert
+        ?? DEFAULT_THRESHOLDS.minSpendForAlert,
+
+      reachPlateau: overrides?.reachPlateau
+        ?? DEFAULT_THRESHOLDS.reachPlateau,
+    }
+  }
+
+  /**
    * Detect fatigue for all ads in a client's account
    */
   async detectFatigue(
@@ -100,9 +167,11 @@ export class MetaFatigueDetector {
     adAccountId: string,
     thresholds?: Partial<FatigueThresholds>
   ): Promise<MetaFatigueSignal[]> {
-    const t = { ...DEFAULT_THRESHOLDS, ...thresholds }
-    const signals: MetaFatigueSignal[] = []
+    // Get client-specific targets and build thresholds
+    const { targets, alertThresholds } = await this.getClientTargets(clientId)
+    const t = this.buildThresholdsFromClientSettings(targets, alertThresholds, thresholds)
 
+    const signals: MetaFatigueSignal[] = []
     const supabase = await this.getSupabase()
 
     // Get recent data (last 7 days)
@@ -174,7 +243,8 @@ export class MetaFatigueDetector {
         currentMetrics[0], // Use first record for entity info
         current,
         baseline,
-        t
+        t,
+        targets // Pass client targets for context
       )
 
       if (signal) {
@@ -198,9 +268,11 @@ export class MetaFatigueDetector {
     adAccountId: string,
     thresholds?: Partial<FatigueThresholds>
   ): Promise<ScalingRecommendation[]> {
-    const t = { ...DEFAULT_THRESHOLDS, ...thresholds }
-    const recommendations: ScalingRecommendation[] = []
+    // Get client-specific targets and build thresholds
+    const { targets, alertThresholds } = await this.getClientTargets(clientId)
+    const t = this.buildThresholdsFromClientSettings(targets, alertThresholds, thresholds)
 
+    const recommendations: ScalingRecommendation[] = []
     const supabase = await this.getSupabase()
 
     // Get last 14 days data for trend analysis
@@ -247,7 +319,8 @@ export class MetaFatigueDetector {
         metrics[0],
         recent,
         older,
-        t
+        t,
+        targets // Pass client targets for ROAS/CPA thresholds
       )
 
       if (recommendation) {
@@ -273,10 +346,18 @@ export class MetaFatigueDetector {
     entityInfo: MetaInsightDaily,
     recent: ExtendedMetrics,
     older: ExtendedMetrics,
-    thresholds: FatigueThresholds
+    thresholds: FatigueThresholds,
+    targets: MetaPerformanceTargets
   ): ScalingRecommendation | null {
     const reasons: string[] = []
     const actions: string[] = []
+
+    // Use client-specific targets or sensible defaults
+    const targetROAS = targets.targetROAS ?? 2.0
+    const minROAS = targets.minROAS ?? 1.0
+    const excellentROAS = targetROAS * 1.5 // 50% above target = excellent
+    const targetCPA = targets.maxCPA ?? targets.targetCPA
+    const optimalFrequency = targets.optimalFrequency ?? 2.0
 
     // Calculate trends
     const ctrTrend = older.avg_ctr > 0
@@ -293,18 +374,26 @@ export class MetaFatigueDetector {
     let recommendation: ScalingRecommendation['recommendation'] = 'maintain'
     let confidence: ScalingRecommendation['confidence'] = 'medium'
 
-    // SCALE UP criteria: Good ROAS, stable/improving CTR, low frequency
+    // Check CPA against target (if set)
+    const cpaOnTarget = !targetCPA || recent.avg_cpa <= targetCPA
+    const cpaAboveTarget = targetCPA && recent.avg_cpa > targetCPA
+
+    // SCALE UP criteria: Good ROAS (above target), stable/improving CTR, low frequency
     if (
-      recent.avg_roas >= 2 &&
+      recent.avg_roas >= targetROAS &&
       recent.avg_frequency < thresholds.frequencyWarning &&
       roasTrend >= -10 &&
-      ctrTrend >= -15
+      ctrTrend >= -15 &&
+      cpaOnTarget
     ) {
       recommendation = 'scale_up'
-      reasons.push(`ROAS van ${recent.avg_roas.toFixed(2)} is boven target`)
+      reasons.push(`ROAS ${recent.avg_roas.toFixed(2)} boven target (${targetROAS})`)
       reasons.push(`Frequentie (${recent.avg_frequency.toFixed(1)}) geeft ruimte voor schaal`)
+      if (targetCPA && recent.avg_cpa > 0) {
+        reasons.push(`CPA €${recent.avg_cpa.toFixed(0)} onder max €${targetCPA}`)
+      }
 
-      if (recent.avg_roas >= 3 && roasTrend >= 0) {
+      if (recent.avg_roas >= excellentROAS && roasTrend >= 0) {
         confidence = 'high'
         actions.push('Verhoog budget met 20-30% per 3 dagen')
         actions.push('Overweeg lookalike audiences toe te voegen')
@@ -314,18 +403,26 @@ export class MetaFatigueDetector {
         actions.push('Monitor CPA nauwlettend bij schaling')
       }
 
-      if (recent.avg_frequency < 2) {
+      if (recent.avg_frequency < optimalFrequency) {
         actions.push('Er is nog veel bereik potentieel - schaal gerust')
       }
     }
-    // SCALE DOWN criteria: Declining metrics but still profitable
+    // SCALE DOWN criteria: Declining metrics, CPA above target, or ROAS below target
     else if (
-      recent.avg_roas >= 1 &&
-      recent.avg_roas < 1.5 &&
+      (recent.avg_roas >= minROAS && recent.avg_roas < targetROAS) ||
+      cpaAboveTarget ||
       (roasTrend < -15 || cpaTrend > 20)
     ) {
       recommendation = 'scale_down'
-      reasons.push(`ROAS daalt (${roasTrend.toFixed(1)}% trend)`)
+      if (recent.avg_roas < targetROAS) {
+        reasons.push(`ROAS ${recent.avg_roas.toFixed(2)} onder target (${targetROAS})`)
+      }
+      if (roasTrend < -15) {
+        reasons.push(`ROAS daalt (${roasTrend.toFixed(1)}% trend)`)
+      }
+      if (cpaAboveTarget && targetCPA) {
+        reasons.push(`CPA €${recent.avg_cpa.toFixed(0)} boven max €${targetCPA}`)
+      }
       if (cpaTrend > 20) {
         reasons.push(`CPA stijgt met ${cpaTrend.toFixed(1)}%`)
       }
@@ -334,11 +431,11 @@ export class MetaFatigueDetector {
       actions.push('Test nieuwe creatives voordat je verder schaalt')
       actions.push('Evalueer audience targeting')
     }
-    // PAUSE criteria: Unprofitable
-    else if (recent.avg_roas < 1 || (recent.avg_cpa > 0 && recent.total_conversions < 1)) {
+    // PAUSE criteria: Unprofitable (below minROAS)
+    else if (recent.avg_roas < minROAS || (recent.avg_cpa > 0 && recent.total_conversions < 1)) {
       recommendation = 'pause'
-      if (recent.avg_roas < 1) {
-        reasons.push(`ROAS onder 1 (${recent.avg_roas.toFixed(2)})`)
+      if (recent.avg_roas < minROAS) {
+        reasons.push(`ROAS ${recent.avg_roas.toFixed(2)} onder minimum (${minROAS})`)
       }
       if (recent.total_conversions < 1 && recent.total_spend > 50) {
         reasons.push(`Geen conversies bij €${recent.total_spend.toFixed(0)} spend`)
@@ -473,11 +570,17 @@ export class MetaFatigueDetector {
     entityInfo: MetaInsightDaily,
     current: ExtendedMetrics,
     baseline: ExtendedMetrics,
-    thresholds: FatigueThresholds
+    thresholds: FatigueThresholds,
+    targets: MetaPerformanceTargets
   ): MetaFatigueSignal | null {
     const reasons: string[] = []
     const actions: string[] = []
     let fatigueScore = 0 // Accumulate fatigue indicators
+
+    // Client targets for context in messages
+    const maxFrequency = targets.maxFrequency ?? thresholds.frequencyWarning
+    const targetCPA = targets.maxCPA ?? targets.targetCPA
+    const minROAS = targets.minROAS ?? 1.0
 
     // Check frequency
     const frequencyHigh = current.avg_frequency > thresholds.frequencyWarning
@@ -532,10 +635,10 @@ export class MetaFatigueDetector {
 
     if (!isFatigued) return null
 
-    // Build detailed reasons and specific actions
+    // Build detailed reasons and specific actions (with client targets)
     if (frequencyHigh) {
       reasons.push(
-        `Frequency te hoog: ${current.avg_frequency.toFixed(1)}x (max: ${thresholds.frequencyWarning})`
+        `Frequency te hoog: ${current.avg_frequency.toFixed(1)}x (max: ${maxFrequency})`
       )
       if (current.avg_frequency > 4) {
         actions.push('🚨 Voeg minimaal 3-5 nieuwe creatives toe')
@@ -563,8 +666,9 @@ export class MetaFatigueDetector {
     }
 
     if (roasDropped) {
+      const roasContext = minROAS > 1 ? ` (min: ${minROAS})` : ''
       reasons.push(
-        `⚠️ ROAS gedaald met ${roasDrop.toFixed(1)}% (nu: ${current.avg_roas.toFixed(2)})`
+        `⚠️ ROAS gedaald met ${roasDrop.toFixed(1)}% (nu: ${current.avg_roas.toFixed(2)}${roasContext})`
       )
       actions.push('Verlaag budget tot ROAS stabiliseert')
       actions.push('Analyseer welke audiences nog wel converteren')
@@ -572,9 +676,13 @@ export class MetaFatigueDetector {
     }
 
     if (cpaIncreased) {
+      const cpaContext = targetCPA ? ` (max: €${targetCPA})` : ''
       reasons.push(
-        `💰 CPA gestegen met ${cpaIncrease.toFixed(1)}% naar €${current.avg_cpa.toFixed(2)}`
+        `💰 CPA gestegen met ${cpaIncrease.toFixed(1)}% naar €${current.avg_cpa.toFixed(2)}${cpaContext}`
       )
+      if (targetCPA && current.avg_cpa > targetCPA) {
+        actions.push(`⚠️ CPA €${current.avg_cpa.toFixed(0)} boven max €${targetCPA}`)
+      }
       actions.push('Evalueer of CPA nog binnen marge past')
       actions.push('Test value-based bidding strategie')
     }

@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getMetaAdsSyncService } from '@/services/meta-ads-sync'
-import type { MetaEntityType, MetaPerformanceRow, MetaDashboardKPIs, MetaInsightDaily } from '@/types/meta-ads'
+import type { MetaEntityType, MetaPerformanceRow, MetaDashboardKPIs, MetaInsightDaily, MetaPerformanceTargets } from '@/types/meta-ads'
 
 type TrendDirection = 'up' | 'down' | 'stable'
 
@@ -123,8 +123,11 @@ export async function GET(request: NextRequest) {
       end
     )
 
+    // Get performance targets from client settings
+    const targets: MetaPerformanceTargets = metaSettings?.targets || {}
+
     // Transform data to PerformanceRows with real trends
-    const frequencyThreshold = metaSettings?.thresholds?.frequencyWarning || 2.5
+    const frequencyThreshold = targets.maxFrequency || metaSettings?.thresholds?.frequencyWarning || 2.5
     const rows: MetaPerformanceRow[] = data.map(insight => {
       const prev = previousPeriodData.get(insight.entity_id)
       const costPerConversion = insight.conversions > 0
@@ -206,6 +209,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       data: rows,
       kpis: dashboardKPIs,
+      targets, // Include client-specific performance targets
       pagination: {
         page,
         pageSize,

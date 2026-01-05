@@ -14,10 +14,11 @@ import {
   ShoppingBag,
   BarChart3,
 } from 'lucide-react'
-import type { MetaDashboardKPIs } from '@/types/meta-ads'
+import type { MetaDashboardKPIs, MetaPerformanceTargets } from '@/types/meta-ads'
 
 interface KPICardsProps {
   kpis: MetaDashboardKPIs
+  targets?: MetaPerformanceTargets
   loading?: boolean
   currency?: string
 }
@@ -131,9 +132,44 @@ function KPICard({
   )
 }
 
-export function MetaKPICards({ kpis, loading, currency = 'EUR' }: KPICardsProps) {
-  // Calculate if CPA is concerning (above 50 EUR threshold or increased significantly)
-  const cpaAlert = kpis.avg_cpa > 50 || kpis.cpa_change > 25
+export function MetaKPICards({ kpis, targets, loading, currency = 'EUR' }: KPICardsProps) {
+  // Use client-specific targets or fall back to defaults
+  const maxCPA = targets?.maxCPA ?? 50 // Default €50 if not set
+  const targetCPA = targets?.targetCPA
+  const minROAS = targets?.minROAS ?? 1.0 // Default 1.0 if not set
+  const targetROAS = targets?.targetROAS
+  const maxFrequency = targets?.maxFrequency ?? 3.0 // Default 3.0 if not set
+
+  // CPA alert: above maxCPA OR significantly above targetCPA OR increased >25%
+  const cpaAboveMax = kpis.avg_cpa > maxCPA
+  const cpaAboveTarget = targetCPA ? kpis.avg_cpa > targetCPA * 1.2 : false // 20% above target
+  const cpaAlert = cpaAboveMax || cpaAboveTarget || kpis.cpa_change > 25
+
+  // Build CPA alert message
+  let cpaAlertMessage: string | undefined
+  if (cpaAboveMax) {
+    cpaAlertMessage = `CPA €${kpis.avg_cpa.toFixed(0)} > max €${maxCPA}`
+  } else if (cpaAboveTarget && targetCPA) {
+    cpaAlertMessage = `CPA €${kpis.avg_cpa.toFixed(0)} > target €${targetCPA}`
+  } else if (kpis.cpa_change > 25) {
+    cpaAlertMessage = `CPA +${kpis.cpa_change.toFixed(0)}% vs vorige periode`
+  }
+
+  // ROAS alert: below minROAS OR significantly below targetROAS
+  const roasBelowMin = kpis.avg_roas < minROAS
+  const roasBelowTarget = targetROAS ? kpis.avg_roas < targetROAS * 0.8 : false // 20% below target
+  const roasAlert = roasBelowMin || roasBelowTarget
+
+  // Build ROAS alert message
+  let roasAlertMessage: string | undefined
+  if (roasBelowMin) {
+    roasAlertMessage = `ROAS ${kpis.avg_roas.toFixed(2)} < min ${minROAS}`
+  } else if (roasBelowTarget && targetROAS) {
+    roasAlertMessage = `ROAS ${kpis.avg_roas.toFixed(2)} < target ${targetROAS}`
+  }
+
+  // Frequency alert: above maxFrequency
+  const frequencyAlert = kpis.avg_frequency > maxFrequency
 
   return (
     <div className="space-y-4">
@@ -156,7 +192,7 @@ export function MetaKPICards({ kpis, loading, currency = 'EUR' }: KPICardsProps)
           loading={loading}
         />
         <KPICard
-          title="CPA"
+          title={targetCPA ? `CPA (target: €${targetCPA})` : 'CPA'}
           value={kpis.avg_cpa}
           change={kpis.cpa_change}
           icon={<Target className="h-5 w-5 text-purple-600" />}
@@ -164,15 +200,17 @@ export function MetaKPICards({ kpis, loading, currency = 'EUR' }: KPICardsProps)
           loading={loading}
           invertTrend={true}
           alert={cpaAlert}
-          alertMessage={cpaAlert ? 'CPA boven target' : undefined}
+          alertMessage={cpaAlertMessage}
         />
         <KPICard
-          title="ROAS"
+          title={targetROAS ? `ROAS (target: ${targetROAS})` : 'ROAS'}
           value={kpis.avg_roas}
           change={kpis.roas_change}
           icon={<BarChart3 className="h-5 w-5 text-emerald-600" />}
           format="decimal"
           loading={loading}
+          alert={roasAlert}
+          alertMessage={roasAlertMessage}
         />
       </div>
 
@@ -207,8 +245,8 @@ export function MetaKPICards({ kpis, loading, currency = 'EUR' }: KPICardsProps)
           icon={<Repeat className="h-5 w-5 text-surface-600" />}
           format="decimal"
           loading={loading}
-          alert={kpis.avg_frequency > 3}
-          alertMessage={kpis.avg_frequency > 3 ? 'Hoge frequentie' : undefined}
+          alert={frequencyAlert}
+          alertMessage={frequencyAlert ? `Frequency ${kpis.avg_frequency.toFixed(1)} > max ${maxFrequency}` : undefined}
         />
         <KPICard
           title="Fatigue Alerts"

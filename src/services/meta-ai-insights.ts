@@ -16,7 +16,14 @@ import { createClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { getMetaAdsSyncService } from './meta-ads-sync'
 import { getMetaFatigueDetector, ScalingRecommendation } from './meta-fatigue-detector'
-import type { MetaAIInsight, MetaFatigueSignal, MetaPerformanceRow } from '@/types/meta-ads'
+import type {
+  MetaAIInsight,
+  MetaFatigueSignal,
+  MetaPerformanceRow,
+  MetaPerformanceTargets,
+  MetaClientContext as MetaClientContextType,
+  MetaAdsSettings,
+} from '@/types/meta-ads'
 
 // ============================================
 // Types
@@ -33,11 +40,23 @@ interface InsightGenerationRequest {
 
 interface ClientContext {
   name?: string
+  // From MetaClientContext
   industry?: string
-  targetCPA?: number
-  targetROAS?: number
-  monthlyBudget?: number
+  businessModel?: string
+  averageOrderValue?: number
+  targetMargin?: number
+  conversionWindow?: string
+  seasonality?: string
   notes?: string
+  // From MetaPerformanceTargets
+  targetCPA?: number
+  maxCPA?: number
+  targetROAS?: number
+  minROAS?: number
+  targetCTR?: number
+  dailyBudget?: number
+  monthlyBudget?: number
+  maxFrequency?: number
 }
 
 interface EnhancedPerformanceData {
@@ -393,21 +412,36 @@ export class MetaAIInsightsService {
     const syncService = getMetaAdsSyncService()
     const fatigueDetector = getMetaFatigueDetector()
 
-    // Get client context
+    // Get client context and performance targets
     const { data: clientData } = await supabase
       .from('clients')
       .select('name, settings')
       .eq('id', clientId)
       .single()
 
-    const metaSettings = clientData?.settings?.meta || {}
+    const metaSettings = (clientData?.settings?.meta || {}) as MetaAdsSettings
+    const targets = metaSettings.targets || {}
+    const context = metaSettings.context || {}
+
     const clientContext: ClientContext = {
       name: clientData?.name,
-      industry: metaSettings.industry,
-      targetCPA: metaSettings.targetCPA,
-      targetROAS: metaSettings.targetROAS,
-      monthlyBudget: metaSettings.monthlyBudget,
-      notes: metaSettings.notes,
+      // From MetaClientContext
+      industry: context.industry,
+      businessModel: context.businessModel,
+      averageOrderValue: context.averageOrderValue,
+      targetMargin: context.targetMargin,
+      conversionWindow: context.conversionWindow,
+      seasonality: context.seasonality,
+      notes: context.notes,
+      // From MetaPerformanceTargets
+      targetCPA: targets.targetCPA,
+      maxCPA: targets.maxCPA,
+      targetROAS: targets.targetROAS,
+      minROAS: targets.minROAS,
+      targetCTR: targets.targetCTR,
+      dailyBudget: targets.dailyBudget,
+      monthlyBudget: targets.monthlyBudget,
+      maxFrequency: targets.maxFrequency,
     }
 
     // Get current period KPIs
@@ -557,18 +591,49 @@ export class MetaAIInsightsService {
       .replace('{{frequency}}', data.kpis.avg_frequency.toFixed(1))
       .replace('{{fatigue_count}}', data.fatigueSignals.length.toString())
 
-    // Add client context
+    // Add client context with all available targets
     const contextLines: string[] = []
-    if (data.clientContext.name) contextLines.push(`Klant: ${data.clientContext.name}`)
-    if (data.clientContext.industry) contextLines.push(`Industrie: ${data.clientContext.industry}`)
-    if (data.clientContext.targetCPA) contextLines.push(`Target CPA: €${data.clientContext.targetCPA}`)
-    if (data.clientContext.targetROAS) contextLines.push(`Target ROAS: ${data.clientContext.targetROAS}`)
-    if (data.clientContext.monthlyBudget) contextLines.push(`Maandbudget: €${data.clientContext.monthlyBudget}`)
-    if (data.clientContext.notes) contextLines.push(`Notities: ${data.clientContext.notes}`)
+    const ctx = data.clientContext
+
+    // Basic info
+    if (ctx.name) contextLines.push(`Klant: ${ctx.name}`)
+    if (ctx.industry) contextLines.push(`Industrie: ${ctx.industry}`)
+    if (ctx.businessModel) contextLines.push(`Business model: ${ctx.businessModel}`)
+
+    // Performance targets - CRITICAL for AI analysis
+    contextLines.push('\n--- PERFORMANCE TARGETS ---')
+    if (ctx.targetCPA) contextLines.push(`Target CPA: €${ctx.targetCPA}`)
+    if (ctx.maxCPA) contextLines.push(`Max CPA (alert threshold): €${ctx.maxCPA}`)
+    if (ctx.targetROAS) contextLines.push(`Target ROAS: ${ctx.targetROAS}`)
+    if (ctx.minROAS) contextLines.push(`Min ROAS (alert threshold): ${ctx.minROAS}`)
+    if (ctx.targetCTR) contextLines.push(`Target CTR: ${ctx.targetCTR}%`)
+    if (ctx.maxFrequency) contextLines.push(`Max Frequency: ${ctx.maxFrequency}`)
+
+    // Budget targets
+    if (ctx.dailyBudget || ctx.monthlyBudget) {
+      contextLines.push('\n--- BUDGET ---')
+      if (ctx.dailyBudget) contextLines.push(`Dagbudget: €${ctx.dailyBudget}`)
+      if (ctx.monthlyBudget) contextLines.push(`Maandbudget: €${ctx.monthlyBudget}`)
+    }
+
+    // Business context
+    if (ctx.averageOrderValue || ctx.targetMargin || ctx.conversionWindow || ctx.seasonality) {
+      contextLines.push('\n--- BUSINESS CONTEXT ---')
+      if (ctx.averageOrderValue) contextLines.push(`Gem. orderwaarde: €${ctx.averageOrderValue}`)
+      if (ctx.targetMargin) contextLines.push(`Doelmarge: ${ctx.targetMargin}%`)
+      if (ctx.conversionWindow) contextLines.push(`Conversion window: ${ctx.conversionWindow}`)
+      if (ctx.seasonality) contextLines.push(`Seizoenspatroon: ${ctx.seasonality}`)
+    }
+
+    // Notes
+    if (ctx.notes) {
+      contextLines.push('\n--- NOTITIES ---')
+      contextLines.push(ctx.notes)
+    }
 
     prompt = prompt.replace(
       '{{client_context}}',
-      contextLines.length > 0 ? contextLines.join('\n') : 'Geen specifieke client context beschikbaar.'
+      contextLines.length > 1 ? contextLines.join('\n') : 'Geen specifieke client context beschikbaar. Gebruik standaard benchmark waardes.'
     )
 
     // Add previous period comparison

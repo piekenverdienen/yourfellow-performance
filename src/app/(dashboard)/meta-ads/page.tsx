@@ -31,6 +31,7 @@ import type {
   MetaPerformanceRow,
   MetaEntityType,
   MetaPerformanceResponse,
+  MetaPerformanceTargets,
 } from '@/types/meta-ads'
 
 // Default empty KPIs
@@ -71,6 +72,7 @@ export default function MetaAdsDashboard() {
   const [exporting, setExporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [kpis, setKpis] = useState<MetaDashboardKPIs>(emptyKPIs)
+  const [targets, setTargets] = useState<MetaPerformanceTargets>({})
   const [data, setData] = useState<MetaPerformanceRow[]>([])
   const [entityType, setEntityType] = useState<MetaEntityType>('ad')
   const [dateRange, setDateRange] = useState<DateRange>(defaultDateRange)
@@ -132,8 +134,9 @@ export default function MetaAdsDashboard() {
         throw new Error(errorData.error || 'Failed to fetch data')
       }
 
-      const result: MetaPerformanceResponse = await response.json()
+      const result = await response.json() as MetaPerformanceResponse & { targets?: MetaPerformanceTargets }
       setKpis(result.kpis)
+      setTargets(result.targets || {})
       // Transform data to include required fields with defaults
       const transformedData = result.data.map((row) => ({
         ...row,
@@ -374,7 +377,7 @@ export default function MetaAdsDashboard() {
       )}
 
       {/* KPI Cards */}
-      <MetaKPICards kpis={kpis} loading={loading} />
+      <MetaKPICards kpis={kpis} targets={targets} loading={loading} />
 
       {/* Entity Type Tabs */}
       <div className="flex items-center gap-2 border-b border-surface-200">
