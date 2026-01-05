@@ -24,6 +24,7 @@ import type {
   MetaClientContext as MetaClientContextType,
   MetaAdsSettings,
 } from '@/types/meta-ads'
+import type { AIContext, ContextSummary } from '@/lib/context'
 
 // ============================================
 // Types
@@ -94,6 +95,9 @@ interface EnhancedPerformanceData {
   fatigueSignals: MetaFatigueSignal[]
   scalingRecommendations: ScalingRecommendation[]
   clientContext: ClientContext
+  // Full AI Context from client intake (if available)
+  aiContext?: AIContext
+  aiContextSummary?: ContextSummary
 }
 
 // ============================================
@@ -522,6 +526,40 @@ export class MetaAIInsightsService {
       prevEnd
     )
 
+    // Get full AI Context from client intake (if available)
+    const { data: aiContextData } = await supabase
+      .from('client_ai_context_active')
+      .select('current_context_json, current_summary_json')
+      .eq('client_id', clientId)
+      .single()
+
+    const aiContext = aiContextData?.current_context_json as AIContext | undefined
+    const aiContextSummary = aiContextData?.current_summary_json as ContextSummary | undefined
+
+    // Enrich client context with AI Context data if manual settings are missing
+    if (aiContext?.observations) {
+      // Use AI Context industry if not manually set
+      if (!clientContext.industry && aiContext.observations.industry) {
+        clientContext.industry = aiContext.observations.industry
+      }
+      // Calculate average order value from price range if not set
+      if (!clientContext.averageOrderValue && aiContext.economics?.priceRange) {
+        const range = aiContext.economics.priceRange
+        if (range.min && range.max) {
+          clientContext.averageOrderValue = (range.min + range.max) / 2
+        }
+      }
+      // Use AI Context seasonality if not manually set
+      if (!clientContext.seasonality && aiContext.economics?.seasonality && aiContext.economics.seasonality.length > 0) {
+        const peakPeriods = aiContext.economics.seasonality
+          .filter(s => s.impact === 'peak')
+          .map(s => s.period)
+        if (peakPeriods.length > 0) {
+          clientContext.seasonality = `Piek: ${peakPeriods.join(', ')}`
+        }
+      }
+    }
+
     // Calculate enhanced KPIs
     const avgCPA = kpis.total_conversions > 0
       ? kpis.total_spend / kpis.total_conversions
@@ -565,6 +603,8 @@ export class MetaAIInsightsService {
       fatigueSignals,
       scalingRecommendations,
       clientContext,
+      aiContext,
+      aiContextSummary,
     }
   }
 
@@ -629,6 +669,67 @@ export class MetaAIInsightsService {
     if (ctx.notes) {
       contextLines.push('\n--- NOTITIES ---')
       contextLines.push(ctx.notes)
+    }
+
+    // Add rich AI Context if available (from client intake)
+    if (data.aiContext) {
+      const ai = data.aiContext
+      contextLines.push('\n--- AI CONTEXT (automatisch gegenereerd) ---')
+
+      // Summary one-liner
+      if (data.aiContextSummary?.oneLiner) {
+        contextLines.push(`Samenvatting: ${data.aiContextSummary.oneLiner}`)
+      }
+
+      // Target audience info for ad messaging insights
+      if (ai.observations?.targetAudience) {
+        const ta = ai.observations.targetAudience
+        if (typeof ta === 'object') {
+          if (ta.primary) contextLines.push(`Primaire doelgroep: ${ta.primary}`)
+          if (ta.psychographics?.painPoints?.length) {
+            contextLines.push(`Pijnpunten doelgroep: ${ta.psychographics.painPoints.slice(0, 3).join(', ')}`)
+          }
+        } else if (typeof ta === 'string') {
+          contextLines.push(`Doelgroep: ${ta}`)
+        }
+      }
+
+      // Products/services for relevance
+      if (ai.observations?.products?.length) {
+        const productNames = ai.observations.products.slice(0, 5).map(p => p.name).join(', ')
+        contextLines.push(`Producten/diensten: ${productNames}`)
+      }
+
+      // USPs for messaging insights
+      if (ai.observations?.usps?.length) {
+        const usps = ai.observations.usps.slice(0, 3).map(u => u.text).join('; ')
+        contextLines.push(`USPs: ${usps}`)
+      }
+
+      // Brand voice for communication style
+      if (ai.observations?.brandVoice) {
+        const bv = ai.observations.brandVoice
+        if (bv.toneOfVoice) contextLines.push(`Tone of voice: ${bv.toneOfVoice}`)
+        if (bv.personality?.length) contextLines.push(`Brand persoonlijkheid: ${bv.personality.join(', ')}`)
+      }
+
+      // Competitors for competitive context
+      if (ai.competitors?.direct?.length) {
+        const compNames = ai.competitors.direct.slice(0, 3).map(c => c.name).join(', ')
+        contextLines.push(`Directe concurrenten: ${compNames}`)
+      }
+
+      // Marketing goals
+      if (ai.goals?.marketing) {
+        const goals = []
+        if (ai.goals.marketing.awareness) goals.push('Awareness')
+        if (ai.goals.marketing.leads) goals.push('Leads')
+        if (ai.goals.marketing.sales) goals.push('Sales')
+        if (ai.goals.marketing.retention) goals.push('Retention')
+        if (goals.length > 0) {
+          contextLines.push(`Marketing focus: ${goals.join(', ')}`)
+        }
+      }
     }
 
     prompt = prompt.replace(
