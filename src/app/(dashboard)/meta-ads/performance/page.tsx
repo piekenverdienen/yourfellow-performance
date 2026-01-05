@@ -52,6 +52,7 @@ const emptyKPIs: MetaDashboardKPIs = {
   clicks_change: 0,
   conversions_change: 0,
   roas_change: 0,
+  cpa_change: 0,
   active_campaigns: 0,
   active_adsets: 0,
   active_ads: 0,

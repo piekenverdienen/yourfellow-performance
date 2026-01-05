@@ -124,9 +124,9 @@ export default function ChatInterfacePage() {
         .eq('conversation_id', convId)
 
       // Map attachments to their messages
-      const messagesWithAttachments = messagesData.map(msg => ({
+      const messagesWithAttachments = messagesData.map((msg: { id: string } & Record<string, unknown>) => ({
         ...msg,
-        attachments: attachmentsData?.filter(att => att.message_id === msg.id) || []
+        attachments: attachmentsData?.filter((att: { message_id: string }) => att.message_id === msg.id) || []
       }))
 
       setMessages(messagesWithAttachments)
