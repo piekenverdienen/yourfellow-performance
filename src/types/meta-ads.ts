@@ -324,7 +324,7 @@ export interface MetaPerformanceRow {
   entity_type: MetaEntityType
   entity_id: string
   entity_name: string
-  status: MetaAdStatus
+  status?: string
   campaign_name?: string
   adset_name?: string
 
@@ -338,6 +338,8 @@ export interface MetaPerformanceRow {
   cpm: number
   frequency: number
   conversions: number
+  conversion_value: number
+  cost_per_conversion: number
   roas: number
 
   // Trend indicators
@@ -346,6 +348,7 @@ export interface MetaPerformanceRow {
   roas_trend: 'up' | 'down' | 'stable'
 
   // Alerts
+  has_fatigue: boolean
   has_fatigue_warning: boolean
   fatigue_severity?: MetaFatigueSeverity
 }

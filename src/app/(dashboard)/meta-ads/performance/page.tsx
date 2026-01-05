@@ -1,8 +1,18 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useSelectedClientId } from '@/stores/client-store'
+import { DateRangePicker, type DateRange } from '@/components/ui/date-range-picker'
+import {
+  FilterToolbar,
+  type FilterState,
+  defaultFilters,
+  applyFilters,
+} from '@/components/meta-ads/filter-toolbar'
+import { exportToCSV, exportToExcel, generateSummaryReport } from '@/lib/export-utils'
 import { Button } from '@/components/ui/button'
+import { subDays, startOfDay, endOfDay, format, differenceInDays } from 'date-fns'
+import { nl } from 'date-fns/locale'
 import {
   BarChart3,
   RefreshCw,
@@ -11,10 +21,12 @@ import {
   TrendingDown,
   Minus,
   AlertCircle,
-  Calendar,
-  Download,
-  Filter,
+  ArrowLeft,
+  FileText,
+  Copy,
+  Check,
 } from 'lucide-react'
+import Link from 'next/link'
 import type {
   MetaDashboardKPIs,
   MetaPerformanceRow,
@@ -44,6 +56,12 @@ const emptyKPIs: MetaDashboardKPIs = {
   active_adsets: 0,
   active_ads: 0,
   fatigued_ads: 0,
+}
+
+// Default date range: last 30 days (performance page shows more data)
+const defaultDateRange: DateRange = {
+  from: startOfDay(subDays(new Date(), 29)),
+  to: endOfDay(new Date()),
 }
 
 const TrendIcon = ({ value }: { value: number }) => {
@@ -76,13 +94,22 @@ export default function MetaAdsPerformancePage() {
   const selectedClientId = useSelectedClientId()
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [copiedReport, setCopiedReport] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [kpis, setKpis] = useState<MetaDashboardKPIs>(emptyKPIs)
   const [data, setData] = useState<MetaPerformanceRow[]>([])
   const [entityType, setEntityType] = useState<MetaEntityType>('campaign')
-  const [dateRange, setDateRange] = useState(30)
+  const [dateRange, setDateRange] = useState<DateRange>(defaultDateRange)
+  const [compareRange, setCompareRange] = useState<DateRange | null>(null)
   const [sortBy, setSortBy] = useState('spend')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  const [filters, setFilters] = useState<FilterState>(defaultFilters)
+
+  // Apply client-side filters
+  const filteredData = useMemo(() => {
+    return applyFilters(data, filters)
+  }, [data, filters])
 
   useEffect(() => {
     if (selectedClientId) {
@@ -99,10 +126,8 @@ export default function MetaAdsPerformancePage() {
     setError(null)
 
     try {
-      const endDate = new Date().toISOString().split('T')[0]
-      const startDate = new Date(Date.now() - dateRange * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .split('T')[0]
+      const startDate = format(dateRange.from, 'yyyy-MM-dd')
+      const endDate = format(dateRange.to, 'yyyy-MM-dd')
 
       const params = new URLSearchParams({
         clientId: selectedClientId,
@@ -114,6 +139,12 @@ export default function MetaAdsPerformancePage() {
         pageSize: '100',
       })
 
+      // Add compare range if set
+      if (compareRange) {
+        params.set('compareStart', format(compareRange.from, 'yyyy-MM-dd'))
+        params.set('compareEnd', format(compareRange.to, 'yyyy-MM-dd'))
+      }
+
       const response = await fetch(`/api/meta-ads/performance?${params}`)
 
       if (!response.ok) {
@@ -123,7 +154,14 @@ export default function MetaAdsPerformancePage() {
 
       const result: MetaPerformanceResponse = await response.json()
       setKpis(result.kpis)
-      setData(result.data)
+      // Transform data to include required fields with defaults
+      const transformedData = result.data.map((row) => ({
+        ...row,
+        conversion_value: row.conversion_value ?? 0,
+        cost_per_conversion: row.cost_per_conversion ?? 0,
+        has_fatigue: row.has_fatigue ?? row.has_fatigue_warning ?? false,
+      }))
+      setData(transformedData)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error')
     } finally {
@@ -139,7 +177,11 @@ export default function MetaAdsPerformancePage() {
       const response = await fetch('/api/meta-ads/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId: selectedClientId }),
+        body: JSON.stringify({
+          clientId: selectedClientId,
+          dateStart: format(dateRange.from, 'yyyy-MM-dd'),
+          dateEnd: format(dateRange.to, 'yyyy-MM-dd'),
+        }),
       })
 
       if (!response.ok) {
@@ -154,6 +196,32 @@ export default function MetaAdsPerformancePage() {
     }
   }
 
+  const handleExport = async (exportFormat: 'csv' | 'excel') => {
+    setExporting(true)
+    try {
+      const options = {
+        dateRange,
+        entityType,
+        filename: `meta-ads-performance-${entityType}s`,
+      }
+
+      if (exportFormat === 'csv') {
+        exportToCSV(filteredData, options)
+      } else {
+        exportToExcel(filteredData, options)
+      }
+    } finally {
+      setTimeout(() => setExporting(false), 500)
+    }
+  }
+
+  const handleCopyReport = () => {
+    const report = generateSummaryReport(filteredData, dateRange)
+    navigator.clipboard.writeText(report)
+    setCopiedReport(true)
+    setTimeout(() => setCopiedReport(false), 2000)
+  }
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('nl-NL', {
       style: 'currency',
@@ -165,6 +233,8 @@ export default function MetaAdsPerformancePage() {
   const formatNumber = (value: number) => {
     return new Intl.NumberFormat('nl-NL').format(value)
   }
+
+  const periodDays = differenceInDays(dateRange.to, dateRange.from) + 1
 
   if (!selectedClientId) {
     return (
@@ -185,32 +255,50 @@ export default function MetaAdsPerformancePage() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
+          <Link href="/meta-ads">
+            <Button variant="ghost" size="sm" className="p-2">
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          </Link>
           <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
             <BarChart3 className="h-5 w-5 text-blue-600" />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-surface-900">Performance Analyse</h1>
             <p className="text-sm text-surface-500">
-              Gedetailleerde metrics en trends
+              {periodDays} dagen - {format(dateRange.from, 'd MMM', { locale: nl })} t/m {format(dateRange.to, 'd MMM yyyy', { locale: nl })}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <select
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Date Range Picker */}
+          <DateRangePicker
             value={dateRange}
-            onChange={e => setDateRange(parseInt(e.target.value))}
-            className="appearance-none bg-white border border-surface-200 rounded-lg px-4 py-2 pr-8 text-sm font-medium text-surface-700"
-          >
-            <option value={7}>Laatste 7 dagen</option>
-            <option value={14}>Laatste 14 dagen</option>
-            <option value={30}>Laatste 30 dagen</option>
-            <option value={60}>Laatste 60 dagen</option>
-            <option value={90}>Laatste 90 dagen</option>
-          </select>
+            onChange={setDateRange}
+            compareValue={compareRange}
+            onCompareChange={setCompareRange}
+            showCompare={true}
+            maxDate={new Date()}
+          />
 
+          {/* Copy Report Button */}
+          <Button
+            variant="outline"
+            onClick={handleCopyReport}
+            className="gap-2"
+          >
+            {copiedReport ? (
+              <Check className="h-4 w-4 text-green-500" />
+            ) : (
+              <FileText className="h-4 w-4" />
+            )}
+            {copiedReport ? 'Gekopieerd!' : 'Kopieer Rapport'}
+          </Button>
+
+          {/* Sync Button */}
           <Button variant="outline" onClick={handleSync} disabled={syncing}>
             {syncing ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -230,8 +318,15 @@ export default function MetaAdsPerformancePage() {
         </div>
       )}
 
+      {/* Compare Period Info */}
+      {compareRange && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">
+          Vergelijken met: {format(compareRange.from, 'd MMM', { locale: nl })} - {format(compareRange.to, 'd MMM yyyy', { locale: nl })}
+        </div>
+      )}
+
       {/* KPI Overview Cards */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white rounded-xl border border-surface-200 p-4">
           <div className="text-sm text-surface-500 mb-1">Totale Spend</div>
           <div className="text-2xl font-bold text-surface-900">
@@ -274,7 +369,7 @@ export default function MetaAdsPerformancePage() {
       </div>
 
       {/* Secondary Metrics */}
-      <div className="grid grid-cols-6 gap-4">
+      <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
         {[
           { label: 'Impressies', value: formatNumber(kpis.total_impressions), change: kpis.impressions_change },
           { label: 'Bereik', value: formatNumber(kpis.total_reach), change: 0 },
@@ -293,31 +388,43 @@ export default function MetaAdsPerformancePage() {
       </div>
 
       {/* Entity Type Tabs */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 border-b border-surface-200">
-          {[
-            { type: 'campaign' as MetaEntityType, label: 'Campaigns' },
-            { type: 'adset' as MetaEntityType, label: 'Ad Sets' },
-            { type: 'ad' as MetaEntityType, label: 'Ads' },
-          ].map(tab => (
-            <button
-              key={tab.type}
-              onClick={() => setEntityType(tab.type)}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                entityType === tab.type
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-surface-500 hover:text-surface-700'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-2 text-sm text-surface-600">
-          <span>{data.length} items</span>
-        </div>
+      <div className="flex items-center gap-2 border-b border-surface-200">
+        {[
+          { type: 'campaign' as MetaEntityType, label: 'Campaigns' },
+          { type: 'adset' as MetaEntityType, label: 'Ad Sets' },
+          { type: 'ad' as MetaEntityType, label: 'Ads' },
+        ].map(tab => (
+          <button
+            key={tab.type}
+            onClick={() => setEntityType(tab.type)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              entityType === tab.type
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-surface-500 hover:text-surface-700'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
+
+      {/* Filter Toolbar */}
+      <FilterToolbar
+        filters={filters}
+        onFiltersChange={setFilters}
+        data={data}
+        entityType={entityType}
+        onExport={handleExport}
+        isExporting={exporting}
+      />
+
+      {/* Results count */}
+      {!loading && (
+        <div className="text-sm text-surface-500">
+          {filteredData.length} {filteredData.length === 1 ? 'resultaat' : 'resultaten'}
+          {filteredData.length !== data.length && ` (van ${data.length} totaal)`}
+        </div>
+      )}
 
       {/* Data Table */}
       <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
@@ -325,9 +432,11 @@ export default function MetaAdsPerformancePage() {
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-surface-400" />
           </div>
-        ) : data.length === 0 ? (
+        ) : filteredData.length === 0 ? (
           <div className="text-center py-12 text-surface-500">
-            Geen data beschikbaar voor deze periode
+            {data.length === 0
+              ? 'Geen data beschikbaar voor deze periode'
+              : 'Geen resultaten voor de huidige filters'}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -367,7 +476,7 @@ export default function MetaAdsPerformancePage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-100">
-                {data.map((row, i) => (
+                {filteredData.map((row) => (
                   <tr
                     key={row.entity_id}
                     className={`hover:bg-surface-50 ${
@@ -394,12 +503,12 @@ export default function MetaAdsPerformancePage() {
                     <td className="px-4 py-3 text-right">
                       <span
                         className={`inline-flex px-2 py-0.5 text-xs rounded-full ${
-                          row.status === 'ACTIVE'
+                          row.status?.toUpperCase() === 'ACTIVE'
                             ? 'bg-green-100 text-green-700'
                             : 'bg-surface-100 text-surface-600'
                         }`}
                       >
-                        {row.status}
+                        {row.status || 'Active'}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">

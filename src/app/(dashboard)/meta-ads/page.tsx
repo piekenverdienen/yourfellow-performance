@@ -1,18 +1,29 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useSelectedClientId } from '@/stores/client-store'
 import { MetaKPICards } from '@/components/meta-ads/kpi-cards'
 import { MetaPerformanceTable } from '@/components/meta-ads/performance-table'
+import { DateRangePicker, type DateRange } from '@/components/ui/date-range-picker'
+import {
+  FilterToolbar,
+  type FilterState,
+  defaultFilters,
+  applyFilters,
+} from '@/components/meta-ads/filter-toolbar'
+import { exportToCSV, exportToExcel } from '@/lib/export-utils'
 import { Button } from '@/components/ui/button'
+import { subDays, startOfDay, endOfDay, format } from 'date-fns'
 import {
   Facebook,
   RefreshCw,
   Loader2,
   Settings,
-  Calendar,
-  ChevronDown,
   AlertCircle,
+  TrendingUp,
+  BarChart3,
+  Brain,
+  Zap,
 } from 'lucide-react'
 import Link from 'next/link'
 import type {
@@ -47,26 +58,33 @@ const emptyKPIs: MetaDashboardKPIs = {
   fatigued_ads: 0,
 }
 
-// Date range options
-const dateRanges = [
-  { label: 'Laatste 7 dagen', days: 7 },
-  { label: 'Laatste 14 dagen', days: 14 },
-  { label: 'Laatste 30 dagen', days: 30 },
-  { label: 'Deze maand', days: 0, type: 'month' },
-]
+// Default date range: last 7 days
+const defaultDateRange: DateRange = {
+  from: startOfDay(subDays(new Date(), 6)),
+  to: endOfDay(new Date()),
+}
 
 export default function MetaAdsDashboard() {
   const selectedClientId = useSelectedClientId()
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [kpis, setKpis] = useState<MetaDashboardKPIs>(emptyKPIs)
   const [data, setData] = useState<MetaPerformanceRow[]>([])
   const [entityType, setEntityType] = useState<MetaEntityType>('ad')
-  const [dateRange, setDateRange] = useState(7)
+  const [dateRange, setDateRange] = useState<DateRange>(defaultDateRange)
+  const [compareRange, setCompareRange] = useState<DateRange | null>(null)
   const [sortBy, setSortBy] = useState('spend')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [isConfigured, setIsConfigured] = useState<boolean | null>(null)
+  const [filters, setFilters] = useState<FilterState>(defaultFilters)
+  const [lastSyncAt, setLastSyncAt] = useState<string | null>(null)
+
+  // Apply client-side filters to data
+  const filteredData = useMemo(() => {
+    return applyFilters(data, filters)
+  }, [data, filters])
 
   // Fetch data
   useEffect(() => {
@@ -85,10 +103,8 @@ export default function MetaAdsDashboard() {
     setError(null)
 
     try {
-      const endDate = new Date().toISOString().split('T')[0]
-      const startDate = new Date(Date.now() - dateRange * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .split('T')[0]
+      const startDate = format(dateRange.from, 'yyyy-MM-dd')
+      const endDate = format(dateRange.to, 'yyyy-MM-dd')
 
       const params = new URLSearchParams({
         clientId: selectedClientId,
@@ -98,6 +114,12 @@ export default function MetaAdsDashboard() {
         sortBy,
         sortOrder,
       })
+
+      // Add compare range if set
+      if (compareRange) {
+        params.set('compareStart', format(compareRange.from, 'yyyy-MM-dd'))
+        params.set('compareEnd', format(compareRange.to, 'yyyy-MM-dd'))
+      }
 
       const response = await fetch(`/api/meta-ads/performance?${params}`)
 
@@ -112,7 +134,14 @@ export default function MetaAdsDashboard() {
 
       const result: MetaPerformanceResponse = await response.json()
       setKpis(result.kpis)
-      setData(result.data)
+      // Transform data to include required fields with defaults
+      const transformedData = result.data.map((row) => ({
+        ...row,
+        conversion_value: row.conversion_value ?? 0,
+        cost_per_conversion: row.cost_per_conversion ?? 0,
+        has_fatigue: row.has_fatigue ?? row.has_fatigue_warning ?? false,
+      }))
+      setData(transformedData)
       setIsConfigured(true)
     } catch (err) {
       console.error('Failed to fetch Meta Ads data:', err)
@@ -130,7 +159,11 @@ export default function MetaAdsDashboard() {
       const response = await fetch('/api/meta-ads/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId: selectedClientId }),
+        body: JSON.stringify({
+          clientId: selectedClientId,
+          dateStart: format(dateRange.from, 'yyyy-MM-dd'),
+          dateEnd: format(dateRange.to, 'yyyy-MM-dd'),
+        }),
       })
 
       if (!response.ok) {
@@ -138,6 +171,7 @@ export default function MetaAdsDashboard() {
         throw new Error(errorData.error || 'Sync failed')
       }
 
+      setLastSyncAt(new Date().toISOString())
       // Refresh data after sync
       await fetchData()
     } catch (err) {
@@ -151,6 +185,33 @@ export default function MetaAdsDashboard() {
   const handleSort = (column: string, order: 'asc' | 'desc') => {
     setSortBy(column)
     setSortOrder(order)
+  }
+
+  const handleExport = async (exportFormat: 'csv' | 'excel') => {
+    setExporting(true)
+    try {
+      const options = {
+        dateRange,
+        entityType,
+        filename: `meta-ads-${entityType}s`,
+      }
+
+      if (exportFormat === 'csv') {
+        exportToCSV(filteredData, options)
+      } else {
+        exportToExcel(filteredData, options)
+      }
+    } finally {
+      setTimeout(() => setExporting(false), 500)
+    }
+  }
+
+  const handleDateRangeChange = (range: DateRange) => {
+    setDateRange(range)
+  }
+
+  const handleCompareChange = (range: DateRange | null) => {
+    setCompareRange(range)
   }
 
   // Not configured state
@@ -199,7 +260,7 @@ export default function MetaAdsDashboard() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-[#1877F2]/10 rounded-lg flex items-center justify-center">
             <Facebook className="h-5 w-5 text-[#1877F2]" />
@@ -212,22 +273,16 @@ export default function MetaAdsDashboard() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          {/* Date Range Selector */}
-          <div className="relative">
-            <select
-              value={dateRange}
-              onChange={(e) => setDateRange(parseInt(e.target.value))}
-              className="appearance-none bg-white border border-surface-200 rounded-lg px-4 py-2 pr-8 text-sm font-medium text-surface-700 hover:border-surface-300 focus:outline-none focus:ring-2 focus:ring-[#1877F2]/20"
-            >
-              {dateRanges.map((range) => (
-                <option key={range.days} value={range.days}>
-                  {range.label}
-                </option>
-              ))}
-            </select>
-            <Calendar className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-surface-400 pointer-events-none" />
-          </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Date Range Picker */}
+          <DateRangePicker
+            value={dateRange}
+            onChange={handleDateRangeChange}
+            compareValue={compareRange}
+            onCompareChange={handleCompareChange}
+            showCompare={true}
+            maxDate={new Date()}
+          />
 
           {/* Sync Button */}
           <Button
@@ -249,6 +304,64 @@ export default function MetaAdsDashboard() {
               <Settings className="h-4 w-4" />
             </Button>
           </Link>
+        </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Link href="/meta-ads/performance">
+          <div className="bg-white rounded-lg border border-surface-200 p-4 hover:border-[#1877F2] hover:shadow-md transition-all cursor-pointer group">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center group-hover:bg-blue-100 transition-colors">
+                <TrendingUp className="h-5 w-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="font-medium text-surface-900">Performance</p>
+                <p className="text-xs text-surface-500">Uitgebreide analyse</p>
+              </div>
+            </div>
+          </div>
+        </Link>
+        <Link href="/meta-ads/fatigue">
+          <div className="bg-white rounded-lg border border-surface-200 p-4 hover:border-amber-400 hover:shadow-md transition-all cursor-pointer group">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center group-hover:bg-amber-100 transition-colors">
+                <Zap className="h-5 w-5 text-amber-600" />
+              </div>
+              <div>
+                <p className="font-medium text-surface-900">Creative Fatigue</p>
+                <p className="text-xs text-surface-500">
+                  {kpis.fatigued_ads > 0 ? `${kpis.fatigued_ads} waarschuwingen` : 'Alles OK'}
+                </p>
+              </div>
+            </div>
+          </div>
+        </Link>
+        <Link href="/meta-ads/insights">
+          <div className="bg-white rounded-lg border border-surface-200 p-4 hover:border-purple-400 hover:shadow-md transition-all cursor-pointer group">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center group-hover:bg-purple-100 transition-colors">
+                <Brain className="h-5 w-5 text-purple-600" />
+              </div>
+              <div>
+                <p className="font-medium text-surface-900">AI Inzichten</p>
+                <p className="text-xs text-surface-500">Automatische analyse</p>
+              </div>
+            </div>
+          </div>
+        </Link>
+        <div className="bg-white rounded-lg border border-surface-200 p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center">
+              <BarChart3 className="h-5 w-5 text-green-600" />
+            </div>
+            <div>
+              <p className="font-medium text-surface-900">Periode</p>
+              <p className="text-xs text-surface-500">
+                {format(dateRange.from, 'd MMM')} - {format(dateRange.to, 'd MMM yyyy')}
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -284,9 +397,34 @@ export default function MetaAdsDashboard() {
         ))}
       </div>
 
+      {/* Filter Toolbar */}
+      <FilterToolbar
+        filters={filters}
+        onFiltersChange={setFilters}
+        data={data}
+        entityType={entityType}
+        onExport={handleExport}
+        isExporting={exporting}
+      />
+
+      {/* Results count */}
+      {!loading && (
+        <div className="flex items-center justify-between text-sm text-surface-500">
+          <span>
+            {filteredData.length} {filteredData.length === 1 ? 'resultaat' : 'resultaten'}
+            {filteredData.length !== data.length && ` (van ${data.length} totaal)`}
+          </span>
+          {lastSyncAt && (
+            <span>
+              Laatste sync: {format(new Date(lastSyncAt), 'd MMM HH:mm')}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Performance Table */}
       <MetaPerformanceTable
-        data={data}
+        data={filteredData}
         entityType={entityType}
         loading={loading}
         onSort={handleSort}
