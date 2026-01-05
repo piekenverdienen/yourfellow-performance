@@ -376,6 +376,7 @@ export interface MetaDashboardKPIs {
   clicks_change: number
   conversions_change: number
   roas_change: number
+  cpa_change: number
 
   // Counts
   active_campaigns: number

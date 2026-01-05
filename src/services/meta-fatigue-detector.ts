@@ -1,11 +1,15 @@
 /**
  * Meta Ads Fatigue Detection Service
  *
- * Detects creative fatigue based on:
- * - High frequency (> 2.5)
- * - CTR decline (> 30% drop vs baseline)
- * - CPC increase
- * - Spend threshold met
+ * Detects creative fatigue and scaling opportunities based on:
+ * - High frequency (configurable, default > 2.5)
+ * - CTR decline (configurable, default > 30% drop)
+ * - CPC increase (configurable, default > 20%)
+ * - ROAS decline (configurable, default > 25% drop)
+ * - CPA increase (configurable, default > 25%)
+ * - Reach plateau detection
+ *
+ * Also provides scaling recommendations for healthy ads.
  */
 
 import { createClient } from '@/lib/supabase/server'
@@ -21,16 +25,43 @@ import type { MetaAdsSettings } from '@/types'
 // ============================================
 
 interface FatigueThresholds {
-  frequencyWarning: number
-  ctrDropWarning: number
-  minSpendForAlert: number
+  frequencyWarning: number      // Max frequency before warning
+  ctrDropWarning: number        // % CTR drop to trigger warning
+  cpcIncreaseWarning: number    // % CPC increase to trigger warning
+  roasDropWarning: number       // % ROAS drop to trigger warning
+  cpaIncreaseWarning: number    // % CPA increase to trigger warning
+  minSpendForAlert: number      // Min spend to consider for alerts
+  reachPlateau: number          // % reach growth below this = plateau
 }
 
-interface BaselineMetrics {
+interface ExtendedMetrics {
   avg_frequency: number
   avg_ctr: number
   avg_cpc: number
+  avg_roas: number
+  avg_cpa: number
   total_spend: number
+  total_conversions: number
+  total_reach: number
+  total_impressions: number
+}
+
+export interface ScalingRecommendation {
+  entity_id: string
+  entity_name: string
+  campaign_name?: string
+  recommendation: 'scale_up' | 'maintain' | 'scale_down' | 'pause'
+  confidence: 'high' | 'medium' | 'low'
+  reasons: string[]
+  suggested_actions: string[]
+  metrics: {
+    spend: number
+    roas: number
+    cpa: number
+    frequency: number
+    ctr_trend: number
+    roas_trend: number
+  }
 }
 
 // ============================================
@@ -40,7 +71,11 @@ interface BaselineMetrics {
 const DEFAULT_THRESHOLDS: FatigueThresholds = {
   frequencyWarning: 2.5,
   ctrDropWarning: 30,
+  cpcIncreaseWarning: 20,
+  roasDropWarning: 25,
+  cpaIncreaseWarning: 25,
   minSpendForAlert: 10,
+  reachPlateau: 5,
 }
 
 // ============================================
@@ -76,11 +111,11 @@ export class MetaFatigueDetector {
       .toISOString()
       .split('T')[0]
 
-    // Get baseline data (previous 7 days)
+    // Get baseline data (previous 14 days for more stable baseline)
     const baselineEnd = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
       .toISOString()
       .split('T')[0]
-    const baselineStart = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)
+    const baselineStart = new Date(Date.now() - 21 * 24 * 60 * 60 * 1000)
       .toISOString()
       .split('T')[0]
 
@@ -122,20 +157,15 @@ export class MetaFatigueDetector {
       const baselineMetrics = baselineByEntity[entityId]
 
       // Calculate averages for current period
-      const current = this.calculateAverages(currentMetrics)
+      const current = this.calculateExtendedAverages(currentMetrics)
 
       // Skip if below spend threshold
       if (current.total_spend < t.minSpendForAlert) continue
 
-      // Get baseline or use defaults
+      // Get baseline or use intelligent defaults
       const baseline = baselineMetrics
-        ? this.calculateAverages(baselineMetrics)
-        : {
-            avg_frequency: 1.5,
-            avg_ctr: current.avg_ctr * 1.3, // Assume 30% higher baseline
-            avg_cpc: current.avg_cpc * 0.8, // Assume 20% lower baseline
-            total_spend: 0,
-          }
+        ? this.calculateExtendedAverages(baselineMetrics)
+        : this.createIntelligentBaseline(current)
 
       // Detect fatigue
       const signal = this.analyzeForFatigue(
@@ -161,6 +191,192 @@ export class MetaFatigueDetector {
   }
 
   /**
+   * Get scaling recommendations for healthy ads
+   */
+  async getScalingRecommendations(
+    clientId: string,
+    adAccountId: string,
+    thresholds?: Partial<FatigueThresholds>
+  ): Promise<ScalingRecommendation[]> {
+    const t = { ...DEFAULT_THRESHOLDS, ...thresholds }
+    const recommendations: ScalingRecommendation[] = []
+
+    const supabase = await this.getSupabase()
+
+    // Get last 14 days data for trend analysis
+    const endDate = new Date().toISOString().split('T')[0]
+    const startDate = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split('T')[0]
+    const midDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split('T')[0]
+
+    // Fetch data
+    const { data, error } = await supabase
+      .from('meta_insights_daily')
+      .select('*')
+      .eq('client_id', clientId)
+      .eq('ad_account_id', adAccountId)
+      .in('entity_type', ['ad', 'adset'])
+      .gte('date', startDate)
+      .lte('date', endDate)
+
+    if (error || !data) {
+      console.error('Failed to fetch data for scaling:', error)
+      return recommendations
+    }
+
+    const byEntity = this.groupByEntity(data as MetaInsightDaily[])
+
+    for (const [entityId, metrics] of Object.entries(byEntity)) {
+      const recentMetrics = metrics.filter(m => m.date >= midDate)
+      const olderMetrics = metrics.filter(m => m.date < midDate)
+
+      if (recentMetrics.length === 0) continue
+
+      const recent = this.calculateExtendedAverages(recentMetrics)
+      const older = olderMetrics.length > 0
+        ? this.calculateExtendedAverages(olderMetrics)
+        : recent
+
+      // Skip low spend entities
+      if (recent.total_spend < t.minSpendForAlert) continue
+
+      const recommendation = this.analyzeForScaling(
+        metrics[0],
+        recent,
+        older,
+        t
+      )
+
+      if (recommendation) {
+        recommendations.push(recommendation)
+      }
+    }
+
+    // Sort by confidence and potential impact
+    return recommendations.sort((a, b) => {
+      const confidenceOrder = { high: 3, medium: 2, low: 1 }
+      const recOrder = { scale_up: 4, maintain: 2, scale_down: 3, pause: 1 }
+      return (
+        (confidenceOrder[b.confidence] * recOrder[b.recommendation]) -
+        (confidenceOrder[a.confidence] * recOrder[a.recommendation])
+      )
+    })
+  }
+
+  /**
+   * Analyze entity for scaling recommendation
+   */
+  private analyzeForScaling(
+    entityInfo: MetaInsightDaily,
+    recent: ExtendedMetrics,
+    older: ExtendedMetrics,
+    thresholds: FatigueThresholds
+  ): ScalingRecommendation | null {
+    const reasons: string[] = []
+    const actions: string[] = []
+
+    // Calculate trends
+    const ctrTrend = older.avg_ctr > 0
+      ? ((recent.avg_ctr - older.avg_ctr) / older.avg_ctr) * 100
+      : 0
+    const roasTrend = older.avg_roas > 0
+      ? ((recent.avg_roas - older.avg_roas) / older.avg_roas) * 100
+      : 0
+    const cpaTrend = older.avg_cpa > 0
+      ? ((recent.avg_cpa - older.avg_cpa) / older.avg_cpa) * 100
+      : 0
+
+    // Determine recommendation
+    let recommendation: ScalingRecommendation['recommendation'] = 'maintain'
+    let confidence: ScalingRecommendation['confidence'] = 'medium'
+
+    // SCALE UP criteria: Good ROAS, stable/improving CTR, low frequency
+    if (
+      recent.avg_roas >= 2 &&
+      recent.avg_frequency < thresholds.frequencyWarning &&
+      roasTrend >= -10 &&
+      ctrTrend >= -15
+    ) {
+      recommendation = 'scale_up'
+      reasons.push(`ROAS van ${recent.avg_roas.toFixed(2)} is boven target`)
+      reasons.push(`Frequentie (${recent.avg_frequency.toFixed(1)}) geeft ruimte voor schaal`)
+
+      if (recent.avg_roas >= 3 && roasTrend >= 0) {
+        confidence = 'high'
+        actions.push('Verhoog budget met 20-30% per 3 dagen')
+        actions.push('Overweeg lookalike audiences toe te voegen')
+      } else {
+        confidence = 'medium'
+        actions.push('Verhoog budget met 10-15% per week')
+        actions.push('Monitor CPA nauwlettend bij schaling')
+      }
+
+      if (recent.avg_frequency < 2) {
+        actions.push('Er is nog veel bereik potentieel - schaal gerust')
+      }
+    }
+    // SCALE DOWN criteria: Declining metrics but still profitable
+    else if (
+      recent.avg_roas >= 1 &&
+      recent.avg_roas < 1.5 &&
+      (roasTrend < -15 || cpaTrend > 20)
+    ) {
+      recommendation = 'scale_down'
+      reasons.push(`ROAS daalt (${roasTrend.toFixed(1)}% trend)`)
+      if (cpaTrend > 20) {
+        reasons.push(`CPA stijgt met ${cpaTrend.toFixed(1)}%`)
+      }
+      confidence = 'medium'
+      actions.push('Verlaag budget met 20-30%')
+      actions.push('Test nieuwe creatives voordat je verder schaalt')
+      actions.push('Evalueer audience targeting')
+    }
+    // PAUSE criteria: Unprofitable
+    else if (recent.avg_roas < 1 || (recent.avg_cpa > 0 && recent.total_conversions < 1)) {
+      recommendation = 'pause'
+      if (recent.avg_roas < 1) {
+        reasons.push(`ROAS onder 1 (${recent.avg_roas.toFixed(2)})`)
+      }
+      if (recent.total_conversions < 1 && recent.total_spend > 50) {
+        reasons.push(`Geen conversies bij €${recent.total_spend.toFixed(0)} spend`)
+      }
+      confidence = recent.total_spend > 100 ? 'high' : 'medium'
+      actions.push('Pauzeer deze ad/adset')
+      actions.push('Analyseer waarom conversies uitblijven')
+      actions.push('Test compleet nieuwe creative angle')
+    }
+    // MAINTAIN criteria: Stable performance
+    else {
+      recommendation = 'maintain'
+      reasons.push('Prestaties zijn stabiel')
+      confidence = 'low'
+      actions.push('Houd huidige budget aan')
+      actions.push('Test variaties van best presterende ads')
+    }
+
+    return {
+      entity_id: entityInfo.entity_id,
+      entity_name: entityInfo.entity_name,
+      campaign_name: entityInfo.campaign_name,
+      recommendation,
+      confidence,
+      reasons,
+      suggested_actions: actions,
+      metrics: {
+        spend: recent.total_spend,
+        roas: recent.avg_roas,
+        cpa: recent.avg_cpa,
+        frequency: recent.avg_frequency,
+        ctr_trend: ctrTrend,
+        roas_trend: roasTrend,
+      },
+    }
+  }
+
+  /**
    * Group insights by entity ID
    */
   private groupByEntity(
@@ -176,11 +392,21 @@ export class MetaFatigueDetector {
   }
 
   /**
-   * Calculate average metrics for a period
+   * Calculate extended average metrics for a period
    */
-  private calculateAverages(data: MetaInsightDaily[]): BaselineMetrics {
+  private calculateExtendedAverages(data: MetaInsightDaily[]): ExtendedMetrics {
     if (data.length === 0) {
-      return { avg_frequency: 0, avg_ctr: 0, avg_cpc: 0, total_spend: 0 }
+      return {
+        avg_frequency: 0,
+        avg_ctr: 0,
+        avg_cpc: 0,
+        avg_roas: 0,
+        avg_cpa: 0,
+        total_spend: 0,
+        total_conversions: 0,
+        total_reach: 0,
+        total_impressions: 0,
+      }
     }
 
     const totals = data.reduce(
@@ -189,16 +415,52 @@ export class MetaFatigueDetector {
         ctr: acc.ctr + (row.ctr || 0),
         cpc: acc.cpc + (row.cpc || 0),
         spend: acc.spend + (row.spend || 0),
+        conversions: acc.conversions + (row.conversions || 0),
+        conversion_value: acc.conversion_value + (row.conversion_value || 0),
+        reach: acc.reach + (row.reach || 0),
+        impressions: acc.impressions + (row.impressions || 0),
         count: acc.count + 1,
       }),
-      { frequency: 0, ctr: 0, cpc: 0, spend: 0, count: 0 }
+      {
+        frequency: 0,
+        ctr: 0,
+        cpc: 0,
+        spend: 0,
+        conversions: 0,
+        conversion_value: 0,
+        reach: 0,
+        impressions: 0,
+        count: 0,
+      }
     )
 
     return {
       avg_frequency: totals.frequency / totals.count,
       avg_ctr: totals.ctr / totals.count,
       avg_cpc: totals.cpc / totals.count,
+      avg_roas: totals.spend > 0 ? totals.conversion_value / totals.spend : 0,
+      avg_cpa: totals.conversions > 0 ? totals.spend / totals.conversions : 0,
       total_spend: totals.spend,
+      total_conversions: totals.conversions,
+      total_reach: totals.reach,
+      total_impressions: totals.impressions,
+    }
+  }
+
+  /**
+   * Create intelligent baseline when no historical data exists
+   */
+  private createIntelligentBaseline(current: ExtendedMetrics): ExtendedMetrics {
+    return {
+      avg_frequency: Math.max(1.5, current.avg_frequency * 0.7),
+      avg_ctr: current.avg_ctr * 1.2, // Assume 20% higher baseline
+      avg_cpc: current.avg_cpc * 0.85, // Assume 15% lower baseline
+      avg_roas: current.avg_roas * 1.15, // Assume 15% higher baseline
+      avg_cpa: current.avg_cpa * 0.85, // Assume 15% lower baseline
+      total_spend: 0,
+      total_conversions: 0,
+      total_reach: 0,
+      total_impressions: 0,
     }
   }
 
@@ -209,63 +471,137 @@ export class MetaFatigueDetector {
     clientId: string,
     adAccountId: string,
     entityInfo: MetaInsightDaily,
-    current: BaselineMetrics,
-    baseline: BaselineMetrics,
+    current: ExtendedMetrics,
+    baseline: ExtendedMetrics,
     thresholds: FatigueThresholds
   ): MetaFatigueSignal | null {
     const reasons: string[] = []
     const actions: string[] = []
+    let fatigueScore = 0 // Accumulate fatigue indicators
 
     // Check frequency
     const frequencyHigh = current.avg_frequency > thresholds.frequencyWarning
+    if (frequencyHigh) {
+      fatigueScore += 2
+    }
 
     // Check CTR drop
     const ctrDrop = baseline.avg_ctr > 0
       ? ((baseline.avg_ctr - current.avg_ctr) / baseline.avg_ctr) * 100
       : 0
     const ctrDropped = ctrDrop > thresholds.ctrDropWarning
+    if (ctrDropped) {
+      fatigueScore += 2
+    }
 
     // Check CPC increase
     const cpcIncrease = baseline.avg_cpc > 0
       ? ((current.avg_cpc - baseline.avg_cpc) / baseline.avg_cpc) * 100
       : 0
-    const cpcIncreased = cpcIncrease > 20 // 20% increase
+    const cpcIncreased = cpcIncrease > thresholds.cpcIncreaseWarning
+    if (cpcIncreased) {
+      fatigueScore += 1
+    }
 
-    // Determine if fatigued
-    const isFatigued = frequencyHigh && (ctrDropped || cpcIncreased)
+    // Check ROAS drop (NEW)
+    const roasDrop = baseline.avg_roas > 0
+      ? ((baseline.avg_roas - current.avg_roas) / baseline.avg_roas) * 100
+      : 0
+    const roasDropped = roasDrop > thresholds.roasDropWarning
+    if (roasDropped) {
+      fatigueScore += 3 // ROAS is most important
+    }
+
+    // Check CPA increase (NEW)
+    const cpaIncrease = baseline.avg_cpa > 0
+      ? ((current.avg_cpa - baseline.avg_cpa) / baseline.avg_cpa) * 100
+      : 0
+    const cpaIncreased = cpaIncrease > thresholds.cpaIncreaseWarning
+    if (cpaIncreased) {
+      fatigueScore += 2
+    }
+
+    // Check reach plateau (NEW)
+    const reachGrowth = baseline.total_reach > 0
+      ? ((current.total_reach - baseline.total_reach) / baseline.total_reach) * 100
+      : 100
+    const reachPlateau = reachGrowth < thresholds.reachPlateau && frequencyHigh
+
+    // Determine if fatigued (need at least 3 points or frequency + major issue)
+    const isFatigued = fatigueScore >= 3 || (frequencyHigh && (roasDropped || cpaIncreased))
 
     if (!isFatigued) return null
 
-    // Build reasons
+    // Build detailed reasons and specific actions
     if (frequencyHigh) {
       reasons.push(
-        `Frequency te hoog: ${current.avg_frequency.toFixed(1)} (drempel: ${thresholds.frequencyWarning})`
+        `Frequency te hoog: ${current.avg_frequency.toFixed(1)}x (max: ${thresholds.frequencyWarning})`
       )
-      actions.push('Vergroot de doelgroep of voeg nieuwe creatives toe')
+      if (current.avg_frequency > 4) {
+        actions.push('🚨 Voeg minimaal 3-5 nieuwe creatives toe')
+        actions.push('Vergroot doelgroep met 30-50% via lookalike expansion')
+      } else {
+        actions.push('Voeg 2-3 nieuwe creative variaties toe')
+        actions.push('Test andere doelgroepsegmenten')
+      }
     }
 
     if (ctrDropped) {
       reasons.push(
-        `CTR gedaald met ${ctrDrop.toFixed(1)}% t.o.v. baseline`
+        `CTR gedaald met ${ctrDrop.toFixed(1)}% (nu: ${current.avg_ctr.toFixed(2)}%)`
       )
-      actions.push('Test nieuwe ad creatives met andere hooks')
+      actions.push('Test nieuwe hooks in de eerste 3 seconden')
+      actions.push('A/B test verschillende thumbnails/afbeeldingen')
     }
 
     if (cpcIncreased) {
       reasons.push(
-        `CPC gestegen met ${cpcIncrease.toFixed(1)}% t.o.v. baseline`
+        `CPC gestegen met ${cpcIncrease.toFixed(1)}% naar €${current.avg_cpc.toFixed(2)}`
       )
-      actions.push('Controleer targeting en overweeg een lagere bid')
+      actions.push('Controleer auction competition in Ads Manager')
+      actions.push('Overweeg andere plaatsingen (Stories, Reels)')
     }
 
-    // Determine severity
+    if (roasDropped) {
+      reasons.push(
+        `⚠️ ROAS gedaald met ${roasDrop.toFixed(1)}% (nu: ${current.avg_roas.toFixed(2)})`
+      )
+      actions.push('Verlaag budget tot ROAS stabiliseert')
+      actions.push('Analyseer welke audiences nog wel converteren')
+      actions.push('Check landing page performance')
+    }
+
+    if (cpaIncreased) {
+      reasons.push(
+        `💰 CPA gestegen met ${cpaIncrease.toFixed(1)}% naar €${current.avg_cpa.toFixed(2)}`
+      )
+      actions.push('Evalueer of CPA nog binnen marge past')
+      actions.push('Test value-based bidding strategie')
+    }
+
+    if (reachPlateau) {
+      reasons.push('Bereik groeit niet meer - audience verzadigd')
+      actions.push('Breid doelgroep uit met nieuwe interests')
+      actions.push('Test broad targeting met algorithmic optimization')
+    }
+
+    // Determine severity based on impact and spend
     let severity: MetaFatigueSeverity = 'low'
-    if (current.avg_frequency > 4 && ctrDrop > 40) {
+    const spendWeight = Math.min(current.total_spend / 100, 2) // Higher spend = more critical
+
+    if (fatigueScore >= 6 || (roasDropped && cpaIncreased)) {
       severity = 'critical'
-    } else if (current.avg_frequency > 3.5 && ctrDrop > 30) {
+    } else if (fatigueScore >= 4 || roasDropped) {
       severity = 'high'
-    } else if (current.avg_frequency > 3 || ctrDrop > 25) {
+    } else if (fatigueScore >= 3 || (frequencyHigh && ctrDropped)) {
       severity = 'medium'
+    }
+
+    // Increase severity for high spend
+    if (spendWeight > 1 && severity !== 'critical') {
+      const severities: MetaFatigueSeverity[] = ['low', 'medium', 'high', 'critical']
+      const currentIndex = severities.indexOf(severity)
+      severity = severities[Math.min(currentIndex + 1, 3)]
     }
 
     return {
