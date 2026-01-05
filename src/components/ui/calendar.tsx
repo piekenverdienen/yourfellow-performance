@@ -30,6 +30,7 @@ interface CalendarProps {
   disabled?: (date: Date) => boolean
   minDate?: Date
   maxDate?: Date
+  defaultMonth?: Date
   className?: string
 }
 
@@ -43,13 +44,21 @@ export function Calendar({
   disabled,
   minDate,
   maxDate,
+  defaultMonth,
   className,
 }: CalendarProps) {
   const [currentMonth, setCurrentMonth] = React.useState(
-    rangeStart || selected || new Date()
+    defaultMonth || rangeStart || selected || new Date()
   )
   const [hoverDate, setHoverDate] = React.useState<Date | null>(null)
   const [selectingStart, setSelectingStart] = React.useState(true)
+
+  // Update month when defaultMonth changes
+  React.useEffect(() => {
+    if (defaultMonth) {
+      setCurrentMonth(defaultMonth)
+    }
+  }, [defaultMonth])
 
   const weekDays = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo']
 
@@ -69,7 +78,7 @@ export function Calendar({
 
   const isDateDisabled = (date: Date) => {
     if (disabled && disabled(date)) return true
-    if (minDate && isBefore(date, minDate)) return true
+    if (minDate && isBefore(date, startOfMonth(minDate))) return true
     if (maxDate && isAfter(date, maxDate)) return true
     return false
   }
@@ -122,35 +131,51 @@ export function Calendar({
 
   const days = getDaysInMonth()
 
+  // Check if we can navigate to previous/next month
+  const canGoPrev = !minDate || !isBefore(subMonths(currentMonth, 1), startOfMonth(minDate))
+  const canGoNext = !maxDate || !isAfter(addMonths(currentMonth, 1), startOfMonth(addMonths(maxDate, 1)))
+
   return (
     <div className={cn('p-3 bg-white', className)}>
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <button
           type="button"
-          onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-          className="p-1 hover:bg-surface-100 rounded-md transition-colors"
+          onClick={() => canGoPrev && setCurrentMonth(subMonths(currentMonth, 1))}
+          disabled={!canGoPrev}
+          className={cn(
+            'p-1.5 rounded-lg transition-all',
+            canGoPrev
+              ? 'hover:bg-surface-100 text-surface-600 hover:text-surface-900'
+              : 'text-surface-300 cursor-not-allowed'
+          )}
         >
-          <ChevronLeft className="h-4 w-4 text-surface-600" />
+          <ChevronLeft className="h-4 w-4" />
         </button>
-        <span className="text-sm font-semibold text-surface-900">
+        <span className="text-sm font-semibold text-surface-900 capitalize">
           {format(currentMonth, 'MMMM yyyy', { locale: nl })}
         </span>
         <button
           type="button"
-          onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-          className="p-1 hover:bg-surface-100 rounded-md transition-colors"
+          onClick={() => canGoNext && setCurrentMonth(addMonths(currentMonth, 1))}
+          disabled={!canGoNext}
+          className={cn(
+            'p-1.5 rounded-lg transition-all',
+            canGoNext
+              ? 'hover:bg-surface-100 text-surface-600 hover:text-surface-900'
+              : 'text-surface-300 cursor-not-allowed'
+          )}
         >
-          <ChevronRight className="h-4 w-4 text-surface-600" />
+          <ChevronRight className="h-4 w-4" />
         </button>
       </div>
 
       {/* Week days header */}
-      <div className="grid grid-cols-7 gap-1 mb-2">
+      <div className="grid grid-cols-7 gap-0.5 mb-2">
         {weekDays.map((day) => (
           <div
             key={day}
-            className="text-center text-xs font-medium text-surface-500 py-1"
+            className="text-center text-[10px] font-semibold text-surface-400 uppercase tracking-wider py-2"
           >
             {day}
           </div>
@@ -158,7 +183,7 @@ export function Calendar({
       </div>
 
       {/* Days grid */}
-      <div className="grid grid-cols-7 gap-1">
+      <div className="grid grid-cols-7 gap-0.5">
         {days.map((day, index) => {
           const isCurrentMonth = isSameMonth(day, currentMonth)
           const isSelected =
@@ -176,25 +201,35 @@ export function Calendar({
               onClick={() => handleDateClick(day)}
               onMouseEnter={() => mode === 'range' && setHoverDate(day)}
               onMouseLeave={() => mode === 'range' && setHoverDate(null)}
-              disabled={isDisabled}
+              disabled={isDisabled || !isCurrentMonth}
               className={cn(
-                'relative h-8 w-8 text-sm rounded-md transition-all',
-                'hover:bg-surface-100 focus:outline-none focus:ring-2 focus:ring-[#1877F2]/20',
-                !isCurrentMonth && 'text-surface-300',
-                isCurrentMonth && 'text-surface-700',
-                isToday && 'font-bold',
-                isDisabled && 'opacity-30 cursor-not-allowed hover:bg-transparent',
-                isSelected && 'bg-[#1877F2] text-white hover:bg-[#1877F2]/90',
-                inRange && !isStart && !isEnd && 'bg-[#1877F2]/10',
-                (isStart || isEnd) && 'bg-[#1877F2] text-white hover:bg-[#1877F2]/90',
-                isStart && rangeEnd && 'rounded-r-none',
-                isEnd && rangeStart && 'rounded-l-none',
-                inRange && !isStart && !isEnd && 'rounded-none'
+                'relative h-9 w-9 text-sm transition-all duration-100',
+                'focus:outline-none focus:ring-2 focus:ring-[#1877F2]/20 focus:z-10',
+                // Base states
+                !isCurrentMonth && 'text-surface-200 cursor-default',
+                isCurrentMonth && !isDisabled && 'text-surface-700 hover:bg-surface-100 cursor-pointer',
+                isCurrentMonth && !isDisabled && 'rounded-lg',
+                // Today
+                isToday && isCurrentMonth && 'font-bold text-[#1877F2]',
+                // Disabled
+                isDisabled && isCurrentMonth && 'text-surface-300 cursor-not-allowed hover:bg-transparent',
+                // Single selection
+                isSelected && 'bg-[#1877F2] text-white hover:bg-[#1877F2]/90 rounded-lg font-semibold',
+                // Range - in range but not start/end
+                inRange && !isStart && !isEnd && isCurrentMonth && 'bg-[#1877F2]/10 rounded-none',
+                // Range start
+                isStart && isCurrentMonth && 'bg-[#1877F2] text-white font-semibold rounded-l-lg rounded-r-none',
+                // Range end
+                isEnd && isCurrentMonth && 'bg-[#1877F2] text-white font-semibold rounded-r-lg rounded-l-none',
+                // Both start and end (single day range)
+                isStart && isEnd && isCurrentMonth && 'rounded-lg',
+                // Start without end yet
+                isStart && !rangeEnd && isCurrentMonth && 'rounded-lg'
               )}
             >
-              {format(day, 'd')}
-              {isToday && !isSelected && !isStart && !isEnd && (
-                <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 bg-[#1877F2] rounded-full" />
+              <span className="relative z-10">{format(day, 'd')}</span>
+              {isToday && !isSelected && !isStart && !isEnd && isCurrentMonth && (
+                <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-[#1877F2] rounded-full" />
               )}
             </button>
           )
