@@ -11,11 +11,14 @@ import {
   Target,
   Repeat,
   AlertTriangle,
+  ShoppingBag,
+  BarChart3,
 } from 'lucide-react'
-import type { MetaDashboardKPIs } from '@/types/meta-ads'
+import type { MetaDashboardKPIs, MetaPerformanceTargets } from '@/types/meta-ads'
 
 interface KPICardsProps {
   kpis: MetaDashboardKPIs
+  targets?: MetaPerformanceTargets
   loading?: boolean
   currency?: string
 }
@@ -29,6 +32,7 @@ interface KPICardProps {
   loading?: boolean
   alert?: boolean
   alertMessage?: string
+  invertTrend?: boolean // When true, negative change is good (e.g., CPA decrease)
 }
 
 function KPICard({
@@ -40,6 +44,7 @@ function KPICard({
   loading,
   alert,
   alertMessage,
+  invertTrend = false,
 }: KPICardProps) {
   const formatValue = (val: string | number) => {
     if (typeof val === 'string') return val
@@ -64,7 +69,9 @@ function KPICard({
     if (change === undefined || change === 0) {
       return <Minus className="h-3 w-3 text-surface-400" />
     }
-    return change > 0 ? (
+    // For inverted trends (like CPA), down is good
+    const isPositive = invertTrend ? change < 0 : change > 0
+    return isPositive ? (
       <TrendingUp className="h-3 w-3 text-green-500" />
     ) : (
       <TrendingDown className="h-3 w-3 text-red-500" />
@@ -73,7 +80,9 @@ function KPICard({
 
   const getTrendColor = () => {
     if (change === undefined || change === 0) return 'text-surface-500'
-    return change > 0 ? 'text-green-600' : 'text-red-600'
+    // For inverted trends (like CPA), down is good
+    const isPositive = invertTrend ? change < 0 : change > 0
+    return isPositive ? 'text-green-600' : 'text-red-600'
   }
 
   return (
@@ -123,61 +132,136 @@ function KPICard({
   )
 }
 
-export function MetaKPICards({ kpis, loading, currency = 'EUR' }: KPICardsProps) {
+export function MetaKPICards({ kpis, targets, loading, currency = 'EUR' }: KPICardsProps) {
+  // Use client-specific targets or fall back to defaults
+  const maxCPA = targets?.maxCPA ?? 50 // Default €50 if not set
+  const targetCPA = targets?.targetCPA
+  const minROAS = targets?.minROAS ?? 1.0 // Default 1.0 if not set
+  const targetROAS = targets?.targetROAS
+  const maxFrequency = targets?.maxFrequency ?? 3.0 // Default 3.0 if not set
+
+  // CPA alert: above maxCPA OR significantly above targetCPA OR increased >25%
+  const cpaAboveMax = kpis.avg_cpa > maxCPA
+  const cpaAboveTarget = targetCPA ? kpis.avg_cpa > targetCPA * 1.2 : false // 20% above target
+  const cpaAlert = cpaAboveMax || cpaAboveTarget || kpis.cpa_change > 25
+
+  // Build CPA alert message
+  let cpaAlertMessage: string | undefined
+  if (cpaAboveMax) {
+    cpaAlertMessage = `CPA €${kpis.avg_cpa.toFixed(0)} > max €${maxCPA}`
+  } else if (cpaAboveTarget && targetCPA) {
+    cpaAlertMessage = `CPA €${kpis.avg_cpa.toFixed(0)} > target €${targetCPA}`
+  } else if (kpis.cpa_change > 25) {
+    cpaAlertMessage = `CPA +${kpis.cpa_change.toFixed(0)}% vs vorige periode`
+  }
+
+  // ROAS alert: below minROAS OR significantly below targetROAS
+  const roasBelowMin = kpis.avg_roas < minROAS
+  const roasBelowTarget = targetROAS ? kpis.avg_roas < targetROAS * 0.8 : false // 20% below target
+  const roasAlert = roasBelowMin || roasBelowTarget
+
+  // Build ROAS alert message
+  let roasAlertMessage: string | undefined
+  if (roasBelowMin) {
+    roasAlertMessage = `ROAS ${kpis.avg_roas.toFixed(2)} < min ${minROAS}`
+  } else if (roasBelowTarget && targetROAS) {
+    roasAlertMessage = `ROAS ${kpis.avg_roas.toFixed(2)} < target ${targetROAS}`
+  }
+
+  // Frequency alert: above maxFrequency
+  const frequencyAlert = kpis.avg_frequency > maxFrequency
+
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-      <KPICard
-        title="Spend"
-        value={kpis.total_spend}
-        change={kpis.spend_change}
-        icon={<DollarSign className="h-5 w-5 text-surface-600" />}
-        format="currency"
-        loading={loading}
-      />
-      <KPICard
-        title="Impressies"
-        value={kpis.total_impressions}
-        change={kpis.impressions_change}
-        icon={<Eye className="h-5 w-5 text-surface-600" />}
-        format="number"
-        loading={loading}
-      />
-      <KPICard
-        title="Clicks"
-        value={kpis.total_clicks}
-        change={kpis.clicks_change}
-        icon={<MousePointer className="h-5 w-5 text-surface-600" />}
-        format="number"
-        loading={loading}
-      />
-      <KPICard
-        title="CTR"
-        value={kpis.avg_ctr}
-        icon={<Target className="h-5 w-5 text-surface-600" />}
-        format="percent"
-        loading={loading}
-      />
-      <KPICard
-        title="ROAS"
-        value={kpis.avg_roas}
-        change={kpis.roas_change}
-        icon={<TrendingUp className="h-5 w-5 text-surface-600" />}
-        format="decimal"
-        loading={loading}
-      />
-      <KPICard
-        title="Fatigued Ads"
-        value={kpis.fatigued_ads}
-        icon={<Repeat className="h-5 w-5 text-amber-600" />}
-        format="number"
-        loading={loading}
-        alert={kpis.fatigued_ads > 0}
-        alertMessage={
-          kpis.fatigued_ads > 0
-            ? `${kpis.fatigued_ads} ads met hoge frequency`
-            : undefined
-        }
-      />
+    <div className="space-y-4">
+      {/* Primary KPIs - Performance */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <KPICard
+          title="Spend"
+          value={kpis.total_spend}
+          change={kpis.spend_change}
+          icon={<DollarSign className="h-5 w-5 text-blue-600" />}
+          format="currency"
+          loading={loading}
+        />
+        <KPICard
+          title="Conversies"
+          value={kpis.total_conversions}
+          change={kpis.conversions_change}
+          icon={<ShoppingBag className="h-5 w-5 text-emerald-600" />}
+          format="number"
+          loading={loading}
+        />
+        <KPICard
+          title={targetCPA ? `CPA (target: €${targetCPA})` : 'CPA'}
+          value={kpis.avg_cpa}
+          change={kpis.cpa_change}
+          icon={<Target className="h-5 w-5 text-purple-600" />}
+          format="currency"
+          loading={loading}
+          invertTrend={true}
+          alert={cpaAlert}
+          alertMessage={cpaAlertMessage}
+        />
+        <KPICard
+          title={targetROAS ? `ROAS (target: ${targetROAS})` : 'ROAS'}
+          value={kpis.avg_roas}
+          change={kpis.roas_change}
+          icon={<BarChart3 className="h-5 w-5 text-emerald-600" />}
+          format="decimal"
+          loading={loading}
+          alert={roasAlert}
+          alertMessage={roasAlertMessage}
+        />
+      </div>
+
+      {/* Secondary KPIs - Volume & Efficiency */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <KPICard
+          title="Impressies"
+          value={kpis.total_impressions}
+          change={kpis.impressions_change}
+          icon={<Eye className="h-5 w-5 text-surface-600" />}
+          format="number"
+          loading={loading}
+        />
+        <KPICard
+          title="Clicks"
+          value={kpis.total_clicks}
+          change={kpis.clicks_change}
+          icon={<MousePointer className="h-5 w-5 text-surface-600" />}
+          format="number"
+          loading={loading}
+        />
+        <KPICard
+          title="CTR"
+          value={kpis.avg_ctr}
+          icon={<Target className="h-5 w-5 text-surface-600" />}
+          format="percent"
+          loading={loading}
+        />
+        <KPICard
+          title="Frequentie"
+          value={kpis.avg_frequency}
+          icon={<Repeat className="h-5 w-5 text-surface-600" />}
+          format="decimal"
+          loading={loading}
+          alert={frequencyAlert}
+          alertMessage={frequencyAlert ? `Frequency ${kpis.avg_frequency.toFixed(1)} > max ${maxFrequency}` : undefined}
+        />
+        <KPICard
+          title="Fatigue Alerts"
+          value={kpis.fatigued_ads}
+          icon={<AlertTriangle className="h-5 w-5 text-amber-600" />}
+          format="number"
+          loading={loading}
+          alert={kpis.fatigued_ads > 0}
+          alertMessage={
+            kpis.fatigued_ads > 0
+              ? `${kpis.fatigued_ads} ads met fatigue`
+              : undefined
+          }
+        />
+      </div>
     </div>
   )
 }

@@ -31,14 +31,15 @@ interface Column {
 
 const columns: Column[] = [
   { key: 'entity_name', label: 'Naam', align: 'left', sortable: true },
+  { key: 'spend', label: 'Spend', format: 'currency', align: 'right', sortable: true },
+  { key: 'conversions', label: 'Conv.', format: 'number', align: 'right', sortable: true },
+  { key: 'cost_per_conversion', label: 'CPA', format: 'currency', align: 'right', sortable: true },
+  { key: 'roas', label: 'ROAS', format: 'decimal', align: 'right', sortable: true },
   { key: 'impressions', label: 'Impressies', format: 'number', align: 'right', sortable: true },
   { key: 'clicks', label: 'Clicks', format: 'number', align: 'right', sortable: true },
-  { key: 'spend', label: 'Spend', format: 'currency', align: 'right', sortable: true },
   { key: 'ctr', label: 'CTR', format: 'percent', align: 'right', sortable: true },
   { key: 'cpc', label: 'CPC', format: 'currency', align: 'right', sortable: true },
   { key: 'frequency', label: 'Freq.', format: 'decimal', align: 'right', sortable: true },
-  { key: 'conversions', label: 'Conv.', format: 'number', align: 'right', sortable: true },
-  { key: 'roas', label: 'ROAS', format: 'decimal', align: 'right', sortable: true },
 ]
 
 function formatValue(value: unknown, format?: Column['format']): string {

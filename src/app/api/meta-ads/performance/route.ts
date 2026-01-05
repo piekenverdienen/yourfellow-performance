@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getMetaAdsSyncService } from '@/services/meta-ads-sync'
-import type { MetaEntityType, MetaPerformanceRow, MetaDashboardKPIs, MetaInsightDaily } from '@/types/meta-ads'
+import type { MetaEntityType, MetaPerformanceRow, MetaDashboardKPIs, MetaInsightDaily, MetaPerformanceTargets } from '@/types/meta-ads'
 
 type TrendDirection = 'up' | 'down' | 'stable'
 
@@ -123,10 +123,16 @@ export async function GET(request: NextRequest) {
       end
     )
 
+    // Get performance targets from client settings
+    const targets: MetaPerformanceTargets = metaSettings?.targets || {}
+
     // Transform data to PerformanceRows with real trends
-    const frequencyThreshold = metaSettings?.thresholds?.frequencyWarning || 2.5
+    const frequencyThreshold = targets.maxFrequency || metaSettings?.thresholds?.frequencyWarning || 2.5
     const rows: MetaPerformanceRow[] = data.map(insight => {
       const prev = previousPeriodData.get(insight.entity_id)
+      const costPerConversion = insight.conversions > 0
+        ? insight.spend / insight.conversions
+        : 0
 
       return {
         entity_type: insight.entity_type,
@@ -144,10 +150,13 @@ export async function GET(request: NextRequest) {
         cpm: insight.cpm,
         frequency: insight.frequency,
         conversions: insight.conversions,
+        conversion_value: insight.conversion_value || 0,
+        cost_per_conversion: costPerConversion,
         roas: insight.roas,
         spend_trend: calculateTrend(insight.spend, prev?.spend),
         ctr_trend: calculateTrend(insight.ctr, prev?.ctr),
         roas_trend: calculateTrend(insight.roas, prev?.roas),
+        has_fatigue: insight.frequency > frequencyThreshold,
         has_fatigue_warning: insight.frequency > frequencyThreshold,
         fatigue_severity: insight.frequency > 4 ? 'high' : insight.frequency > 3 ? 'medium' : 'low',
       }
@@ -187,6 +196,10 @@ export async function GET(request: NextRequest) {
         kpis.current.spend > 0 ? kpis.current.revenue / kpis.current.spend : 0,
         kpis.previous.spend > 0 ? kpis.previous.revenue / kpis.previous.spend : 0
       ),
+      cpa_change: calculatePercentChange(
+        kpis.current.conversions > 0 ? kpis.current.spend / kpis.current.conversions : 0,
+        kpis.previous.conversions > 0 ? kpis.previous.spend / kpis.previous.conversions : 0
+      ),
       active_campaigns: entityCounts.campaigns,
       active_adsets: entityCounts.adsets,
       active_ads: entityCounts.ads,
@@ -196,6 +209,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       data: rows,
       kpis: dashboardKPIs,
+      targets, // Include client-specific performance targets
       pagination: {
         page,
         pageSize,

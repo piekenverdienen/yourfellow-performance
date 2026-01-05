@@ -45,6 +45,74 @@ export type MetaFatigueSeverity = 'low' | 'medium' | 'high' | 'critical'
 // Settings Types (stored in clients.settings.meta)
 // ============================================
 
+/**
+ * Performance targets - what this client considers "good"
+ * All values are optional; system uses historical averages as fallback
+ */
+export interface MetaPerformanceTargets {
+  // Cost targets
+  targetCPA?: number            // Target cost per acquisition (EUR)
+  maxCPA?: number               // Maximum acceptable CPA before alert
+  targetCPC?: number            // Target cost per click
+
+  // Return targets
+  targetROAS?: number           // Target return on ad spend (e.g., 3.0 = 3x return)
+  minROAS?: number              // Minimum acceptable ROAS before alert
+
+  // Efficiency targets
+  targetCTR?: number            // Target click-through rate (%)
+  minCTR?: number               // Minimum CTR before concern
+
+  // Budget
+  dailyBudget?: number          // Daily spend target (EUR)
+  monthlyBudget?: number        // Monthly spend budget (EUR)
+
+  // Frequency
+  maxFrequency?: number         // Max frequency before fatigue (default: 2.5)
+  optimalFrequency?: number     // Optimal frequency range max (default: 2.0)
+}
+
+/**
+ * Client context - helps AI understand the business
+ */
+export interface MetaClientContext {
+  industry?: string             // e.g., 'E-commerce', 'SaaS', 'Lead Gen'
+  businessModel?: string        // e.g., 'D2C', 'B2B', 'Marketplace'
+  averageOrderValue?: number    // Average order value (EUR)
+  targetMargin?: number         // Target profit margin (%)
+  conversionWindow?: string     // e.g., '7-day click', '1-day view'
+  seasonality?: string          // e.g., 'Q4 peak', 'Summer slow'
+  notes?: string                // Free-form notes for AI context
+}
+
+/**
+ * Alert thresholds - when to trigger warnings
+ * These are percentage changes from baseline/target
+ */
+export interface MetaAlertThresholds {
+  // CPA alerts
+  cpaIncreaseWarning?: number   // % increase to trigger warning (default: 20)
+  cpaIncreaseCritical?: number  // % increase to trigger critical (default: 50)
+
+  // ROAS alerts
+  roasDropWarning?: number      // % drop to trigger warning (default: 20)
+  roasDropCritical?: number     // % drop to trigger critical (default: 40)
+
+  // CTR alerts
+  ctrDropWarning?: number       // % drop to trigger warning (default: 30)
+
+  // CPC alerts
+  cpcIncreaseWarning?: number   // % increase to trigger warning (default: 25)
+
+  // Frequency
+  frequencyWarning?: number     // Absolute frequency threshold (default: 2.5)
+  frequencyCritical?: number    // Critical frequency threshold (default: 4.0)
+
+  // Spend
+  minSpendForAlert?: number     // Min spend to trigger any alert (default: 10 EUR)
+  overspendWarning?: number     // % over daily budget to warn (default: 20)
+}
+
 export interface MetaAdsSettings {
   enabled?: boolean
   adAccountId?: string          // format: act_XXXXX
@@ -53,10 +121,17 @@ export interface MetaAdsSettings {
   pixelId?: string              // Meta Pixel ID for tracking
   timezone?: string             // e.g., 'Europe/Amsterdam'
   currency?: string             // e.g., 'EUR'
+
   // Sync settings
   syncEnabled?: boolean
   lastSyncAt?: string           // ISO timestamp
-  // Thresholds for alerts
+
+  // NEW: Comprehensive targets and thresholds
+  targets?: MetaPerformanceTargets
+  context?: MetaClientContext
+  alertThresholds?: MetaAlertThresholds
+
+  // DEPRECATED: Use alertThresholds instead
   thresholds?: {
     frequencyWarning?: number   // Default: 2.5
     ctrDropWarning?: number     // Default: 30 (%)
@@ -324,7 +399,7 @@ export interface MetaPerformanceRow {
   entity_type: MetaEntityType
   entity_id: string
   entity_name: string
-  status: MetaAdStatus
+  status?: string
   campaign_name?: string
   adset_name?: string
 
@@ -338,6 +413,8 @@ export interface MetaPerformanceRow {
   cpm: number
   frequency: number
   conversions: number
+  conversion_value: number
+  cost_per_conversion: number
   roas: number
 
   // Trend indicators
@@ -346,6 +423,7 @@ export interface MetaPerformanceRow {
   roas_trend: 'up' | 'down' | 'stable'
 
   // Alerts
+  has_fatigue: boolean
   has_fatigue_warning: boolean
   fatigue_severity?: MetaFatigueSeverity
 }
@@ -373,6 +451,7 @@ export interface MetaDashboardKPIs {
   clicks_change: number
   conversions_change: number
   roas_change: number
+  cpa_change: number
 
   // Counts
   active_campaigns: number

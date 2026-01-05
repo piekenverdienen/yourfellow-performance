@@ -478,28 +478,59 @@ export function parseMetaInsights(
       entityName = raw.campaign_name || 'Unknown Campaign'
     }
 
-    // Parse conversions - prefer 'purchase' action type, fallback to sum all
+    // Parse conversions - ONLY count purchase events, not all conversion types
+    // Priority order: omni_purchase > purchase > offsite_conversion.fb_pixel_purchase
+    const purchaseActionTypes = [
+      'omni_purchase',
+      'purchase',
+      'offsite_conversion.fb_pixel_purchase',
+      'onsite_conversion.purchase',
+    ]
+
+    // Find purchase actions in the actions array
     const purchaseActions = (raw.actions || []).filter(
-      a => a.action_type === 'purchase' || a.action_type === 'omni_purchase'
+      a => purchaseActionTypes.includes(a.action_type)
     )
+
+    // Find purchase values in action_values array
     const purchaseValues = (raw.action_values || []).filter(
-      a => a.action_type === 'purchase' || a.action_type === 'omni_purchase'
+      a => purchaseActionTypes.includes(a.action_type)
     )
 
-    // Conversions: prefer purchase actions, fallback to conversions field
-    const conversions = purchaseActions.length > 0
-      ? purchaseActions.reduce((sum, c) => sum + parseFloat(c.value || '0'), 0)
-      : (raw.conversions || []).reduce((sum, c) => sum + parseFloat(c.value || '0'), 0)
-
-    // Conversion value: prefer purchase values, fallback to conversion_values
-    const conversionValue = purchaseValues.length > 0
-      ? purchaseValues.reduce((sum, c) => sum + parseFloat(c.value || '0'), 0)
-      : (raw.conversion_values || []).reduce((sum, c) => sum + parseFloat(c.value || '0'), 0)
-
-    const costPerConversion = (raw.cost_per_conversion || []).reduce(
-      (sum, c) => sum + parseFloat(c.value || '0'),
-      0
+    // Also check the conversions array for purchase types (Meta sometimes puts them here)
+    const purchaseConversions = (raw.conversions || []).filter(
+      c => purchaseActionTypes.includes(c.action_type)
     )
+
+    // Also check conversion_values for purchase types
+    const purchaseConversionValues = (raw.conversion_values || []).filter(
+      c => purchaseActionTypes.includes(c.action_type)
+    )
+
+    // Conversions: ONLY count purchases (no fallback to all conversions)
+    // Check actions first, then conversions array
+    let conversions = 0
+    if (purchaseActions.length > 0) {
+      conversions = purchaseActions.reduce((sum, c) => sum + parseFloat(c.value || '0'), 0)
+    } else if (purchaseConversions.length > 0) {
+      conversions = purchaseConversions.reduce((sum, c) => sum + parseFloat(c.value || '0'), 0)
+    }
+
+    // Conversion value: ONLY purchase values
+    let conversionValue = 0
+    if (purchaseValues.length > 0) {
+      conversionValue = purchaseValues.reduce((sum, c) => sum + parseFloat(c.value || '0'), 0)
+    } else if (purchaseConversionValues.length > 0) {
+      conversionValue = purchaseConversionValues.reduce((sum, c) => sum + parseFloat(c.value || '0'), 0)
+    }
+
+    // Cost per conversion - only for purchase types
+    const purchaseCostPer = (raw.cost_per_conversion || []).filter(
+      c => purchaseActionTypes.includes(c.action_type)
+    )
+    const costPerConversion = purchaseCostPer.length > 0
+      ? purchaseCostPer.reduce((sum, c) => sum + parseFloat(c.value || '0'), 0) / purchaseCostPer.length
+      : 0
 
     // ROAS: prefer purchase_roas from Meta, fallback to calculated
     const purchaseRoas = (raw.purchase_roas || []).find(
