@@ -515,6 +515,67 @@ export async function POST(request: NextRequest) {
         // Silently continue if alerts fetch fails
         console.warn('Could not fetch monitoring alerts:', alertError)
       }
+
+      // Add Meta Ads performance context if available
+      try {
+        const metaSettings = clientData?.settings?.meta
+        if (metaSettings?.adAccountId) {
+          const adAccountId = `act_${metaSettings.adAccountId.replace(/^act_/, '')}`
+
+          // Get date range (last 14 days)
+          const endDate = new Date()
+          endDate.setDate(endDate.getDate() - 1)
+          const startDate = new Date(endDate)
+          startDate.setDate(startDate.getDate() - 13)
+
+          const formatDate = (d: Date) => d.toISOString().split('T')[0]
+
+          // Fetch aggregated Meta Ads data
+          const { data: metaData } = await supabase
+            .from('meta_insights_daily')
+            .select('spend, conversions, conversion_value')
+            .eq('client_id', clientId)
+            .eq('ad_account_id', adAccountId)
+            .eq('entity_type', 'campaign')
+            .gte('date', formatDate(startDate))
+            .lte('date', formatDate(endDate))
+
+          if (metaData && metaData.length > 0) {
+            // Calculate totals
+            const totals = metaData.reduce(
+              (acc: { spend: number; conversions: number; revenue: number }, row: { spend?: number; conversions?: number; conversion_value?: number }) => ({
+                spend: acc.spend + (row.spend || 0),
+                conversions: acc.conversions + (row.conversions || 0),
+                revenue: acc.revenue + (row.conversion_value || 0)
+              }),
+              { spend: 0, conversions: 0, revenue: 0 }
+            )
+
+            const roas = totals.spend > 0 ? (totals.revenue / totals.spend).toFixed(2) : '0'
+            const cpa = totals.conversions > 0 ? (totals.spend / totals.conversions).toFixed(2) : '0'
+
+            // Get targets if available
+            const targets = metaSettings.targets || {}
+
+            const metaLines = [
+              '',
+              '📊 META ADS PERFORMANCE (afgelopen 14 dagen):',
+              `- Totale spend: €${totals.spend.toFixed(2)}`,
+              `- ROAS: ${roas}${targets.targetROAS ? ` (target: ${targets.targetROAS})` : ''}`,
+              `- Conversies: ${totals.conversions}`,
+              `- CPA: €${cpa}${targets.targetCPA ? ` (target: €${targets.targetCPA})` : ''}`,
+              `- Omzet: €${totals.revenue.toFixed(2)}`,
+              '',
+              'Je kunt de gebruiker helpen met het analyseren van deze Meta Ads performance data.'
+            ]
+
+            systemPrompt = `${systemPrompt}\n${metaLines.join('\n')}`
+          }
+        }
+      } catch (metaError) {
+        // Silently continue if Meta Ads fetch fails
+        console.warn('Could not fetch Meta Ads data:', metaError)
+      }
     }
 
     // Add knowledge base context for Mia
