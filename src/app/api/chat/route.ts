@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import OpenAI from 'openai'
 import { createClient } from '@/lib/supabase/server'
 import type { ChatActionType } from '@/types'
+import { MetaAdsClient, parseMetaInsights } from '@/lib/meta/client'
 
 export const runtime = 'edge'
 
@@ -519,13 +520,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Add Meta Ads performance context (separate from AI Context, based on client settings)
+    // Add Meta Ads performance context using LIVE API calls
     if (clientSettings && clientId) {
       try {
         const metaSettings = (clientSettings?.meta as Record<string, unknown>) || null
         const metaAdAccountId = metaSettings?.adAccountId as string | undefined
-        if (metaAdAccountId) {
-          const adAccountId = `act_${metaAdAccountId.replace(/^act_/, '')}`
+        const metaAccessToken = metaSettings?.accessToken as string | undefined
+
+        if (metaAdAccountId && metaAccessToken) {
+          const adAccountId = MetaAdsClient.formatAdAccountId(metaAdAccountId)
 
           // Get date range (last 14 days)
           const endDate = new Date()
@@ -535,7 +538,70 @@ export async function POST(request: NextRequest) {
 
           const formatMetaDate = (d: Date) => d.toISOString().split('T')[0]
 
-          // Fetch aggregated Meta Ads data
+          // Make LIVE API call to Meta
+          const metaClient = new MetaAdsClient({
+            accessToken: metaAccessToken,
+            adAccountId: adAccountId,
+          })
+
+          const rawInsights = await metaClient.getAccountInsights(
+            adAccountId,
+            formatMetaDate(startDate),
+            formatMetaDate(endDate),
+            'campaign' // Campaign level for accurate totals
+          )
+
+          if (rawInsights && rawInsights.length > 0) {
+            // Parse the raw insights
+            const parsedInsights = parseMetaInsights(rawInsights, clientId, adAccountId)
+
+            // Calculate totals from live data
+            const metaTotals = parsedInsights.reduce(
+              (acc, insight) => ({
+                spend: acc.spend + (insight.spend || 0),
+                conversions: acc.conversions + (insight.conversions || 0),
+                revenue: acc.revenue + (insight.conversion_value || 0),
+                impressions: acc.impressions + (insight.impressions || 0),
+                clicks: acc.clicks + (insight.clicks || 0),
+              }),
+              { spend: 0, conversions: 0, revenue: 0, impressions: 0, clicks: 0 }
+            )
+
+            const metaRoas = metaTotals.spend > 0 ? (metaTotals.revenue / metaTotals.spend).toFixed(2) : '0'
+            const metaCpa = metaTotals.conversions > 0 ? (metaTotals.spend / metaTotals.conversions).toFixed(2) : '0'
+            const metaCtr = metaTotals.impressions > 0 ? ((metaTotals.clicks / metaTotals.impressions) * 100).toFixed(2) : '0'
+
+            // Get targets if available
+            const metaTargets = (metaSettings?.targets as Record<string, unknown>) || {}
+
+            const metaContextLines = [
+              '',
+              '📊 META ADS PERFORMANCE (LIVE DATA - afgelopen 14 dagen):',
+              `- Totale spend: €${metaTotals.spend.toFixed(2)}`,
+              `- ROAS: ${metaRoas}${metaTargets.targetROAS ? ` (target: ${metaTargets.targetROAS})` : ''}`,
+              `- Conversies: ${metaTotals.conversions}`,
+              `- CPA: €${metaCpa}${metaTargets.targetCPA ? ` (target: €${metaTargets.targetCPA})` : ''}`,
+              `- Omzet: €${metaTotals.revenue.toFixed(2)}`,
+              `- Impressies: ${metaTotals.impressions.toLocaleString('nl-NL')}`,
+              `- Clicks: ${metaTotals.clicks.toLocaleString('nl-NL')}`,
+              `- CTR: ${metaCtr}%`,
+              '',
+              'Dit is LIVE data direct van de Meta API. Je kunt de gebruiker helpen met het analyseren van deze Meta Ads performance data.'
+            ]
+
+            systemPrompt = `${systemPrompt}\n${metaContextLines.join('\n')}`
+          }
+        } else if (metaAdAccountId && !metaAccessToken) {
+          // Fallback to database if no access token configured
+          const adAccountId = `act_${metaAdAccountId.replace(/^act_/, '')}`
+
+          const endDate = new Date()
+          endDate.setDate(endDate.getDate() - 1)
+          const startDate = new Date(endDate)
+          startDate.setDate(startDate.getDate() - 13)
+
+          const formatMetaDate = (d: Date) => d.toISOString().split('T')[0]
+
           const { data: metaAdsData } = await supabase
             .from('meta_insights_daily')
             .select('spend, conversions, conversion_value')
@@ -546,7 +612,6 @@ export async function POST(request: NextRequest) {
             .lte('date', formatMetaDate(endDate))
 
           if (metaAdsData && metaAdsData.length > 0) {
-            // Calculate totals
             const metaTotals = metaAdsData.reduce(
               (acc: { spend: number; conversions: number; revenue: number }, row: { spend?: number; conversions?: number; conversion_value?: number }) => ({
                 spend: acc.spend + (row.spend || 0),
@@ -559,7 +624,6 @@ export async function POST(request: NextRequest) {
             const metaRoas = metaTotals.spend > 0 ? (metaTotals.revenue / metaTotals.spend).toFixed(2) : '0'
             const metaCpa = metaTotals.conversions > 0 ? (metaTotals.spend / metaTotals.conversions).toFixed(2) : '0'
 
-            // Get targets if available
             const metaTargets = (metaSettings?.targets as Record<string, unknown>) || {}
 
             const metaContextLines = [
