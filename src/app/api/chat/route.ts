@@ -517,8 +517,10 @@ export async function POST(request: NextRequest) {
         // Silently continue if alerts fetch fails
         console.warn('Could not fetch monitoring alerts:', alertError)
       }
+    }
 
-      // Add Meta Ads performance context if available
+    // Add Meta Ads performance context (separate from AI Context, based on client settings)
+    if (clientSettings && clientId) {
       try {
         const metaSettings = (clientSettings?.meta as Record<string, unknown>) || null
         const metaAdAccountId = metaSettings?.adAccountId as string | undefined
@@ -531,21 +533,21 @@ export async function POST(request: NextRequest) {
           const startDate = new Date(endDate)
           startDate.setDate(startDate.getDate() - 13)
 
-          const formatDate = (d: Date) => d.toISOString().split('T')[0]
+          const formatMetaDate = (d: Date) => d.toISOString().split('T')[0]
 
           // Fetch aggregated Meta Ads data
-          const { data: metaData } = await supabase
+          const { data: metaAdsData } = await supabase
             .from('meta_insights_daily')
             .select('spend, conversions, conversion_value')
             .eq('client_id', clientId)
             .eq('ad_account_id', adAccountId)
             .eq('entity_type', 'campaign')
-            .gte('date', formatDate(startDate))
-            .lte('date', formatDate(endDate))
+            .gte('date', formatMetaDate(startDate))
+            .lte('date', formatMetaDate(endDate))
 
-          if (metaData && metaData.length > 0) {
+          if (metaAdsData && metaAdsData.length > 0) {
             // Calculate totals
-            const totals = metaData.reduce(
+            const metaTotals = metaAdsData.reduce(
               (acc: { spend: number; conversions: number; revenue: number }, row: { spend?: number; conversions?: number; conversion_value?: number }) => ({
                 spend: acc.spend + (row.spend || 0),
                 conversions: acc.conversions + (row.conversions || 0),
@@ -554,30 +556,30 @@ export async function POST(request: NextRequest) {
               { spend: 0, conversions: 0, revenue: 0 }
             )
 
-            const roas = totals.spend > 0 ? (totals.revenue / totals.spend).toFixed(2) : '0'
-            const cpa = totals.conversions > 0 ? (totals.spend / totals.conversions).toFixed(2) : '0'
+            const metaRoas = metaTotals.spend > 0 ? (metaTotals.revenue / metaTotals.spend).toFixed(2) : '0'
+            const metaCpa = metaTotals.conversions > 0 ? (metaTotals.spend / metaTotals.conversions).toFixed(2) : '0'
 
             // Get targets if available
-            const targets = (metaSettings?.targets as Record<string, unknown>) || {}
+            const metaTargets = (metaSettings?.targets as Record<string, unknown>) || {}
 
-            const metaLines = [
+            const metaContextLines = [
               '',
               '📊 META ADS PERFORMANCE (afgelopen 14 dagen):',
-              `- Totale spend: €${totals.spend.toFixed(2)}`,
-              `- ROAS: ${roas}${targets.targetROAS ? ` (target: ${targets.targetROAS})` : ''}`,
-              `- Conversies: ${totals.conversions}`,
-              `- CPA: €${cpa}${targets.targetCPA ? ` (target: €${targets.targetCPA})` : ''}`,
-              `- Omzet: €${totals.revenue.toFixed(2)}`,
+              `- Totale spend: €${metaTotals.spend.toFixed(2)}`,
+              `- ROAS: ${metaRoas}${metaTargets.targetROAS ? ` (target: ${metaTargets.targetROAS})` : ''}`,
+              `- Conversies: ${metaTotals.conversions}`,
+              `- CPA: €${metaCpa}${metaTargets.targetCPA ? ` (target: €${metaTargets.targetCPA})` : ''}`,
+              `- Omzet: €${metaTotals.revenue.toFixed(2)}`,
               '',
               'Je kunt de gebruiker helpen met het analyseren van deze Meta Ads performance data.'
             ]
 
-            systemPrompt = `${systemPrompt}\n${metaLines.join('\n')}`
+            systemPrompt = `${systemPrompt}\n${metaContextLines.join('\n')}`
           }
         }
-      } catch (metaError) {
+      } catch (metaContextError) {
         // Silently continue if Meta Ads fetch fails
-        console.warn('Could not fetch Meta Ads data:', metaError)
+        console.warn('Could not fetch Meta Ads context:', metaContextError)
       }
     }
 
