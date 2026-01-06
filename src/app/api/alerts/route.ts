@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
       .eq('user_id', user.id);
 
     if (memberships && memberships.length > 0) {
-      query = query.in('client_id', memberships.map(m => m.client_id));
+      query = query.in('client_id', memberships.map((m: { client_id: string }) => m.client_id));
     } else {
       // Check if user is admin
       const { data: profile } = await supabase
@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Transform response
-  const transformedAlerts = (alerts || []).map(alert => ({
+  const transformedAlerts = (alerts || []).map((alert: Record<string, unknown> & { clients?: { name?: string; slug?: string } }) => ({
     id: alert.id,
     client_id: alert.client_id,
     client_name: alert.clients?.name,

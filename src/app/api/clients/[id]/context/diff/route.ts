@@ -118,8 +118,8 @@ export async function GET(
       )
     }
 
-    const fromData = versions.find(v => v.version === fromVersion)?.context_json as Record<string, unknown>
-    const toData = versions.find(v => v.version === toVersion)?.context_json as Record<string, unknown>
+    const fromData = versions.find((v: { version: number }) => v.version === fromVersion)?.context_json as Record<string, unknown>
+    const toData = versions.find((v: { version: number }) => v.version === toVersion)?.context_json as Record<string, unknown>
 
     // Calculate differences
     const changes = calculateDiff(fromData, toData)
@@ -199,10 +199,10 @@ function calculateDiff(
   const changes: FieldDiff[] = []
 
   // Get all unique keys
-  const allKeys = new Set([
+  const allKeys = Array.from(new Set([
     ...Object.keys(oldObj || {}),
     ...Object.keys(newObj || {}),
-  ])
+  ]))
 
   for (const key of allKeys) {
     // Skip metadata fields

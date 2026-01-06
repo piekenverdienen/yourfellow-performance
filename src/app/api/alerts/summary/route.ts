@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
       .single();
 
     if (memberships && memberships.length > 0) {
-      query = query.in('client_id', memberships.map(m => m.client_id));
+      query = query.in('client_id', memberships.map((m: { client_id: string }) => m.client_id));
     } else if (profile?.role !== 'admin') {
       // Not an admin and no memberships
       return NextResponse.json({

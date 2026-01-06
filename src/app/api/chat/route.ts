@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import OpenAI from 'openai'
 import { createClient } from '@/lib/supabase/server'
 import type { ChatActionType } from '@/types'
+import { MetaAdsClient, parseMetaInsights } from '@/lib/meta/client'
 
 export const runtime = 'edge'
 
@@ -211,6 +212,7 @@ export async function POST(request: NextRequest) {
     // Get client context if clientId provided (uses new AI Context Layer)
     let clientContext: Record<string, unknown> | null = null
     let clientName: string | null = null
+    let clientSettings: Record<string, unknown> | null = null
 
     if (clientId) {
       // Verify client access
@@ -224,15 +226,16 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // Fetch client name
-      const { data: client } = await supabase
+      // Fetch client name and settings
+      const { data: clientData } = await supabase
         .from('clients')
-        .select('name')
+        .select('name, settings')
         .eq('id', clientId)
         .single()
 
-      if (client) {
-        clientName = client.name
+      if (clientData) {
+        clientName = clientData.name
+        clientSettings = clientData.settings as Record<string, unknown> | null
 
         // Get context from new AI Context Layer (client_context table)
         const { data: contextData } = await supabase
@@ -514,6 +517,133 @@ export async function POST(request: NextRequest) {
       } catch (alertError) {
         // Silently continue if alerts fetch fails
         console.warn('Could not fetch monitoring alerts:', alertError)
+      }
+    }
+
+    // Add Meta Ads performance context using LIVE API calls
+    if (clientSettings && clientId) {
+      try {
+        const metaSettings = (clientSettings?.meta as Record<string, unknown>) || null
+        const metaAdAccountId = metaSettings?.adAccountId as string | undefined
+        const metaAccessToken = metaSettings?.accessToken as string | undefined
+
+        if (metaAdAccountId && metaAccessToken) {
+          const adAccountId = MetaAdsClient.formatAdAccountId(metaAdAccountId)
+
+          // Get date range (last 14 days)
+          const endDate = new Date()
+          endDate.setDate(endDate.getDate() - 1)
+          const startDate = new Date(endDate)
+          startDate.setDate(startDate.getDate() - 13)
+
+          const formatMetaDate = (d: Date) => d.toISOString().split('T')[0]
+
+          // Make LIVE API call to Meta
+          const metaClient = new MetaAdsClient({
+            accessToken: metaAccessToken,
+            adAccountId: adAccountId,
+          })
+
+          const rawInsights = await metaClient.getAccountInsights(
+            adAccountId,
+            formatMetaDate(startDate),
+            formatMetaDate(endDate),
+            'campaign' // Campaign level for accurate totals
+          )
+
+          if (rawInsights && rawInsights.length > 0) {
+            // Parse the raw insights
+            const parsedInsights = parseMetaInsights(rawInsights, clientId, adAccountId)
+
+            // Calculate totals from live data
+            const metaTotals = parsedInsights.reduce(
+              (acc, insight) => ({
+                spend: acc.spend + (insight.spend || 0),
+                conversions: acc.conversions + (insight.conversions || 0),
+                revenue: acc.revenue + (insight.conversion_value || 0),
+                impressions: acc.impressions + (insight.impressions || 0),
+                clicks: acc.clicks + (insight.clicks || 0),
+              }),
+              { spend: 0, conversions: 0, revenue: 0, impressions: 0, clicks: 0 }
+            )
+
+            const metaRoas = metaTotals.spend > 0 ? (metaTotals.revenue / metaTotals.spend).toFixed(2) : '0'
+            const metaCpa = metaTotals.conversions > 0 ? (metaTotals.spend / metaTotals.conversions).toFixed(2) : '0'
+            const metaCtr = metaTotals.impressions > 0 ? ((metaTotals.clicks / metaTotals.impressions) * 100).toFixed(2) : '0'
+
+            // Get targets if available
+            const metaTargets = (metaSettings?.targets as Record<string, unknown>) || {}
+
+            const metaContextLines = [
+              '',
+              '📊 META ADS PERFORMANCE (LIVE DATA - afgelopen 14 dagen):',
+              `- Totale spend: €${metaTotals.spend.toFixed(2)}`,
+              `- ROAS: ${metaRoas}${metaTargets.targetROAS ? ` (target: ${metaTargets.targetROAS})` : ''}`,
+              `- Conversies: ${metaTotals.conversions}`,
+              `- CPA: €${metaCpa}${metaTargets.targetCPA ? ` (target: €${metaTargets.targetCPA})` : ''}`,
+              `- Omzet: €${metaTotals.revenue.toFixed(2)}`,
+              `- Impressies: ${metaTotals.impressions.toLocaleString('nl-NL')}`,
+              `- Clicks: ${metaTotals.clicks.toLocaleString('nl-NL')}`,
+              `- CTR: ${metaCtr}%`,
+              '',
+              'Dit is LIVE data direct van de Meta API. Je kunt de gebruiker helpen met het analyseren van deze Meta Ads performance data.'
+            ]
+
+            systemPrompt = `${systemPrompt}\n${metaContextLines.join('\n')}`
+          }
+        } else if (metaAdAccountId && !metaAccessToken) {
+          // Fallback to database if no access token configured
+          const adAccountId = `act_${metaAdAccountId.replace(/^act_/, '')}`
+
+          const endDate = new Date()
+          endDate.setDate(endDate.getDate() - 1)
+          const startDate = new Date(endDate)
+          startDate.setDate(startDate.getDate() - 13)
+
+          const formatMetaDate = (d: Date) => d.toISOString().split('T')[0]
+
+          const { data: metaAdsData } = await supabase
+            .from('meta_insights_daily')
+            .select('spend, conversions, conversion_value')
+            .eq('client_id', clientId)
+            .eq('ad_account_id', adAccountId)
+            .eq('entity_type', 'campaign')
+            .gte('date', formatMetaDate(startDate))
+            .lte('date', formatMetaDate(endDate))
+
+          if (metaAdsData && metaAdsData.length > 0) {
+            const metaTotals = metaAdsData.reduce(
+              (acc: { spend: number; conversions: number; revenue: number }, row: { spend?: number; conversions?: number; conversion_value?: number }) => ({
+                spend: acc.spend + (row.spend || 0),
+                conversions: acc.conversions + (row.conversions || 0),
+                revenue: acc.revenue + (row.conversion_value || 0)
+              }),
+              { spend: 0, conversions: 0, revenue: 0 }
+            )
+
+            const metaRoas = metaTotals.spend > 0 ? (metaTotals.revenue / metaTotals.spend).toFixed(2) : '0'
+            const metaCpa = metaTotals.conversions > 0 ? (metaTotals.spend / metaTotals.conversions).toFixed(2) : '0'
+
+            const metaTargets = (metaSettings?.targets as Record<string, unknown>) || {}
+
+            const metaContextLines = [
+              '',
+              '📊 META ADS PERFORMANCE (afgelopen 14 dagen):',
+              `- Totale spend: €${metaTotals.spend.toFixed(2)}`,
+              `- ROAS: ${metaRoas}${metaTargets.targetROAS ? ` (target: ${metaTargets.targetROAS})` : ''}`,
+              `- Conversies: ${metaTotals.conversions}`,
+              `- CPA: €${metaCpa}${metaTargets.targetCPA ? ` (target: €${metaTargets.targetCPA})` : ''}`,
+              `- Omzet: €${metaTotals.revenue.toFixed(2)}`,
+              '',
+              'Je kunt de gebruiker helpen met het analyseren van deze Meta Ads performance data.'
+            ]
+
+            systemPrompt = `${systemPrompt}\n${metaContextLines.join('\n')}`
+          }
+        }
+      } catch (metaContextError) {
+        // Silently continue if Meta Ads fetch fails
+        console.warn('Could not fetch Meta Ads context:', metaContextError)
       }
     }
 
