@@ -224,15 +224,15 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // Fetch client name
-      const { data: client } = await supabase
+      // Fetch client name and settings
+      const { data: clientData } = await supabase
         .from('clients')
-        .select('name')
+        .select('name, settings')
         .eq('id', clientId)
         .single()
 
-      if (client) {
-        clientName = client.name
+      if (clientData) {
+        clientName = clientData.name
 
         // Get context from new AI Context Layer (client_context table)
         const { data: contextData } = await supabase
