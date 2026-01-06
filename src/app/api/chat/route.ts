@@ -211,6 +211,7 @@ export async function POST(request: NextRequest) {
     // Get client context if clientId provided (uses new AI Context Layer)
     let clientContext: Record<string, unknown> | null = null
     let clientName: string | null = null
+    let clientSettings: Record<string, unknown> | null = null
 
     if (clientId) {
       // Verify client access
@@ -233,6 +234,7 @@ export async function POST(request: NextRequest) {
 
       if (clientData) {
         clientName = clientData.name
+        clientSettings = clientData.settings as Record<string, unknown> | null
 
         // Get context from new AI Context Layer (client_context table)
         const { data: contextData } = await supabase
@@ -518,9 +520,10 @@ export async function POST(request: NextRequest) {
 
       // Add Meta Ads performance context if available
       try {
-        const metaSettings = clientData?.settings?.meta
-        if (metaSettings?.adAccountId) {
-          const adAccountId = `act_${metaSettings.adAccountId.replace(/^act_/, '')}`
+        const metaSettings = (clientSettings?.meta as Record<string, unknown>) || null
+        const metaAdAccountId = metaSettings?.adAccountId as string | undefined
+        if (metaAdAccountId) {
+          const adAccountId = `act_${metaAdAccountId.replace(/^act_/, '')}`
 
           // Get date range (last 14 days)
           const endDate = new Date()
@@ -555,7 +558,7 @@ export async function POST(request: NextRequest) {
             const cpa = totals.conversions > 0 ? (totals.spend / totals.conversions).toFixed(2) : '0'
 
             // Get targets if available
-            const targets = metaSettings.targets || {}
+            const targets = (metaSettings?.targets as Record<string, unknown>) || {}
 
             const metaLines = [
               '',
