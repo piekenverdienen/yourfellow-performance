@@ -278,6 +278,8 @@ export class MetaAdsClient {
     const accountId = adAccountId || this.adAccountId
     if (!accountId) throw new Error('Ad Account ID is required')
 
+    // Note: Keep fields minimal to avoid "too much data" error from Meta API
+    // object_story_spec is too large - fetch separately if needed
     const fields = [
       'id',
       'account_id',
@@ -297,6 +299,101 @@ export class MetaAdsClient {
     )
 
     return response.data || []
+  }
+
+  /**
+   * Get ads with full creative details (slower, but gets image URLs)
+   * Fetches in smaller batches to avoid API limits
+   */
+  async getAdsWithCreatives(adAccountId?: string): Promise<MetaAd[]> {
+    const accountId = adAccountId || this.adAccountId
+    if (!accountId) throw new Error('Ad Account ID is required')
+
+    // First get basic ad info
+    const basicFields = [
+      'id',
+      'name',
+      'status',
+      'effective_status',
+      'creative{id}',
+    ].join(',')
+
+    const adsResponse = await this.request<MetaApiResponse<MetaAd>>(
+      `/${accountId}/ads`,
+      { fields: basicFields, limit: 500 }
+    )
+
+    const ads = adsResponse.data || []
+
+    // Then fetch creative details for each ad (in parallel, max 10 at a time)
+    const batchSize = 10
+    for (let i = 0; i < ads.length; i += batchSize) {
+      const batch = ads.slice(i, i + batchSize)
+      await Promise.all(
+        batch.map(async (ad) => {
+          if (ad.creative?.id) {
+            const details = await this.getCreativeDetails(ad.creative.id)
+            if (details) {
+              ad.creative = { ...ad.creative, ...details }
+            }
+          }
+        })
+      )
+    }
+
+    return ads
+  }
+
+  /**
+   * Get creative details including image/video URLs
+   * This fetches the actual creative assets which may not be in the ads endpoint
+   */
+  async getCreativeDetails(creativeId: string): Promise<MetaCreative | null> {
+    try {
+      const fields = [
+        'id',
+        'name',
+        'title',
+        'body',
+        'call_to_action_type',
+        'image_url',
+        'thumbnail_url',
+        'video_id',
+        'object_story_spec',
+        'asset_feed_spec',
+        'effective_object_story_id',
+      ].join(',')
+
+      const response = await this.request<MetaCreative>(
+        `/${creativeId}`,
+        { fields }
+      )
+
+      return response
+    } catch (error) {
+      console.error(`Failed to fetch creative ${creativeId}:`, error)
+      return null
+    }
+  }
+
+  /**
+   * Get ad previews (rendered ad images)
+   * This is the most reliable way to get ad thumbnails
+   */
+  async getAdPreviews(adId: string, format: 'DESKTOP_FEED_STANDARD' | 'MOBILE_FEED_STANDARD' = 'MOBILE_FEED_STANDARD'): Promise<string | null> {
+    try {
+      const response = await this.request<{ data: Array<{ body: string }> }>(
+        `/${adId}/previews`,
+        { ad_format: format }
+      )
+
+      // The preview returns HTML, we'd need to extract the image
+      // For now, return null - this is complex to parse
+      return response.data?.[0]?.body || null
+    } catch (error) {
+      console.error(`Failed to fetch ad preview ${adId}:`, error)
+      return null
+    }
   }
 
   // ============================================

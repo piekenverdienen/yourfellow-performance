@@ -392,6 +392,80 @@ export interface MetaAIInsight {
 }
 
 // ============================================
+// Ad Creative Types (stored in meta_ad_creatives)
+// ============================================
+
+export interface MetaAdCreative {
+  id?: string
+  client_id: string
+  ad_account_id: string
+  ad_id: string
+  ad_name?: string
+  creative_id?: string
+
+  // Creative content
+  title?: string
+  body?: string
+  cta_type?: string               // e.g., 'SHOP_NOW', 'LEARN_MORE'
+
+  // Media
+  image_url?: string
+  thumbnail_url?: string
+  video_id?: string
+
+  // Landing page
+  link_url?: string
+
+  // Status
+  ad_status?: string
+  effective_status?: string
+
+  // Raw data
+  raw_creative_json?: Record<string, unknown>
+
+  // Timestamps
+  created_at?: string
+  updated_at?: string
+}
+
+// ============================================
+// Top Ads Types (for /api/meta/top-ads)
+// ============================================
+
+export interface TopAdItem {
+  ad_id: string
+  ad_name: string
+
+  // Aggregated metrics
+  spend: number
+  impressions: number
+  clicks: number
+  conversions: number
+  conversion_value: number
+  roas: number
+  cpa: number
+  ctr: number
+  cpc: number
+
+  // Creative data (joined)
+  creative?: {
+    title?: string
+    body?: string
+    cta_type?: string
+    image_url?: string
+    thumbnail_url?: string
+    video_id?: string
+    link_url?: string
+  }
+}
+
+export interface TopAdsResponse {
+  rangeDays: number
+  metric: 'roas' | 'cpa' | 'spend' | 'conversions'
+  items: TopAdItem[]
+}
+
+// ============================================
 // UI/Table Types
 // ============================================
 

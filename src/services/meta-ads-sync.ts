@@ -12,6 +12,8 @@ import type {
   MetaSyncRequest,
   MetaSyncResponse,
   MetaEntityType,
+  MetaAdCreative,
+  MetaCreative,
 } from '@/types/meta-ads'
 import type { MetaAdsSettings } from '@/types'
 
@@ -24,6 +26,7 @@ interface SyncStats {
   adsets: number
   ads: number
   insights: number
+  creatives: number
 }
 
 // ============================================
@@ -51,6 +54,7 @@ export class MetaAdsSyncService {
       adsets: 0,
       ads: 0,
       insights: 0,
+      creatives: 0,
     }
     const errors: string[] = []
 
@@ -115,6 +119,21 @@ export class MetaAdsSyncService {
           if (entityType === 'ad') stats.ads = insights
         } catch (error) {
           const errorMsg = `Failed to sync ${entityType}: ${error instanceof Error ? error.message : 'Unknown error'}`
+          console.error(errorMsg)
+          errors.push(errorMsg)
+        }
+      }
+
+      // Sync ad creatives (always sync when ads are synced)
+      if (typesToSync.includes('ad')) {
+        try {
+          const creativesResult = await this.syncAdCreatives(clientId, accountId)
+          stats.creatives = creativesResult.synced
+          if (creativesResult.errors.length > 0) {
+            errors.push(...creativesResult.errors.map(e => `Creatives: ${e}`))
+          }
+        } catch (error) {
+          const errorMsg = `Failed to sync creatives: ${error instanceof Error ? error.message : 'Unknown error'}`
           console.error(errorMsg)
           errors.push(errorMsg)
         }
@@ -422,6 +441,123 @@ export class MetaAdsSyncService {
   }
 
   // ============================================
+  // Creative Sync
+  // ============================================
+
+  /**
+   * Sync ad creatives for a client
+   * Fetches ads with creative data from Meta API and stores in meta_ad_creatives
+   */
+  async syncAdCreatives(
+    clientId: string,
+    adAccountId: string
+  ): Promise<{ synced: number; errors: string[] }> {
+    const errors: string[] = []
+    let synced = 0
+
+    try {
+      // Get client settings
+      const supabase = await this.getSupabase()
+      const { data: client, error: clientError } = await supabase
+        .from('clients')
+        .select('settings')
+        .eq('id', clientId)
+        .single()
+
+      if (clientError || !client) {
+        return { synced: 0, errors: ['Client not found'] }
+      }
+
+      const metaSettings = client.settings?.meta as MetaAdsSettings | undefined
+      if (!metaSettings?.enabled || !metaSettings.accessToken) {
+        return { synced: 0, errors: ['Meta Ads not configured for this client'] }
+      }
+
+      // Initialize Meta client
+      const metaClient = new MetaAdsClient({
+        accessToken: metaSettings.accessToken,
+        adAccountId: adAccountId || metaSettings.adAccountId,
+      })
+
+      const accountId = MetaAdsClient.formatAdAccountId(
+        adAccountId || metaSettings.adAccountId || ''
+      )
+
+      // Fetch ads with creative data
+      const ads = await metaClient.getAds(accountId)
+
+      if (ads.length === 0) {
+        return { synced: 0, errors: [] }
+      }
+
+      // Map to MetaAdCreative records
+      const creatives: MetaAdCreative[] = ads.map(ad => {
+        // Extract image URL from multiple possible locations
+        const imageUrl = extractImageUrl(ad.creative)
+        const thumbnailUrl = ad.creative?.thumbnail_url || imageUrl
+
+        return {
+          client_id: clientId,
+          ad_account_id: accountId,
+          ad_id: ad.id,
+          ad_name: ad.name,
+          creative_id: ad.creative?.id,
+          title: extractTitle(ad.creative),
+          body: extractBody(ad.creative),
+          cta_type: extractCTA(ad.creative),
+          image_url: imageUrl,
+          thumbnail_url: thumbnailUrl,
+          video_id: ad.creative?.video_id,
+          link_url: extractLinkUrl(ad.creative),
+          ad_status: ad.status,
+          effective_status: ad.effective_status,
+          raw_creative_json: ad.creative as Record<string, unknown> | undefined,
+        }
+      })
+
+      // Upsert to database in batches
+      await this.upsertCreatives(creatives)
+      synced = creatives.length
+
+      console.log(`[Meta Creatives Sync] Synced ${synced} creatives for client ${clientId}`)
+
+      return { synced, errors }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error'
+      console.error('[Meta Creatives Sync] Error:', errorMsg)
+      errors.push(errorMsg)
+      return { synced, errors }
+    }
+  }
+
+  /**
+   * Upsert creatives to database (idempotent)
+   */
+  private async upsertCreatives(creatives: MetaAdCreative[]): Promise<void> {
+    if (creatives.length === 0) return
+
+    const supabase = await this.getSupabase()
+
+    // Upsert in batches of 100
+    const batchSize = 100
+    for (let i = 0; i < creatives.length; i += batchSize) {
+      const batch = creatives.slice(i, i + batchSize)
+
+      const { error } = await supabase
+        .from('meta_ad_creatives')
+        .upsert(batch, {
+          onConflict: 'client_id,ad_account_id,ad_id',
+          ignoreDuplicates: false,
+        })
+
+      if (error) {
+        console.error('[Meta Creatives Sync] Upsert error:', error)
+        throw new Error(`Failed to upsert creatives: ${error.message}`)
+      }
+    }
+  }
+
+  // ============================================
   // Helpers
   // ============================================
 
@@ -443,4 +579,51 @@ export function getMetaAdsSyncService(): MetaAdsSyncService {
     syncServiceInstance = new MetaAdsSyncService()
   }
   return syncServiceInstance
+}
+
+// ============================================
+// Creative Data Extraction Helpers
+// ============================================
+// Simplified helpers - Meta API returns direct fields
+
+/**
+ * Extract image URL from creative
+ */
+function extractImageUrl(creative?: MetaCreative): string | undefined {
+  if (!creative) return undefined
+  // Direct image_url or thumbnail_url
+  return creative.image_url || creative.thumbnail_url || undefined
+}
+
+/**
+ * Extract title from creative
+ */
+function extractTitle(creative?: MetaCreative): string | undefined {
+  if (!creative) return undefined
+  return creative.title || creative.name || undefined
+}
+
+/**
+ * Extract body/message from creative
+ */
+function extractBody(creative?: MetaCreative): string | undefined {
+  if (!creative) return undefined
+  return creative.body || undefined
+}
+
+/**
+ * Extract CTA type from creative
+ */
+function extractCTA(creative?: MetaCreative): string | undefined {
+  if (!creative) return undefined
+  return creative.call_to_action_type || undefined
+}
+
+/**
+ * Extract link URL from creative
+ */
+function extractLinkUrl(creative?: MetaCreative): string | undefined {
+  // Link URL requires object_story_spec which we don't fetch anymore
+  // to avoid "too much data" errors
+  return undefined
 }
