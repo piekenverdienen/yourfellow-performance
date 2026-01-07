@@ -584,38 +584,15 @@ export function getMetaAdsSyncService(): MetaAdsSyncService {
 // ============================================
 // Creative Data Extraction Helpers
 // ============================================
-// Meta stores creative data in different places depending on ad type
+// Simplified helpers - Meta API returns direct fields
 
 /**
- * Extract image URL from creative - checks multiple possible locations
+ * Extract image URL from creative
  */
 function extractImageUrl(creative?: MetaCreative): string | undefined {
   if (!creative) return undefined
-
-  // Direct image_url (rare but sometimes present)
-  if (creative.image_url) return creative.image_url
-
-  // From object_story_spec.link_data (most common for link ads)
-  const linkData = creative.object_story_spec?.link_data
-  if (linkData) {
-    // Check for picture field
-    if ((linkData as Record<string, unknown>).picture) {
-      return (linkData as Record<string, unknown>).picture as string
-    }
-    // Check for image array
-    if ((linkData as Record<string, unknown>).image_crops) {
-      // Image crops contain different sizes - try to get original
-      const crops = (linkData as Record<string, unknown>).image_crops as Record<string, unknown>
-      if (crops && crops['100x100']) {
-        return undefined // We have crops but need to construct URL differently
-      }
-    }
-  }
-
-  // For video ads, use thumbnail
-  if (creative.thumbnail_url) return creative.thumbnail_url
-
-  return undefined
+  // Direct image_url or thumbnail_url
+  return creative.image_url || creative.thumbnail_url || undefined
 }
 
 /**
@@ -623,15 +600,7 @@ function extractImageUrl(creative?: MetaCreative): string | undefined {
  */
 function extractTitle(creative?: MetaCreative): string | undefined {
   if (!creative) return undefined
-
-  // Direct title
-  if (creative.title) return creative.title
-
-  // From object_story_spec.link_data
-  const linkData = creative.object_story_spec?.link_data
-  if (linkData?.name) return linkData.name
-
-  return undefined
+  return creative.title || creative.name || undefined
 }
 
 /**
@@ -639,16 +608,7 @@ function extractTitle(creative?: MetaCreative): string | undefined {
  */
 function extractBody(creative?: MetaCreative): string | undefined {
   if (!creative) return undefined
-
-  // Direct body
-  if (creative.body) return creative.body
-
-  // From object_story_spec.link_data
-  const linkData = creative.object_story_spec?.link_data
-  if (linkData?.message) return linkData.message
-  if (linkData?.description) return linkData.description
-
-  return undefined
+  return creative.body || undefined
 }
 
 /**
@@ -656,31 +616,14 @@ function extractBody(creative?: MetaCreative): string | undefined {
  */
 function extractCTA(creative?: MetaCreative): string | undefined {
   if (!creative) return undefined
-
-  // Direct CTA
-  if (creative.call_to_action_type) return creative.call_to_action_type
-
-  // From object_story_spec.link_data
-  const linkData = creative.object_story_spec?.link_data
-  if (linkData?.call_to_action?.type) return linkData.call_to_action.type
-
-  return undefined
+  return creative.call_to_action_type || undefined
 }
 
 /**
  * Extract link URL from creative
  */
 function extractLinkUrl(creative?: MetaCreative): string | undefined {
-  if (!creative) return undefined
-
-  // From object_story_spec.link_data
-  const linkData = creative.object_story_spec?.link_data
-  if (linkData?.link) return linkData.link
-
-  // From call_to_action value
-  if (linkData?.call_to_action?.value?.link) {
-    return linkData.call_to_action.value.link
-  }
-
+  // Link URL requires object_story_spec which we don't fetch anymore
+  // to avoid "too much data" errors
   return undefined
 }
