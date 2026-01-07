@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useSelectedClientId } from '@/stores/client-store'
 import { MetaKPICards } from '@/components/meta-ads/kpi-cards'
 import { MetaPerformanceTable } from '@/components/meta-ads/performance-table'
+import { TopAdsSection } from '@/components/meta-ads/top-ads'
 import { DateRangePicker, type DateRange } from '@/components/ui/date-range-picker'
 import {
   FilterToolbar,
@@ -379,6 +380,14 @@ export default function MetaAdsDashboard() {
 
       {/* KPI Cards */}
       <MetaKPICards kpis={kpis} targets={targets} loading={loading} />
+
+      {/* Top Ads Section */}
+      <TopAdsSection
+        clientId={selectedClientId}
+        rangeDays={7}
+        defaultMetric="roas"
+        limit={5}
+      />
 
       {/* Entity Type Tabs */}
       <div className="flex items-center gap-2 border-b border-surface-200">
