@@ -13,6 +13,7 @@ import type {
   MetaSyncResponse,
   MetaEntityType,
   MetaAdCreative,
+  MetaCreative,
 } from '@/types/meta-ads'
 import type { MetaAdsSettings } from '@/types'
 
@@ -490,23 +491,29 @@ export class MetaAdsSyncService {
       }
 
       // Map to MetaAdCreative records
-      const creatives: MetaAdCreative[] = ads.map(ad => ({
-        client_id: clientId,
-        ad_account_id: accountId,
-        ad_id: ad.id,
-        ad_name: ad.name,
-        creative_id: ad.creative?.id,
-        title: ad.creative?.title,
-        body: ad.creative?.body,
-        cta_type: ad.creative?.call_to_action_type,
-        image_url: ad.creative?.image_url,
-        thumbnail_url: ad.creative?.thumbnail_url,
-        video_id: ad.creative?.video_id,
-        link_url: ad.creative?.object_story_spec?.link_data?.link,
-        ad_status: ad.status,
-        effective_status: ad.effective_status,
-        raw_creative_json: ad.creative as Record<string, unknown> | undefined,
-      }))
+      const creatives: MetaAdCreative[] = ads.map(ad => {
+        // Extract image URL from multiple possible locations
+        const imageUrl = extractImageUrl(ad.creative)
+        const thumbnailUrl = ad.creative?.thumbnail_url || imageUrl
+
+        return {
+          client_id: clientId,
+          ad_account_id: accountId,
+          ad_id: ad.id,
+          ad_name: ad.name,
+          creative_id: ad.creative?.id,
+          title: extractTitle(ad.creative),
+          body: extractBody(ad.creative),
+          cta_type: extractCTA(ad.creative),
+          image_url: imageUrl,
+          thumbnail_url: thumbnailUrl,
+          video_id: ad.creative?.video_id,
+          link_url: extractLinkUrl(ad.creative),
+          ad_status: ad.status,
+          effective_status: ad.effective_status,
+          raw_creative_json: ad.creative as Record<string, unknown> | undefined,
+        }
+      })
 
       // Upsert to database in batches
       await this.upsertCreatives(creatives)
@@ -572,4 +579,108 @@ export function getMetaAdsSyncService(): MetaAdsSyncService {
     syncServiceInstance = new MetaAdsSyncService()
   }
   return syncServiceInstance
+}
+
+// ============================================
+// Creative Data Extraction Helpers
+// ============================================
+// Meta stores creative data in different places depending on ad type
+
+/**
+ * Extract image URL from creative - checks multiple possible locations
+ */
+function extractImageUrl(creative?: MetaCreative): string | undefined {
+  if (!creative) return undefined
+
+  // Direct image_url (rare but sometimes present)
+  if (creative.image_url) return creative.image_url
+
+  // From object_story_spec.link_data (most common for link ads)
+  const linkData = creative.object_story_spec?.link_data
+  if (linkData) {
+    // Check for picture field
+    if ((linkData as Record<string, unknown>).picture) {
+      return (linkData as Record<string, unknown>).picture as string
+    }
+    // Check for image array
+    if ((linkData as Record<string, unknown>).image_crops) {
+      // Image crops contain different sizes - try to get original
+      const crops = (linkData as Record<string, unknown>).image_crops as Record<string, unknown>
+      if (crops && crops['100x100']) {
+        return undefined // We have crops but need to construct URL differently
+      }
+    }
+  }
+
+  // For video ads, use thumbnail
+  if (creative.thumbnail_url) return creative.thumbnail_url
+
+  return undefined
+}
+
+/**
+ * Extract title from creative
+ */
+function extractTitle(creative?: MetaCreative): string | undefined {
+  if (!creative) return undefined
+
+  // Direct title
+  if (creative.title) return creative.title
+
+  // From object_story_spec.link_data
+  const linkData = creative.object_story_spec?.link_data
+  if (linkData?.name) return linkData.name
+
+  return undefined
+}
+
+/**
+ * Extract body/message from creative
+ */
+function extractBody(creative?: MetaCreative): string | undefined {
+  if (!creative) return undefined
+
+  // Direct body
+  if (creative.body) return creative.body
+
+  // From object_story_spec.link_data
+  const linkData = creative.object_story_spec?.link_data
+  if (linkData?.message) return linkData.message
+  if (linkData?.description) return linkData.description
+
+  return undefined
+}
+
+/**
+ * Extract CTA type from creative
+ */
+function extractCTA(creative?: MetaCreative): string | undefined {
+  if (!creative) return undefined
+
+  // Direct CTA
+  if (creative.call_to_action_type) return creative.call_to_action_type
+
+  // From object_story_spec.link_data
+  const linkData = creative.object_story_spec?.link_data
+  if (linkData?.call_to_action?.type) return linkData.call_to_action.type
+
+  return undefined
+}
+
+/**
+ * Extract link URL from creative
+ */
+function extractLinkUrl(creative?: MetaCreative): string | undefined {
+  if (!creative) return undefined
+
+  // From object_story_spec.link_data
+  const linkData = creative.object_story_spec?.link_data
+  if (linkData?.link) return linkData.link
+
+  // From call_to_action value
+  if (linkData?.call_to_action?.value?.link) {
+    return linkData.call_to_action.value.link
+  }
+
+  return undefined
 }

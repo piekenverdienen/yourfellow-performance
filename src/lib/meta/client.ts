@@ -286,7 +286,7 @@ export class MetaAdsClient {
       'name',
       'status',
       'effective_status',
-      'creative{id,name,title,body,call_to_action_type,image_url,video_id,thumbnail_url}',
+      'creative{id,name,title,body,call_to_action_type,image_url,video_id,thumbnail_url,object_story_spec}',
       'created_time',
       'updated_time',
     ].join(',')
@@ -297,6 +297,58 @@ export class MetaAdsClient {
     )
 
     return response.data || []
+  }
+
+  /**
+   * Get creative details including image/video URLs
+   * This fetches the actual creative assets which may not be in the ads endpoint
+   */
+  async getCreativeDetails(creativeId: string): Promise<MetaCreative | null> {
+    try {
+      const fields = [
+        'id',
+        'name',
+        'title',
+        'body',
+        'call_to_action_type',
+        'image_url',
+        'thumbnail_url',
+        'video_id',
+        'object_story_spec',
+        'asset_feed_spec',
+        'effective_object_story_id',
+      ].join(',')
+
+      const response = await this.request<MetaCreative>(
+        `/${creativeId}`,
+        { fields }
+      )
+
+      return response
+    } catch (error) {
+      console.error(`Failed to fetch creative ${creativeId}:`, error)
+      return null
+    }
+  }
+
+  /**
+   * Get ad previews (rendered ad images)
+   * This is the most reliable way to get ad thumbnails
+   */
+  async getAdPreviews(adId: string, format: 'DESKTOP_FEED_STANDARD' | 'MOBILE_FEED_STANDARD' = 'MOBILE_FEED_STANDARD'): Promise<string | null> {
+    try {
+      const response = await this.request<{ data: Array<{ body: string }> }>(
+        `/${adId}/previews`,
+        { ad_format: format }
+      )
+
+      // The preview returns HTML, we'd need to extract the image
+      // For now, return null - this is complex to parse
+      return response.data?.[0]?.body || null
+    } catch (error) {
+      console.error(`Failed to fetch ad preview ${adId}:`, error)
+      return null
+    }
   }
 
   // ============================================
