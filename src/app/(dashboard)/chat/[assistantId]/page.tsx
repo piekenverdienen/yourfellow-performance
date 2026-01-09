@@ -621,8 +621,8 @@ export default function ChatInterfacePage() {
           {isStreaming && streamingContent && (
             <div className="flex gap-4 justify-start">
               <AssistantAvatar slug={assistant.slug} size="sm" />
-              <div className="max-w-[75%] px-4 py-3 bg-white rounded-2xl shadow-sm border border-surface-100">
-                <div className="prose prose-sm max-w-none prose-p:leading-relaxed prose-p:text-surface-700">
+              <div className="max-w-[70%] px-5 py-4 bg-surface-50/80 rounded-2xl">
+                <div className="prose prose-[15px] max-w-none leading-relaxed prose-p:text-surface-700 prose-p:my-1.5">
                   <ReactMarkdown>{streamingContent}</ReactMarkdown>
                 </div>
               </div>
@@ -633,9 +633,13 @@ export default function ChatInterfacePage() {
           {isLoading && !streamingContent && (
             <div className="flex gap-4 justify-start">
               <AssistantAvatar slug={assistant.slug} size="sm" />
-              <div className="px-4 py-3 bg-white rounded-2xl shadow-sm border border-surface-100">
-                <div className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              <div className="px-5 py-4 bg-surface-50/80 rounded-2xl">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex gap-1">
+                    <span className="w-2 h-2 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-2 h-2 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-2 h-2 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
                   <span className="text-sm text-surface-500">
                     {statusMessage || 'Aan het typen...'}
                   </span>
