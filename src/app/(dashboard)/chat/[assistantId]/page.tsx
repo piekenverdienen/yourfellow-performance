@@ -45,6 +45,7 @@ export default function ChatInterfacePage() {
   const [isGeneratingImage, setIsGeneratingImage] = useState(false)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
   const supabase = createClient()
 
   useEffect(() => {
@@ -137,6 +138,32 @@ export default function ChatInterfacePage() {
     setConversationId(null)
     setMessages([])
     router.push(`/chat/${assistantId}`)
+  }
+
+  // Cancel the current streaming request
+  const handleCancelChat = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+    }
+
+    // Keep any partial response that was already streamed
+    if (streamingContent) {
+      const partialMessage: Message = {
+        id: `assistant-${Date.now()}`,
+        conversation_id: conversationId || '',
+        role: 'assistant',
+        content: streamingContent + '\n\n*[Gestopt door gebruiker]*',
+        tokens_used: 0,
+        created_at: new Date().toISOString(),
+      }
+      setMessages(prev => [...prev, partialMessage])
+    }
+
+    setIsLoading(false)
+    setIsStreaming(false)
+    setStreamingContent('')
+    setStatusMessage(null)
   }
 
   const selectConversation = async (convId: string) => {
@@ -382,6 +409,9 @@ export default function ChatInterfacePage() {
     setMessages(prev => [...prev, tempUserMessage])
 
     try {
+      // Create new AbortController for this request
+      abortControllerRef.current = new AbortController()
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -394,6 +424,7 @@ export default function ChatInterfacePage() {
           attachments: uploadedAttachments,
           model: chatModelName,
         }),
+        signal: abortControllerRef.current.signal,
       })
 
       if (!response.ok) {
@@ -459,9 +490,14 @@ export default function ChatInterfacePage() {
       // Refresh conversations list
       await fetchConversations()
     } catch (error) {
+      // Don't handle abort errors - they're handled by handleCancelChat
+      if (error instanceof Error && error.name === 'AbortError') {
+        return
+      }
       console.error('Chat error:', error)
       setMessages(prev => prev.filter(m => m.id !== tempUserMessage.id))
     } finally {
+      abortControllerRef.current = null
       setIsLoading(false)
       setIsStreaming(false)
       setStatusMessage(null)
@@ -651,6 +687,7 @@ export default function ChatInterfacePage() {
         {/* Input area with multimodal actions */}
         <ChatActionBar
           onSubmit={handleChatSubmit}
+          onCancel={handleCancelChat}
           isLoading={isLoading || isStreaming}
           placeholder={`Bericht aan ${assistant.name}...`}
         />
