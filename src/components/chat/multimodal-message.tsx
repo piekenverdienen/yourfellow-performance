@@ -1,12 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import ReactMarkdown from 'react-markdown'
 import {
   FileText,
-  Image as ImageIcon,
   Sparkles,
   Download,
   ExternalLink,
@@ -116,40 +114,18 @@ export function MultimodalMessage({
   const isMultimodal = message.content_type === 'multimodal'
   const isFileAnalysis = message.content_type === 'file_analysis'
 
-  // Get action icon based on content type
-  const getActionIcon = () => {
-    if (isImageGeneration) return <Sparkles className="h-4 w-4" />
-    if (isMultimodal) return <ImageIcon className="h-4 w-4" />
-    if (isFileAnalysis) return <FileText className="h-4 w-4" />
-    return null
-  }
-
-  const actionIcon = getActionIcon()
-
   return (
     <div
       className={cn(
-        'flex gap-3',
+        'flex gap-4',
         isUser ? 'justify-end' : 'justify-start'
       )}
     >
       {!isUser && assistantAvatar}
       <div className={cn('flex flex-col gap-2', isUser ? 'items-end' : 'items-start')}>
-        {/* Action indicator */}
-        {actionIcon && isUser && (
-          <div className="flex items-center gap-1 text-xs text-surface-500">
-            {actionIcon}
-            <span>
-              {isImageGeneration && 'Afbeelding genereren'}
-              {isMultimodal && 'Afbeelding analyseren'}
-              {isFileAnalysis && 'Bestand analyseren'}
-            </span>
-          </div>
-        )}
-
         {/* Attachments (show before text for user messages) */}
         {isUser && hasAttachments && (
-          <div className="flex flex-wrap gap-2 max-w-[80%]">
+          <div className="flex flex-wrap gap-2 max-w-[75%]">
             {message.attachments!.map(attachment => (
               <AttachmentPreview key={attachment.id} attachment={attachment} />
             ))}
@@ -158,28 +134,30 @@ export function MultimodalMessage({
 
         {/* Message content */}
         {message.content && (
-          <Card
+          <div
             className={cn(
-              'max-w-[80%] px-4 py-3',
+              'max-w-[75%] px-4 py-3 rounded-2xl',
               isUser
-                ? 'bg-primary text-white'
-                : 'bg-white'
+                ? 'bg-surface-900 text-white'
+                : 'bg-white shadow-sm border border-surface-100'
             )}
           >
             <div
               className={cn(
-                'prose prose-sm max-w-none',
-                isUser && 'prose-invert'
+                'prose prose-sm max-w-none prose-p:leading-relaxed',
+                isUser
+                  ? 'prose-invert prose-p:text-white/90'
+                  : 'prose-p:text-surface-700'
               )}
             >
               <ReactMarkdown>{message.content}</ReactMarkdown>
             </div>
-          </Card>
+          </div>
         )}
 
         {/* Attachments (show after text for assistant messages - generated images) */}
         {!isUser && hasAttachments && (
-          <div className="flex flex-wrap gap-2 max-w-[80%]">
+          <div className="flex flex-wrap gap-2 max-w-[75%]">
             {message.attachments!.map(attachment => (
               <AttachmentPreview key={attachment.id} attachment={attachment} />
             ))}

@@ -2,17 +2,14 @@
 
 import { useState, useRef, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
 import {
-  Plus,
   Send,
   Loader2,
+  Paperclip,
   Image as ImageIcon,
   Sparkles,
   FileText,
-  MessageSquare,
   X,
-  Upload,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ChatActionType, UploadedFile } from '@/types'
@@ -33,40 +30,24 @@ interface ChatActionBarProps {
   showModelSelector?: boolean
 }
 
-interface ActionOption {
-  id: ChatActionType
+interface ActionPill {
+  id: ChatActionType | 'attach'
   label: string
-  description: string
   icon: React.ReactNode
   acceptedFiles?: string
 }
 
-const ACTION_OPTIONS: ActionOption[] = [
+const ACTION_PILLS: ActionPill[] = [
   {
-    id: 'chat',
-    label: 'Tekst chat',
-    description: 'Normale tekst conversatie',
-    icon: <MessageSquare className="h-4 w-4" />,
-  },
-  {
-    id: 'image_analyze',
-    label: 'Afbeelding analyseren',
-    description: 'Upload een afbeelding voor analyse',
-    icon: <ImageIcon className="h-4 w-4" />,
-    acceptedFiles: 'image/jpeg,image/png,image/webp,image/gif',
+    id: 'attach',
+    label: 'Bijlage',
+    icon: <Paperclip className="h-3.5 w-3.5" />,
+    acceptedFiles: 'image/jpeg,image/png,image/webp,image/gif,application/pdf,.pdf,application/msword,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx,text/csv,.csv',
   },
   {
     id: 'image_generate',
-    label: 'Afbeelding genereren',
-    description: 'Genereer een afbeelding met AI',
-    icon: <Sparkles className="h-4 w-4" />,
-  },
-  {
-    id: 'file_analyze',
-    label: 'Bestand analyseren',
-    description: 'Upload PDF, DOCX of CSV',
-    icon: <FileText className="h-4 w-4" />,
-    acceptedFiles: 'application/pdf,.pdf,application/msword,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx,text/csv,.csv',
+    label: 'Genereer',
+    icon: <Sparkles className="h-3.5 w-3.5" />,
   },
 ]
 
@@ -79,7 +60,6 @@ export function ChatActionBar({
 }: ChatActionBarProps) {
   const [input, setInput] = useState('')
   const [selectedAction, setSelectedAction] = useState<ChatActionType>('chat')
-  const [showActionMenu, setShowActionMenu] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [isDragging, setIsDragging] = useState(false)
   const [selectedChatModel, setSelectedChatModel] = useState<ChatModelId>('claude-sonnet')
@@ -87,8 +67,6 @@ export function ChatActionBar({
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  const currentAction = ACTION_OPTIONS.find(a => a.id === selectedAction)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -123,18 +101,17 @@ export function ChatActionBar({
     }
   }
 
-  const handleActionSelect = (action: ChatActionType) => {
-    setSelectedAction(action)
-    setShowActionMenu(false)
-
-    // Open file picker if action requires files
-    const actionConfig = ACTION_OPTIONS.find(a => a.id === action)
-    if (actionConfig?.acceptedFiles && fileInputRef.current) {
-      fileInputRef.current.accept = actionConfig.acceptedFiles
-      fileInputRef.current.click()
+  const handlePillClick = (pill: ActionPill) => {
+    if (pill.id === 'attach') {
+      // Open file picker
+      if (fileInputRef.current) {
+        fileInputRef.current.accept = pill.acceptedFiles || ''
+        fileInputRef.current.click()
+      }
+    } else if (pill.id === 'image_generate') {
+      setSelectedAction(pill.id)
+      textareaRef.current?.focus()
     }
-
-    textareaRef.current?.focus()
   }
 
   const handleFileSelect = useCallback((files: FileList | null) => {
@@ -193,7 +170,7 @@ export function ChatActionBar({
   const getPlaceholder = () => {
     switch (selectedAction) {
       case 'image_analyze':
-        return 'Beschrijf wat je wilt weten over de afbeelding...'
+        return 'Wat wil je weten over deze afbeelding?'
       case 'image_generate':
         return 'Beschrijf de afbeelding die je wilt genereren...'
       case 'file_analyze':
@@ -203,10 +180,22 @@ export function ChatActionBar({
     }
   }
 
+  // Auto-resize textarea
+  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value)
+
+    // Auto-resize
+    const textarea = e.target
+    textarea.style.height = 'auto'
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`
+  }
+
+  const isImageGenerateMode = selectedAction === 'image_generate'
+
   return (
     <div
       className={cn(
-        'relative p-4 border-t border-surface-200 bg-white',
+        'relative px-4 py-3 bg-white border-t border-surface-200',
         isDragging && 'ring-2 ring-primary ring-inset bg-primary/5'
       )}
       onDragOver={handleDragOver}
@@ -215,144 +204,138 @@ export function ChatActionBar({
     >
       {/* Drag overlay */}
       {isDragging && (
-        <div className="absolute inset-0 flex items-center justify-center bg-primary/10 z-10 pointer-events-none">
+        <div className="absolute inset-0 flex items-center justify-center bg-primary/10 z-10 pointer-events-none rounded-2xl">
           <div className="flex items-center gap-2 text-primary font-medium">
-            <Upload className="h-5 w-5" />
+            <Paperclip className="h-5 w-5" />
             <span>Sleep bestand hier</span>
           </div>
         </div>
       )}
 
-      {/* Uploaded files preview */}
-      {uploadedFiles.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-3">
-          {uploadedFiles.map(file => (
-            <div
-              key={file.id}
-              className="relative group flex items-center gap-2 px-3 py-2 bg-surface-100 rounded-lg"
-            >
-              {file.preview ? (
-                <img
-                  src={file.preview}
-                  alt={file.file.name}
-                  className="w-10 h-10 object-cover rounded"
-                />
-              ) : (
-                <FileText className="h-5 w-5 text-surface-500" />
-              )}
-              <div className="flex flex-col min-w-0">
-                <span className="text-sm font-medium truncate max-w-[150px]">
-                  {file.file.name}
-                </span>
-                <span className="text-xs text-surface-500">
-                  {(file.file.size / 1024).toFixed(1)} KB
-                </span>
+      {/* Main input container */}
+      <div className={cn(
+        'relative bg-surface-50 rounded-2xl border border-surface-200 transition-all',
+        'focus-within:border-surface-300 focus-within:bg-white focus-within:shadow-sm',
+        isDragging && 'border-primary'
+      )}>
+        {/* Uploaded files preview - inside the container */}
+        {uploadedFiles.length > 0 && (
+          <div className="flex flex-wrap gap-2 p-3 pb-0">
+            {uploadedFiles.map(file => (
+              <div
+                key={file.id}
+                className="relative group flex items-center gap-2 px-3 py-2 bg-white border border-surface-200 rounded-xl shadow-sm"
+              >
+                {file.preview ? (
+                  <img
+                    src={file.preview}
+                    alt={file.file.name}
+                    className="w-10 h-10 object-cover rounded-lg"
+                  />
+                ) : (
+                  <div className="w-10 h-10 bg-surface-100 rounded-lg flex items-center justify-center">
+                    <FileText className="h-5 w-5 text-surface-500" />
+                  </div>
+                )}
+                <div className="flex flex-col min-w-0">
+                  <span className="text-sm font-medium truncate max-w-[120px]">
+                    {file.file.name}
+                  </span>
+                  <span className="text-xs text-surface-500">
+                    {(file.file.size / 1024).toFixed(0)} KB
+                  </span>
+                </div>
+                <button
+                  onClick={() => removeFile(file.id)}
+                  className="p-1 hover:bg-surface-100 rounded-full text-surface-400 hover:text-surface-600 transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
+            ))}
+          </div>
+        )}
+
+        {/* Image generate mode indicator */}
+        {isImageGenerateMode && uploadedFiles.length === 0 && (
+          <div className="flex items-center gap-2 px-4 pt-3 pb-0">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium">
+              <Sparkles className="h-3 w-3" />
+              <span>Afbeelding genereren</span>
               <button
-                onClick={() => removeFile(file.id)}
-                className="absolute -top-1 -right-1 p-1 bg-surface-200 hover:bg-surface-300 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={() => setSelectedAction('chat')}
+                className="ml-1 hover:bg-primary/20 rounded-full p-0.5"
               >
                 <X className="h-3 w-3" />
               </button>
             </div>
-          ))}
-        </div>
-      )}
+          </div>
+        )}
 
-      <form onSubmit={handleSubmit} className="flex items-end gap-2">
-        {/* Action menu button */}
-        <div className="relative">
+        {/* Textarea */}
+        <textarea
+          ref={textareaRef}
+          value={input}
+          onChange={handleTextareaChange}
+          onKeyDown={handleKeyDown}
+          placeholder={getPlaceholder()}
+          className={cn(
+            'w-full bg-transparent px-4 py-3 text-surface-900 placeholder:text-surface-400',
+            'resize-none outline-none',
+            'min-h-[52px] max-h-[200px]'
+          )}
+          rows={1}
+          disabled={isLoading || disabled}
+        />
+
+        {/* Bottom bar with pills and send button */}
+        <div className="flex items-center justify-between px-3 pb-3">
+          {/* Left side: Action pills */}
+          <div className="flex items-center gap-1.5">
+            {ACTION_PILLS.map(pill => (
+              <button
+                key={pill.id}
+                type="button"
+                onClick={() => handlePillClick(pill)}
+                disabled={disabled || isLoading}
+                className={cn(
+                  'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all',
+                  'border border-surface-200 hover:border-surface-300',
+                  'text-surface-600 hover:text-surface-900 hover:bg-surface-100',
+                  'disabled:opacity-50 disabled:cursor-not-allowed',
+                  pill.id === selectedAction && 'bg-primary/10 border-primary/30 text-primary'
+                )}
+              >
+                {pill.icon}
+                <span>{pill.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Right side: Send button */}
           <Button
             type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setShowActionMenu(!showActionMenu)}
+            onClick={handleSubmit}
+            disabled={
+              (!input.trim() && uploadedFiles.length === 0) ||
+              isLoading ||
+              disabled ||
+              ((selectedAction === 'image_analyze' || selectedAction === 'file_analyze') && uploadedFiles.length === 0)
+            }
             className={cn(
-              'shrink-0 h-[44px] w-[44px] p-0',
-              selectedAction !== 'chat' && 'border-primary text-primary'
+              'rounded-full h-9 w-9 p-0 shrink-0',
+              'bg-primary hover:bg-primary/90 text-black',
+              'disabled:bg-surface-200 disabled:text-surface-400'
             )}
-            disabled={disabled}
           >
-            {currentAction?.icon || <Plus className="h-5 w-5" />}
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
           </Button>
-
-          {/* Action dropdown */}
-          {showActionMenu && (
-            <div className="absolute bottom-full left-0 mb-2 w-64 bg-white rounded-lg shadow-lg border border-surface-200 py-1 z-20">
-              {ACTION_OPTIONS.map(action => (
-                <button
-                  key={action.id}
-                  type="button"
-                  onClick={() => handleActionSelect(action.id)}
-                  className={cn(
-                    'w-full px-3 py-2 text-left hover:bg-surface-50 transition-colors flex items-start gap-3',
-                    selectedAction === action.id && 'bg-primary/10'
-                  )}
-                >
-                  <span className={cn(
-                    'mt-0.5',
-                    selectedAction === action.id ? 'text-primary' : 'text-surface-500'
-                  )}>
-                    {action.icon}
-                  </span>
-                  <div>
-                    <div className={cn(
-                      'font-medium text-sm',
-                      selectedAction === action.id && 'text-primary'
-                    )}>
-                      {action.label}
-                    </div>
-                    <div className="text-xs text-surface-500">{action.description}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
         </div>
-
-        {/* Text input */}
-        <div className="flex-1 relative">
-          <Textarea
-            ref={textareaRef}
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={getPlaceholder()}
-            className="resize-none min-h-[44px] max-h-32 pr-10"
-            rows={1}
-            disabled={isLoading || disabled}
-          />
-          {/* Quick file upload button inside textarea */}
-          {selectedAction === 'chat' && (
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 hover:bg-surface-100 rounded text-surface-400 hover:text-surface-600 transition-colors"
-              disabled={disabled}
-            >
-              <Upload className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-
-        {/* Submit button */}
-        <Button
-          type="submit"
-          disabled={
-            (!input.trim() && uploadedFiles.length === 0) ||
-            isLoading ||
-            disabled ||
-            ((selectedAction === 'image_analyze' || selectedAction === 'file_analyze') && uploadedFiles.length === 0)
-          }
-          className="shrink-0 h-[44px]"
-        >
-          {isLoading ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
-          ) : (
-            <Send className="h-5 w-5" />
-          )}
-        </Button>
-      </form>
+      </div>
 
       {/* Hidden file input */}
       <input
@@ -361,40 +344,28 @@ export function ChatActionBar({
         className="hidden"
         onChange={handleFileInputChange}
         multiple
-        accept={currentAction?.acceptedFiles}
       />
 
-      {/* Model selector and help text */}
-      <div className="flex items-center justify-between mt-2">
-        {showModelSelector && (
-          <div className="flex items-center gap-2">
-            {selectedAction === 'image_generate' ? (
-              <ImageModelSelector
-                value={selectedImageModel}
-                onChange={setSelectedImageModel}
-                disabled={isLoading || disabled}
-                compact
-              />
-            ) : (
-              <ModelSelector
-                value={selectedChatModel}
-                onChange={setSelectedChatModel}
-                disabled={isLoading || disabled}
-                compact
-              />
-            )}
-          </div>
-        )}
-        <p className={cn(
-          "text-xs text-surface-500",
-          !showModelSelector && "text-center w-full"
-        )}>
-          {selectedAction === 'chat' && 'Enter om te versturen, Shift+Enter voor nieuwe regel'}
-          {selectedAction === 'image_analyze' && 'Upload een afbeelding en stel een vraag'}
-          {selectedAction === 'image_generate' && 'Beschrijf de afbeelding die je wilt maken'}
-          {selectedAction === 'file_analyze' && 'Upload een bestand (PDF, DOCX, CSV) en stel een vraag'}
-        </p>
-      </div>
+      {/* Model selector - below input, right aligned */}
+      {showModelSelector && (
+        <div className="flex items-center justify-end mt-2">
+          {isImageGenerateMode ? (
+            <ImageModelSelector
+              value={selectedImageModel}
+              onChange={setSelectedImageModel}
+              disabled={isLoading || disabled}
+              compact
+            />
+          ) : (
+            <ModelSelector
+              value={selectedChatModel}
+              onChange={setSelectedChatModel}
+              disabled={isLoading || disabled}
+              compact
+            />
+          )}
+        </div>
+      )}
     </div>
   )
 }

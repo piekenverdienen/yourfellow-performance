@@ -595,16 +595,15 @@ export default function ChatInterfacePage() {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {messages.length === 0 && !isStreaming && (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <div className="mb-4">
-                <AssistantAvatar slug={assistant.slug} size="lg" className="w-16 h-16" />
+            <div className="flex flex-col items-center justify-center h-full text-center px-4">
+              <div className="mb-6">
+                <AssistantAvatar slug={assistant.slug} size="lg" className="w-14 h-14" />
               </div>
-              <h3 className="text-lg font-semibold text-surface-900">{assistant.name}</h3>
-              <p className="text-surface-600 max-w-md mt-2">{assistant.description}</p>
-              <p className="text-surface-500 text-sm mt-4">
-                Stuur een bericht om het gesprek te starten
+              <h3 className="text-xl font-semibold text-surface-900 mb-2">{assistant.name}</h3>
+              <p className="text-surface-500 max-w-sm text-sm leading-relaxed">
+                {assistant.description || 'Hoe kan ik je vandaag helpen?'}
               </p>
             </div>
           )}
@@ -620,28 +619,28 @@ export default function ChatInterfacePage() {
 
           {/* Streaming message */}
           {isStreaming && streamingContent && (
-            <div className="flex gap-3 justify-start">
+            <div className="flex gap-4 justify-start">
               <AssistantAvatar slug={assistant.slug} size="sm" />
-              <Card className="max-w-[80%] px-4 py-3 bg-white">
-                <div className="prose prose-sm max-w-none">
+              <div className="max-w-[75%] px-4 py-3 bg-white rounded-2xl shadow-sm border border-surface-100">
+                <div className="prose prose-sm max-w-none prose-p:leading-relaxed prose-p:text-surface-700">
                   <ReactMarkdown>{streamingContent}</ReactMarkdown>
                 </div>
-              </Card>
+              </div>
             </div>
           )}
 
           {/* Loading indicator with status */}
           {isLoading && !streamingContent && (
-            <div className="flex gap-3 justify-start">
+            <div className="flex gap-4 justify-start">
               <AssistantAvatar slug={assistant.slug} size="sm" />
-              <Card className="px-4 py-3 bg-white">
+              <div className="px-4 py-3 bg-white rounded-2xl shadow-sm border border-surface-100">
                 <div className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-surface-400" />
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
                   <span className="text-sm text-surface-500">
                     {statusMessage || 'Aan het typen...'}
                   </span>
                 </div>
-              </Card>
+              </div>
             </div>
           )}
 
