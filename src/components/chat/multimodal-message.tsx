@@ -136,18 +136,17 @@ export function MultimodalMessage({
         {message.content && (
           <div
             className={cn(
-              'rounded-2xl inline-block',
+              'rounded-2xl w-fit',
               isUser
-                ? 'bg-gradient-to-br from-surface-800 to-surface-900 text-white px-4 py-2.5 shadow-md max-w-[70%]'
-                : 'bg-surface-50/80 px-5 py-4 max-w-[70%]'
+                ? 'bg-gradient-to-br from-surface-800 to-surface-900 text-white px-4 py-2.5 shadow-md'
+                : 'bg-surface-50/80 px-5 py-4'
             )}
+            style={{ maxWidth: 'min(70%, 600px)' }}
           >
             <div
               className={cn(
-                'text-[15px] leading-relaxed whitespace-pre-wrap',
-                isUser
-                  ? 'text-white'
-                  : 'text-surface-700'
+                'text-[15px] leading-relaxed',
+                isUser ? 'text-white' : 'text-surface-700'
               )}
             >
               <ReactMarkdown
