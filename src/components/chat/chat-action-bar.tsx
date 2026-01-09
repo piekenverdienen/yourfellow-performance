@@ -13,6 +13,7 @@ import {
   MessageSquare,
   X,
   Upload,
+  Square,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ChatActionType, UploadedFile } from '@/types'
@@ -27,6 +28,7 @@ interface ChatActionBarProps {
     chatModel?: string
     imageModel?: string
   }) => void
+  onCancel?: () => void
   isLoading: boolean
   placeholder?: string
   disabled?: boolean
@@ -72,6 +74,7 @@ const ACTION_OPTIONS: ActionOption[] = [
 
 export function ChatActionBar({
   onSubmit,
+  onCancel,
   isLoading,
   placeholder = 'Typ een bericht...',
   disabled = false,
@@ -335,23 +338,35 @@ export function ChatActionBar({
           )}
         </div>
 
-        {/* Submit button */}
-        <Button
-          type="submit"
-          disabled={
-            (!input.trim() && uploadedFiles.length === 0) ||
-            isLoading ||
-            disabled ||
-            ((selectedAction === 'image_analyze' || selectedAction === 'file_analyze') && uploadedFiles.length === 0)
-          }
-          className="shrink-0 h-[44px]"
-        >
-          {isLoading ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
-          ) : (
-            <Send className="h-5 w-5" />
-          )}
-        </Button>
+        {/* Submit/Stop button */}
+        {isLoading && onCancel ? (
+          <Button
+            type="button"
+            onClick={onCancel}
+            variant="destructive"
+            className="shrink-0 h-[44px]"
+          >
+            <Square className="h-4 w-4 mr-1.5 fill-current" />
+            Stop
+          </Button>
+        ) : (
+          <Button
+            type="submit"
+            disabled={
+              (!input.trim() && uploadedFiles.length === 0) ||
+              isLoading ||
+              disabled ||
+              ((selectedAction === 'image_analyze' || selectedAction === 'file_analyze') && uploadedFiles.length === 0)
+            }
+            className="shrink-0 h-[44px]"
+          >
+            {isLoading ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <Send className="h-5 w-5" />
+            )}
+          </Button>
+        )}
       </form>
 
       {/* Hidden file input */}
