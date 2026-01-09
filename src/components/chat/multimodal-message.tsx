@@ -136,21 +136,27 @@ export function MultimodalMessage({
         {message.content && (
           <div
             className={cn(
-              'max-w-[70%] rounded-2xl',
+              'rounded-2xl inline-block',
               isUser
-                ? 'bg-gradient-to-br from-surface-800 to-surface-900 text-white px-5 py-3.5 shadow-md'
-                : 'bg-surface-50/80 px-5 py-4'
+                ? 'bg-gradient-to-br from-surface-800 to-surface-900 text-white px-4 py-2.5 shadow-md max-w-[70%]'
+                : 'bg-surface-50/80 px-5 py-4 max-w-[70%]'
             )}
           >
             <div
               className={cn(
-                'prose prose-[15px] max-w-none leading-relaxed',
+                'text-[15px] leading-relaxed whitespace-pre-wrap',
                 isUser
-                  ? 'prose-invert prose-p:text-white prose-p:my-1.5 prose-headings:text-white prose-strong:text-white prose-code:text-white/90'
-                  : 'prose-p:text-surface-700 prose-p:my-1.5 prose-headings:text-surface-900 prose-strong:text-surface-900 prose-code:text-surface-800 prose-code:bg-surface-200/50'
+                  ? 'text-white'
+                  : 'text-surface-700'
               )}
             >
-              <ReactMarkdown>{message.content}</ReactMarkdown>
+              <ReactMarkdown
+                components={{
+                  p: ({ children }) => <p className="my-0">{children}</p>,
+                }}
+              >
+                {message.content}
+              </ReactMarkdown>
             </div>
           </div>
         )}
