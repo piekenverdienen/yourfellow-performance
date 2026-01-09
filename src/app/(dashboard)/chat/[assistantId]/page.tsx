@@ -11,8 +11,6 @@ import {
   ArrowLeft,
   Loader2,
   Plus,
-  MessageSquare,
-  Clock,
   Trash2,
   PanelLeftClose,
   PanelLeft,
@@ -504,68 +502,64 @@ export default function ChatInterfacePage() {
       {/* Sidebar with conversations */}
       <div
         className={cn(
-          'border-r border-surface-200 bg-white flex flex-col transition-all duration-300',
+          'border-r border-surface-200 bg-surface-50/50 flex flex-col transition-all duration-300',
           sidebarOpen ? 'w-72' : 'w-0 overflow-hidden'
         )}
       >
         {/* Sidebar header */}
-        <div className="p-4 border-b border-surface-200">
+        <div className="p-4 border-b border-surface-100">
           <div className="flex items-center gap-3 mb-4">
             <Link
               href="/chat"
-              className="p-2 hover:bg-surface-100 rounded-lg transition-colors"
+              className="p-2 hover:bg-surface-100 rounded-xl transition-colors"
             >
-              <ArrowLeft className="h-5 w-5 text-surface-600" />
+              <ArrowLeft className="h-4 w-4 text-surface-500" />
             </Link>
-            <div className="flex items-center gap-3">
-              <AssistantAvatar slug={assistant.slug} size="md" />
-              <div>
-                <h2 className="font-semibold text-surface-900">{assistant.name}</h2>
-              </div>
+            <div className="flex items-center gap-2.5">
+              <AssistantAvatar slug={assistant.slug} size="sm" />
+              <h2 className="font-medium text-surface-900 text-sm">{assistant.name}</h2>
             </div>
           </div>
-          <Button onClick={startNewConversation} className="w-full" size="sm">
+          <Button onClick={startNewConversation} className="w-full rounded-xl" size="sm">
             <Plus className="h-4 w-4 mr-2" />
             Nieuw gesprek
           </Button>
         </div>
 
         {/* Conversations list */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+        <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
           {conversations.map(conv => (
             <div
               key={conv.id}
               onClick={() => selectConversation(conv.id)}
               className={cn(
-                'group flex items-center gap-2 p-3 rounded-lg cursor-pointer transition-colors',
+                'group flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all',
                 conv.id === conversationId
-                  ? 'bg-primary/10 text-surface-900'
-                  : 'hover:bg-surface-100 text-surface-600'
+                  ? 'bg-white shadow-sm text-surface-900'
+                  : 'hover:bg-white/60 text-surface-600'
               )}
             >
-              <MessageSquare className="h-4 w-4 shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{conv.title}</p>
-                <p className="text-xs text-surface-500 flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
+                <p className="text-[13px] font-medium truncate">{conv.title}</p>
+                <p className="text-xs text-surface-400 mt-0.5">
                   {formatDate(conv.updated_at)}
                 </p>
               </div>
               <button
                 onClick={e => deleteConversation(conv.id, e)}
-                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-surface-200 rounded transition-all"
+                className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-surface-100 rounded-lg transition-all"
                 disabled={deletingId === conv.id}
               >
                 {deletingId === conv.id ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (
-                  <Trash2 className="h-4 w-4 text-surface-400 hover:text-red-500" />
+                  <Trash2 className="h-3.5 w-3.5 text-surface-400 hover:text-red-500" />
                 )}
               </button>
             </div>
           ))}
           {conversations.length === 0 && (
-            <p className="text-sm text-surface-500 text-center py-4">
+            <p className="text-xs text-surface-400 text-center py-8">
               Nog geen gesprekken
             </p>
           )}
@@ -575,21 +569,21 @@ export default function ChatInterfacePage() {
       {/* Chat area */}
       <div className="flex-1 flex flex-col bg-surface-50">
         {/* Chat header */}
-        <div className="h-14 px-4 border-b border-surface-200 bg-white flex items-center gap-3">
+        <div className="h-12 px-4 border-b border-surface-100 bg-white/80 backdrop-blur-sm flex items-center gap-3">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-2 hover:bg-surface-100 rounded-lg transition-colors"
+            className="p-1.5 hover:bg-surface-100 rounded-lg transition-colors"
           >
             {sidebarOpen ? (
-              <PanelLeftClose className="h-5 w-5 text-surface-600" />
+              <PanelLeftClose className="h-4 w-4 text-surface-500" />
             ) : (
-              <PanelLeft className="h-5 w-5 text-surface-600" />
+              <PanelLeft className="h-4 w-4 text-surface-500" />
             )}
           </button>
           {!sidebarOpen && (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <AssistantAvatar slug={assistant.slug} size="sm" />
-              <span className="font-medium text-surface-900">{assistant.name}</span>
+              <span className="font-medium text-surface-900 text-sm">{assistant.name}</span>
             </div>
           )}
         </div>
