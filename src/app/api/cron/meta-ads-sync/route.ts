@@ -8,10 +8,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { getMetaAdsCronSyncService } from '@/services/meta-ads-sync'
 import { getMetaCronFatigueDetector } from '@/services/meta-fatigue-detector'
 import type { MetaAdsSettings } from '@/types'
+import type { MetaFatigueSignal } from '@/types/meta-ads'
 
 // Use service role for cron jobs (no user context)
 function getServiceSupabase() {
@@ -24,6 +25,106 @@ function getServiceSupabase() {
   }
 
   return createClient(supabaseUrl, serviceRoleKey)
+}
+
+/**
+ * Convert fatigue signals to alerts so they appear on the /alerts page
+ */
+async function createAlertsFromFatigueSignals(
+  supabase: SupabaseClient,
+  clientId: string,
+  clientName: string,
+  signals: MetaFatigueSignal[]
+): Promise<number> {
+  let alertsCreated = 0
+  const today = new Date().toISOString().slice(0, 10)
+
+  for (const signal of signals) {
+    // Only create alerts for high/critical severity
+    if (signal.severity !== 'high' && signal.severity !== 'critical') {
+      continue
+    }
+
+    // Create unique fingerprint per entity per day
+    const fingerprint = `meta_fatigue:${signal.entity_type}:${signal.entity_id}:${today}`
+
+    // Check if alert already exists
+    const { data: existing } = await supabase
+      .from('alerts')
+      .select('id')
+      .eq('fingerprint', fingerprint)
+      .single()
+
+    if (existing) {
+      continue // Skip duplicate
+    }
+
+    // Build alert title and description
+    const entityLabel = signal.entity_type === 'ad'
+      ? 'Ad'
+      : signal.entity_type === 'adset'
+        ? 'Ad Set'
+        : 'Campaign'
+
+    const title = `${entityLabel} fatigue: ${signal.entity_name}`
+    const shortDescription = signal.reasons.slice(0, 2).join('. ')
+
+    // Build impact description
+    const impactParts: string[] = []
+    if (signal.frequency_change > 0) {
+      impactParts.push(`Frequency +${signal.frequency_change.toFixed(0)}%`)
+    }
+    if (signal.ctr_change < -10) {
+      impactParts.push(`CTR ${signal.ctr_change.toFixed(0)}%`)
+    }
+    if (signal.cpc_change > 10) {
+      impactParts.push(`CPC +${signal.cpc_change.toFixed(0)}%`)
+    }
+    const impact = impactParts.length > 0
+      ? `Performance degradatie: ${impactParts.join(', ')}`
+      : 'Creatieve vermoeidheid gedetecteerd'
+
+    // Insert alert
+    const { error } = await supabase.from('alerts').insert({
+      client_id: clientId,
+      type: 'performance',
+      channel: 'meta',
+      check_id: `meta_fatigue_${signal.entity_type}`,
+      severity: signal.severity,
+      status: 'open',
+      title,
+      short_description: shortDescription,
+      impact,
+      suggested_actions: signal.suggested_actions,
+      details: {
+        clientName,
+        entity_type: signal.entity_type,
+        entity_id: signal.entity_id,
+        entity_name: signal.entity_name,
+        campaign_name: signal.campaign_name,
+        adset_name: signal.adset_name,
+        current_frequency: signal.current_frequency,
+        current_ctr: signal.current_ctr,
+        current_cpc: signal.current_cpc,
+        baseline_ctr: signal.baseline_ctr,
+        baseline_cpc: signal.baseline_cpc,
+        frequency_change: signal.frequency_change,
+        ctr_change: signal.ctr_change,
+        cpc_change: signal.cpc_change,
+        reasons: signal.reasons,
+      },
+      fingerprint,
+      detected_at: signal.detected_at || new Date().toISOString(),
+    })
+
+    if (!error) {
+      alertsCreated++
+    } else {
+      console.error(`[Cron] Failed to create alert for ${signal.entity_name}:`, error.message)
+    }
+  }
+
+  return alertsCreated
 }
 
 export async function GET(request: NextRequest) {
@@ -80,6 +181,7 @@ export async function GET(request: NextRequest) {
       syncSuccess: boolean
       syncError?: string
       fatigueDetected: number
+      alertsCreated: number
       fatigueError?: string
     }[] = []
 
@@ -94,6 +196,7 @@ export async function GET(request: NextRequest) {
         clientName: client.name,
         syncSuccess: false,
         fatigueDetected: 0,
+        alertsCreated: 0,
       }
 
       try {
@@ -127,14 +230,21 @@ export async function GET(request: NextRequest) {
               `[Cron] Fatigue detection complete for ${client.name}: ${fatigueSignals.length} signals`
             )
 
-            // Log high-severity signals
-            const criticalSignals = fatigueSignals.filter(
-              s => s.severity === 'critical' || s.severity === 'high'
-            )
-            if (criticalSignals.length > 0) {
-              console.warn(
-                `[Cron] ${criticalSignals.length} high-severity fatigue signals for ${client.name}`
+            // Step 3: Create alerts from high-severity fatigue signals
+            if (fatigueSignals.length > 0) {
+              const alertsCreated = await createAlertsFromFatigueSignals(
+                supabase,
+                client.id,
+                client.name,
+                fatigueSignals
               )
+              result.alertsCreated = alertsCreated
+
+              if (alertsCreated > 0) {
+                console.log(
+                  `[Cron] Created ${alertsCreated} alerts for ${client.name}`
+                )
+              }
             }
           } catch (fatigueError) {
             console.error(
@@ -160,9 +270,10 @@ export async function GET(request: NextRequest) {
     const successful = results.filter(r => r.syncSuccess).length
     const failed = results.filter(r => !r.syncSuccess).length
     const totalFatigue = results.reduce((sum, r) => sum + r.fatigueDetected, 0)
+    const totalAlerts = results.reduce((sum, r) => sum + r.alertsCreated, 0)
 
     console.log(
-      `[Cron] Job complete. Synced: ${successful}/${enabledClients.length}, Fatigue signals: ${totalFatigue}`
+      `[Cron] Job complete. Synced: ${successful}/${enabledClients.length}, Fatigue signals: ${totalFatigue}, Alerts created: ${totalAlerts}`
     )
 
     return NextResponse.json({
@@ -172,6 +283,7 @@ export async function GET(request: NextRequest) {
         successful,
         failed,
         totalFatigueSignals: totalFatigue,
+        totalAlertsCreated: totalAlerts,
       },
       results,
       timestamp: new Date().toISOString(),
