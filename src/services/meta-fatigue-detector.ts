@@ -13,6 +13,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import type {
   MetaFatigueSignal,
   MetaFatigueSeverity,
@@ -21,6 +22,11 @@ import type {
   MetaAlertThresholds,
 } from '@/types/meta-ads'
 import type { MetaAdsSettings } from '@/types'
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+interface MetaFatigueDetectorOptions {
+  useServiceRole?: boolean
+}
 
 // ============================================
 // Types
@@ -85,11 +91,27 @@ const DEFAULT_THRESHOLDS: FatigueThresholds = {
 // ============================================
 
 export class MetaFatigueDetector {
-  private supabase: Awaited<ReturnType<typeof createClient>> | null = null
+  private supabase: SupabaseClient | null = null
+  private useServiceRole: boolean
 
-  private async getSupabase() {
+  constructor(options: MetaFatigueDetectorOptions = {}) {
+    this.useServiceRole = options.useServiceRole ?? false
+  }
+
+  private async getSupabase(): Promise<SupabaseClient> {
     if (!this.supabase) {
-      this.supabase = await createClient()
+      if (this.useServiceRole) {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+        const serviceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
+
+        if (!supabaseUrl || !serviceKey) {
+          throw new Error('Missing Supabase service credentials for cron fatigue detection')
+        }
+
+        this.supabase = createServiceClient(supabaseUrl, serviceKey)
+      } else {
+        this.supabase = await createClient()
+      }
     }
     return this.supabase
   }
@@ -848,10 +870,24 @@ export class MetaFatigueDetector {
 // ============================================
 
 let detectorInstance: MetaFatigueDetector | null = null
+let cronDetectorInstance: MetaFatigueDetector | null = null
 
+/**
+ * Get fatigue detector for user-authenticated API routes
+ */
 export function getMetaFatigueDetector(): MetaFatigueDetector {
   if (!detectorInstance) {
-    detectorInstance = new MetaFatigueDetector()
+    detectorInstance = new MetaFatigueDetector({ useServiceRole: false })
   }
   return detectorInstance
+}
+
+/**
+ * Get fatigue detector for cron jobs (uses service role key, bypasses RLS)
+ */
+export function getMetaCronFatigueDetector(): MetaFatigueDetector {
+  if (!cronDetectorInstance) {
+    cronDetectorInstance = new MetaFatigueDetector({ useServiceRole: true })
+  }
+  return cronDetectorInstance
 }

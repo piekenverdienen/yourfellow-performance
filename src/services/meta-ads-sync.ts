@@ -6,6 +6,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { MetaAdsClient, parseMetaInsights } from '@/lib/meta/client'
 import type {
   MetaInsightDaily,
@@ -14,6 +15,7 @@ import type {
   MetaEntityType,
 } from '@/types/meta-ads'
 import type { MetaAdsSettings } from '@/types'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 // ============================================
 // Types
@@ -26,16 +28,38 @@ interface SyncStats {
   insights: number
 }
 
+interface MetaAdsSyncServiceOptions {
+  useServiceRole?: boolean
+}
+
 // ============================================
 // Meta Ads Sync Service
 // ============================================
 
 export class MetaAdsSyncService {
-  private supabase: Awaited<ReturnType<typeof createClient>> | null = null
+  private supabase: SupabaseClient | null = null
+  private useServiceRole: boolean
 
-  private async getSupabase() {
+  constructor(options: MetaAdsSyncServiceOptions = {}) {
+    this.useServiceRole = options.useServiceRole ?? false
+  }
+
+  private async getSupabase(): Promise<SupabaseClient> {
     if (!this.supabase) {
-      this.supabase = await createClient()
+      if (this.useServiceRole) {
+        // Use service role key for cron jobs (bypasses RLS)
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+        const serviceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
+
+        if (!supabaseUrl || !serviceKey) {
+          throw new Error('Missing Supabase service credentials for cron sync')
+        }
+
+        this.supabase = createServiceClient(supabaseUrl, serviceKey)
+      } else {
+        // Use user context (for API routes with auth)
+        this.supabase = await createClient()
+      }
     }
     return this.supabase
   }
@@ -437,10 +461,24 @@ export class MetaAdsSyncService {
 // ============================================
 
 let syncServiceInstance: MetaAdsSyncService | null = null
+let cronSyncServiceInstance: MetaAdsSyncService | null = null
 
+/**
+ * Get sync service for user-authenticated API routes
+ */
 export function getMetaAdsSyncService(): MetaAdsSyncService {
   if (!syncServiceInstance) {
-    syncServiceInstance = new MetaAdsSyncService()
+    syncServiceInstance = new MetaAdsSyncService({ useServiceRole: false })
   }
   return syncServiceInstance
+}
+
+/**
+ * Get sync service for cron jobs (uses service role key, bypasses RLS)
+ */
+export function getMetaAdsCronSyncService(): MetaAdsSyncService {
+  if (!cronSyncServiceInstance) {
+    cronSyncServiceInstance = new MetaAdsSyncService({ useServiceRole: true })
+  }
+  return cronSyncServiceInstance
 }

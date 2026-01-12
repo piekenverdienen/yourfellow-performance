@@ -9,17 +9,18 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { getMetaAdsSyncService } from '@/services/meta-ads-sync'
-import { getMetaFatigueDetector } from '@/services/meta-fatigue-detector'
+import { getMetaAdsCronSyncService } from '@/services/meta-ads-sync'
+import { getMetaCronFatigueDetector } from '@/services/meta-fatigue-detector'
 import type { MetaAdsSettings } from '@/types'
 
 // Use service role for cron jobs (no user context)
 function getServiceSupabase() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  // Support both naming conventions for service role key
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
 
   if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error('Missing Supabase credentials for cron job')
+    throw new Error('Missing Supabase credentials for cron job (SUPABASE_SERVICE_KEY)')
   }
 
   return createClient(supabaseUrl, serviceRoleKey)
@@ -77,8 +78,8 @@ export async function GET(request: NextRequest) {
       fatigueError?: string
     }[] = []
 
-    const syncService = getMetaAdsSyncService()
-    const fatigueDetector = getMetaFatigueDetector()
+    const syncService = getMetaAdsCronSyncService()
+    const fatigueDetector = getMetaCronFatigueDetector()
 
     // Process each client
     for (const client of enabledClients) {
