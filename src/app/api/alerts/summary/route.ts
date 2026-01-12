@@ -17,12 +17,12 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const clientId = searchParams.get('client_id');
 
-  // Build query for critical/high fundamental alerts
+  // Build query for critical/high alerts (fundamental + performance)
   let query = supabase
     .from('alerts')
     .select('id, client_id, channel, title, short_description, severity, check_id, detected_at, clients!inner(name)')
     .eq('status', 'open')
-    .eq('type', 'fundamental')
+    .in('type', ['fundamental', 'performance'])
     .in('severity', ['critical', 'high'])
     .order('detected_at', { ascending: false });
 

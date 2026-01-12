@@ -11,8 +11,10 @@ import {
   RefreshCw,
   ChevronDown,
   ExternalLink,
+  Building2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useClientStore } from '@/stores/client-store'
 import type { Alert, AlertChannel, AlertStatus, AlertSeverity } from '@/types'
 
 const CHANNEL_LABELS: Record<AlertChannel, string> = {
@@ -43,6 +45,7 @@ interface AlertWithClient extends Alert {
 
 export default function AlertsPage() {
   const searchParams = useSearchParams()
+  const { selectedClient, clients } = useClientStore()
   const [alerts, setAlerts] = useState<AlertWithClient[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -51,9 +54,17 @@ export default function AlertsPage() {
   // Filters
   const [channelFilter, setChannelFilter] = useState<AlertChannel | ''>('')
   const [statusFilter, setStatusFilter] = useState<AlertStatus | ''>('open')
+  const [clientFilter, setClientFilter] = useState<string>('selected') // 'all', 'selected', or client_id
   const [expandedAlert, setExpandedAlert] = useState<string | null>(
     searchParams.get('id')
   )
+
+  // Determine which client ID to filter on
+  const effectiveClientId = clientFilter === 'all'
+    ? undefined
+    : clientFilter === 'selected'
+      ? selectedClient?.id
+      : clientFilter
 
   const fetchAlerts = async () => {
     setLoading(true)
@@ -62,6 +73,7 @@ export default function AlertsPage() {
       const params = new URLSearchParams()
       if (channelFilter) params.set('channel', channelFilter)
       if (statusFilter) params.set('status', statusFilter)
+      if (effectiveClientId) params.set('client_id', effectiveClientId)
 
       const response = await fetch(`/api/alerts?${params.toString()}`)
       if (!response.ok) throw new Error('Failed to fetch alerts')
@@ -77,7 +89,7 @@ export default function AlertsPage() {
 
   useEffect(() => {
     fetchAlerts()
-  }, [channelFilter, statusFilter])
+  }, [channelFilter, statusFilter, effectiveClientId])
 
   const handleUpdateStatus = async (alertId: string, newStatus: AlertStatus) => {
     setUpdating(alertId)
@@ -117,11 +129,28 @@ export default function AlertsPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-4 mb-6">
+      <div className="flex items-center gap-4 mb-6 flex-wrap">
         <div className="flex items-center gap-2">
           <Filter className="h-4 w-4 text-surface-500" />
           <span className="text-sm text-surface-600">Filters:</span>
         </div>
+
+        {/* Client filter */}
+        <select
+          value={clientFilter}
+          onChange={(e) => setClientFilter(e.target.value)}
+          className="px-3 py-2 border border-surface-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+        >
+          <option value="selected">
+            {selectedClient ? selectedClient.name : 'Selecteer klant'}
+          </option>
+          <option value="all">Alle klanten</option>
+          {clients.map((client) => (
+            <option key={client.id} value={client.id}>
+              {client.name}
+            </option>
+          ))}
+        </select>
 
         <select
           value={channelFilter}
