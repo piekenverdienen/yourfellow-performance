@@ -34,7 +34,8 @@ import { GA4MonitoringSetup } from '@/components/ga4-monitoring-setup'
 import { SearchConsoleSetup } from '@/components/search-console-setup'
 import { MetaAdsSetup } from '@/components/meta-ads-setup'
 import { GoogleAdsSetup } from '@/components/google-ads-setup'
-import type { Client, ClientMemberRole, ClientContext, User, GA4MonitoringSettings, SearchConsoleSettings, MetaAdsSettings } from '@/types'
+import { ShopifySetup } from '@/components/shopify-setup'
+import type { Client, ClientMemberRole, ClientContext, User, GA4MonitoringSettings, SearchConsoleSettings, MetaAdsSettings, ShopifySettings } from '@/types'
 
 interface ClientMember {
   id: string
@@ -740,6 +741,39 @@ export default function ClientDetailPage() {
                   const newSettings = {
                     ...client.settings,
                     googleAds: googleAdsSettings,
+                  }
+                  const res = await fetch(`/api/clients/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ settings: newSettings }),
+                  })
+                  if (res.ok) {
+                    const data = await res.json()
+                    setClient(data.client)
+                    fetchClients()
+                  } else {
+                    const error = await res.json()
+                    throw new Error(error.error || 'Fout bij opslaan')
+                  }
+                }}
+                disabled={saving}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Shopify */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Shopify</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ShopifySetup
+                clientId={id}
+                currentSettings={client.settings?.shopify}
+                onSave={async (shopifySettings) => {
+                  const newSettings = {
+                    ...client.settings,
+                    shopify: shopifySettings,
                   }
                   const res = await fetch(`/api/clients/${id}`, {
                     method: 'PUT',

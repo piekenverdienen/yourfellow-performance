@@ -424,7 +424,15 @@ export async function GET(request: NextRequest) {
       const ga4Settings = client.settings?.ga4Monitoring as GA4MonitoringSettings
       const propertyId = ga4Settings.propertyId!
 
-      const result = {
+      const result: {
+        clientId: string
+        clientName: string
+        propertyId: string
+        success: boolean
+        anomaliesDetected: number
+        alertsCreated: number
+        error?: string
+      } = {
         clientId: client.id,
         clientName: client.name,
         propertyId,

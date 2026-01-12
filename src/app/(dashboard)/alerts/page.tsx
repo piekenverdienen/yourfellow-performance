@@ -23,6 +23,7 @@ const CHANNEL_LABELS: Record<AlertChannel, string> = {
   website: 'Website',
   tracking: 'Tracking',
   seo: 'SEO',
+  shopify: 'Shopify',
 }
 
 const SEVERITY_COLORS: Record<AlertSeverity, string> = {
