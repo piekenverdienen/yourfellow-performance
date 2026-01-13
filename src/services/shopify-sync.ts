@@ -65,7 +65,7 @@ interface ShopifySyncServiceOptions {
 class ShopifyClient {
   private storeId: string
   private accessToken: string
-  private apiVersion = '2025-01'
+  private apiVersion = '2026-01'
 
   constructor(storeId: string, accessToken: string) {
     // Validate and normalize store ID

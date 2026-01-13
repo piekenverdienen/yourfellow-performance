@@ -127,7 +127,7 @@ export async function GET(request: NextRequest) {
     const accessToken = tokenData.access_token
 
     // Fetch shop details to get store name
-    const shopResponse = await fetch(`https://${shop}/admin/api/2025-01/shop.json`, {
+    const shopResponse = await fetch(`https://${shop}/admin/api/2026-01/shop.json`, {
       headers: {
         'X-Shopify-Access-Token': accessToken,
         'Content-Type': 'application/json',
