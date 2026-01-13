@@ -342,9 +342,58 @@ export interface GoogleAdsSettings {
   }
 }
 
+// Shopify Settings per client
+export interface ShopifySettings {
+  // Connection
+  enabled?: boolean
+  storeId?: string              // Store identifier (e.g., "my-store" from my-store.myshopify.com)
+  accessToken?: string          // Admin API access token (shpat_xxx)
+  currency?: string             // Default: EUR
+  timezone?: string             // Default: Europe/Amsterdam
+
+  // Sync settings
+  syncEnabled?: boolean
+  lastSyncAt?: string           // ISO timestamp
+
+  // Thresholds for alerts
+  thresholds?: {
+    revenueDropWarning?: number   // Default: 20 (%)
+    revenueDropCritical?: number  // Default: 40 (%)
+    ordersDropWarning?: number    // Default: 25 (%)
+    ordersDropCritical?: number   // Default: 50 (%)
+    highRefundRate?: number       // Default: 10 (%)
+  }
+}
+
+// Shopify Orders Daily data point
+export interface ShopifyOrdersDaily {
+  id: string
+  client_id: string
+  store_id: string
+  date: string
+  total_orders: number
+  total_revenue: number
+  average_order_value: number
+  total_customers: number
+  new_customers: number
+  returning_customers: number
+  refund_count: number
+  refund_amount: number
+  top_products: ShopifyTopProduct[]
+  currency: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ShopifyTopProduct {
+  title: string
+  quantity: number
+  revenue: number
+}
+
 // Alert Types
 export type AlertType = 'fundamental' | 'performance' | 'tracking'
-export type AlertChannel = 'google_ads' | 'meta' | 'website' | 'tracking' | 'seo'
+export type AlertChannel = 'google_ads' | 'meta' | 'website' | 'tracking' | 'seo' | 'shopify'
 export type AlertSeverity = 'critical' | 'high' | 'medium' | 'low'
 export type AlertStatus = 'open' | 'acknowledged' | 'resolved'
 
@@ -428,6 +477,7 @@ export interface ClientSettings {
   searchConsole?: SearchConsoleSettings
   meta?: MetaAdsSettings
   googleAds?: GoogleAdsSettings
+  shopify?: ShopifySettings
   [key: string]: unknown
 }
 
