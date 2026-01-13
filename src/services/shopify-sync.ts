@@ -65,11 +65,73 @@ interface ShopifySyncServiceOptions {
 class ShopifyClient {
   private storeId: string
   private accessToken: string
-  private apiVersion = '2024-01'
+  private apiVersion = '2025-01'
 
   constructor(storeId: string, accessToken: string) {
-    this.storeId = storeId
+    // Validate and normalize store ID
+    this.storeId = this.normalizeStoreId(storeId)
     this.accessToken = accessToken
+  }
+
+  /**
+   * Normalize store ID - extract subdomain from various input formats
+   */
+  private normalizeStoreId(input: string): string {
+    let storeId = input.trim().toLowerCase()
+
+    // Remove protocol if present
+    storeId = storeId.replace(/^https?:\/\//, '')
+
+    // Extract subdomain from full domain (e.g., "store.myshopify.com" -> "store")
+    if (storeId.includes('.myshopify.com')) {
+      storeId = storeId.split('.myshopify.com')[0]
+    }
+
+    // Remove admin path if present (e.g., "admin.shopify.com/store/xyz" -> "xyz")
+    if (storeId.includes('admin.shopify.com/store/')) {
+      const match = storeId.match(/admin\.shopify\.com\/store\/([^/]+)/)
+      if (match) {
+        storeId = match[1]
+      }
+    }
+
+    // Remove any trailing slashes or paths
+    storeId = storeId.split('/')[0]
+
+    return storeId
+  }
+
+  /**
+   * Validate that the store ID looks correct
+   */
+  static validateStoreId(storeId: string): { valid: boolean; error?: string } {
+    const normalized = storeId.trim().toLowerCase()
+      .replace(/^https?:\/\//, '')
+      .split('.myshopify.com')[0]
+      .split('/')[0]
+
+    // Store IDs should be alphanumeric with hyphens, typically 3-50 chars
+    if (!normalized) {
+      return { valid: false, error: 'Store ID mag niet leeg zijn' }
+    }
+
+    if (normalized.length < 3) {
+      return { valid: false, error: 'Store ID is te kort (minimaal 3 karakters)' }
+    }
+
+    if (normalized.length > 60) {
+      return { valid: false, error: 'Store ID is te lang' }
+    }
+
+    // Check for valid characters (alphanumeric and hyphens)
+    if (!/^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/.test(normalized)) {
+      return {
+        valid: false,
+        error: 'Store ID mag alleen letters, cijfers en koppeltekens bevatten'
+      }
+    }
+
+    return { valid: true }
   }
 
   private get baseUrl(): string {
@@ -93,6 +155,18 @@ class ShopifyClient {
 
     if (!response.ok) {
       const errorText = await response.text()
+
+      // Provide more helpful error messages
+      if (response.status === 401) {
+        throw new Error('Ongeldige access token. Controleer of je token begint met "shpat_" en correct is gekopieerd.')
+      }
+      if (response.status === 403) {
+        throw new Error('Geen toegang. Controleer of de app de juiste scopes heeft (read_orders, read_customers).')
+      }
+      if (response.status === 404) {
+        throw new Error(`Store "${this.storeId}" niet gevonden. Controleer of de Store ID correct is (bv. "mijn-webshop" van mijn-webshop.myshopify.com).`)
+      }
+
       throw new Error(`Shopify API error: ${response.status} - ${errorText}`)
     }
 
@@ -589,6 +663,23 @@ export class ShopifySyncService {
     storeName?: string
     error?: string
   }> {
+    // Validate store ID format first
+    const validation = ShopifyClient.validateStoreId(storeId)
+    if (!validation.valid) {
+      return {
+        success: false,
+        error: validation.error,
+      }
+    }
+
+    // Validate access token format
+    if (!accessToken.startsWith('shpat_')) {
+      return {
+        success: false,
+        error: 'Access token moet beginnen met "shpat_". Gebruik de Admin API access token van je custom app.',
+      }
+    }
+
     const client = new ShopifyClient(storeId, accessToken)
     return client.testConnection()
   }

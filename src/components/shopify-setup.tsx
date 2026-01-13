@@ -170,28 +170,45 @@ export function ShopifySetup({
               <Info className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
               <div className="text-sm text-blue-800">
                 <p className="font-medium mb-2">Hoe krijg je deze gegevens?</p>
-                <ol className="list-decimal list-inside space-y-1 text-blue-700">
+                <ol className="list-decimal list-inside space-y-2 text-blue-700">
                   <li>
-                    <strong>Store ID</strong>: Kijk naar je admin URL:{' '}
+                    <strong>Store ID</strong>: Dit is je Shopify store subdomain.<br />
+                    <span className="text-xs">Voorbeeld: als je admin URL is{' '}
                     <code className="bg-blue-100 px-1 rounded">
-                      https://admin.shopify.com/store/<strong>jouw-store-id</strong>
-                    </code>
+                      https://admin.shopify.com/store/<strong>mijn-webshop</strong>
+                    </code>{' '}
+                    dan is je Store ID:{' '}
+                    <code className="bg-blue-100 px-1 rounded font-bold">mijn-webshop</code></span>
                   </li>
                   <li>
-                    <strong>Access Token</strong>: Ga naar{' '}
-                    <a
-                      href="https://admin.shopify.com/store"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="underline hover:text-blue-900"
-                    >
-                      Settings &rarr; Apps and sales channels &rarr; Develop apps
-                      <ExternalLink className="inline h-3 w-3 ml-1" />
-                    </a>
+                    <strong>Access Token</strong>: Maak een <em>Custom App</em> in je store:<br />
+                    <span className="text-xs">
+                      Ga naar{' '}
+                      <a
+                        href="https://admin.shopify.com/store"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline hover:text-blue-900"
+                      >
+                        Settings &rarr; Apps and sales channels &rarr; Develop apps
+                        <ExternalLink className="inline h-3 w-3 ml-1" />
+                      </a>
+                    </span>
                   </li>
-                  <li>Maak een custom app met <code className="bg-blue-100 px-1 rounded">read_orders</code> en <code className="bg-blue-100 px-1 rounded">read_customers</code> scopes</li>
-                  <li>Installeer de app en kopieer de Access Token</li>
+                  <li>
+                    <span className="text-xs">Maak een nieuwe custom app met scopes:{' '}
+                    <code className="bg-blue-100 px-1 rounded">read_orders</code> en{' '}
+                    <code className="bg-blue-100 px-1 rounded">read_customers</code></span>
+                  </li>
+                  <li>
+                    <span className="text-xs">Installeer de app en kopieer de <strong>Admin API access token</strong> (begint met{' '}
+                    <code className="bg-blue-100 px-1 rounded">shpat_</code>)</span>
+                  </li>
                 </ol>
+                <div className="mt-3 p-2 bg-amber-100 border border-amber-300 rounded text-amber-800 text-xs">
+                  <strong>Let op:</strong> Je hebt de <em>Admin API access token</em> nodig van een custom app in je store,
+                  niet de Partner API token. De Partner API is alleen voor Partner Dashboard data.
+                </div>
               </div>
             </div>
           </div>
@@ -213,7 +230,8 @@ export function ShopifySetup({
               disabled={disabled}
             />
             <p className="mt-1 text-xs text-surface-500">
-              Dit is het deel voor <code className="bg-surface-100 px-1 rounded">.myshopify.com</code> in je admin URL
+              Je store subdomain, bijv. <code className="bg-surface-100 px-1 rounded">mijn-webshop</code> van{' '}
+              <code className="bg-surface-100 px-1 rounded">mijn-webshop.myshopify.com</code>
             </p>
           </div>
 
@@ -241,7 +259,7 @@ export function ShopifySetup({
               </button>
             </div>
             <p className="mt-1 text-xs text-surface-500">
-              Begint met <code className="bg-surface-100 px-1 rounded">shpat_</code>
+              Admin API access token - begint met <code className="bg-surface-100 px-1 rounded">shpat_</code>
             </p>
           </div>
 

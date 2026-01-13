@@ -65,8 +65,8 @@ export async function POST(request: NextRequest) {
     if (!testResult.success) {
       return NextResponse.json(
         {
-          error: 'Kan geen verbinding maken met Shopify',
-          details: testResult.error
+          success: false,
+          error: testResult.error || 'Kan geen verbinding maken met Shopify',
         },
         { status: 400 }
       )
