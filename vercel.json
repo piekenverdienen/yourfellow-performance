@@ -5,17 +5,6 @@
   "installCommand": "npm install",
   "framework": "nextjs",
   "regions": ["cdg1"],
-  "env": {
-    "NEXT_PUBLIC_SUPABASE_URL": "@supabase-url",
-    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "@supabase-anon-key",
-    "SUPABASE_SERVICE_KEY": "@supabase-service-key",
-    "ANTHROPIC_API_KEY": "@anthropic-api-key",
-    "GA4_CREDENTIALS": "@ga4-credentials",
-    "CLICKUP_TOKEN": "@clickup-token",
-    "TAVILY_API_KEY": "@tavily-api-key",
-    "RESEND_API_KEY": "@resend-api-key",
-    "NEXT_PUBLIC_APP_URL": "https://hq.yourfellow.nl"
-  },
   "crons": [
     {
       "path": "/api/cron/meta-ads-sync",
