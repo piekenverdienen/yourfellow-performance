@@ -6,12 +6,12 @@ import { Input } from '@/components/ui/input'
 import {
   Save,
   Loader2,
-  AlertTriangle,
   CheckCircle,
   Info,
   ExternalLink,
-  RefreshCw,
   ShoppingBag,
+  Link2,
+  Unlink,
 } from 'lucide-react'
 import type { ShopifySettings } from '@/types'
 
@@ -48,13 +48,10 @@ export function ShopifySetup({
     }
   )
   const [saving, setSaving] = useState(false)
-  const [testing, setTesting] = useState(false)
-  const [testResult, setTestResult] = useState<{
-    success: boolean
-    message: string
-  } | null>(null)
-  const [showToken, setShowToken] = useState(false)
+  const [shopDomain, setShopDomain] = useState('')
+  const [connecting, setConnecting] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [disconnecting, setDisconnecting] = useState(false)
 
   // Track if we've initialized from props
   const hasInitialized = useRef(false)
@@ -73,14 +70,28 @@ export function ShopifySetup({
     }
   }, [currentSettings])
 
+  // Check URL params for OAuth result
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const shopifyStatus = params.get('shopify')
+    const storeName = params.get('store')
+    const shopifyError = params.get('shopify_error')
+
+    if (shopifyStatus === 'connected' && storeName) {
+      // Clear URL params
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+
+    if (shopifyError) {
+      alert(`Shopify verbinding mislukt: ${shopifyError}`)
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+  }, [])
+
   const handleSave = async () => {
     setSaving(true)
     try {
-      if (!settings.enabled) {
-        await onSave(undefined)
-      } else {
-        await onSave(settings)
-      }
+      await onSave(settings)
     } catch (error) {
       console.error('Error saving Shopify settings:', error)
       alert('Er ging iets mis bij het opslaan')
@@ -89,55 +100,66 @@ export function ShopifySetup({
     }
   }
 
-  const testConnection = async () => {
-    setTesting(true)
-    setTestResult(null)
+  const startOAuthFlow = () => {
+    if (!shopDomain.trim()) {
+      alert('Vul eerst je Shopify store domein in')
+      return
+    }
 
+    setConnecting(true)
+
+    // Normalize the shop domain
+    let normalizedDomain = shopDomain.trim().toLowerCase()
+    if (!normalizedDomain.includes('.myshopify.com')) {
+      normalizedDomain = `${normalizedDomain}.myshopify.com`
+    }
+    normalizedDomain = normalizedDomain.replace(/^https?:\/\//, '')
+
+    // Redirect to OAuth install endpoint
+    window.location.href = `/api/shopify/oauth/install?shop=${encodeURIComponent(normalizedDomain)}&clientId=${encodeURIComponent(clientId)}`
+  }
+
+  const disconnectShopify = async () => {
+    if (!confirm('Weet je zeker dat je de Shopify verbinding wilt verbreken?')) {
+      return
+    }
+
+    setDisconnecting(true)
     try {
-      const response = await fetch('/api/shopify/connect', {
+      const response = await fetch('/api/shopify/disconnect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          clientId,
-          storeId: settings.storeId,
-          accessToken: settings.accessToken,
-          currency: settings.currency,
-          timezone: settings.timezone,
-        }),
+        body: JSON.stringify({ clientId }),
       })
 
-      const data = await response.json()
-
-      if (response.ok && data.success) {
-        setTestResult({
-          success: true,
-          message: data.storeName
-            ? `Verbonden met: ${data.storeName}`
-            : 'Verbinding succesvol!',
+      if (response.ok) {
+        setSettings({
+          enabled: false,
+          storeId: '',
+          accessToken: '',
+          currency: 'EUR',
+          timezone: 'Europe/Amsterdam',
+          syncEnabled: true,
+          thresholds: defaultThresholds,
         })
-        // Update settings to mark as enabled since connection was successful
-        setSettings((prev) => ({ ...prev, enabled: true }))
+        await onSave(undefined)
       } else {
-        setTestResult({
-          success: false,
-          message: data.error || data.details || 'Verbinding mislukt',
-        })
+        const data = await response.json()
+        alert(data.error || 'Kon verbinding niet verbreken')
       }
     } catch (error) {
-      setTestResult({
-        success: false,
-        message: 'Netwerk fout - probeer opnieuw',
-      })
+      console.error('Error disconnecting Shopify:', error)
+      alert('Er ging iets mis')
     } finally {
-      setTesting(false)
+      setDisconnecting(false)
     }
   }
 
-  const isValid = settings.enabled && settings.storeId && settings.accessToken
+  const isConnected = settings.enabled && settings.storeId && settings.accessToken
 
   return (
     <div className="space-y-6">
-      {/* Enable/Disable Toggle */}
+      {/* Header */}
       <div className="flex items-center justify-between p-4 bg-surface-50 rounded-lg">
         <div className="flex items-center gap-3">
           <ShoppingBag className="h-5 w-5 text-[#95BF47]" />
@@ -148,150 +170,34 @@ export function ShopifySetup({
             </p>
           </div>
         </div>
-        <label className="relative inline-flex items-center cursor-pointer">
-          <input
-            type="checkbox"
-            checked={settings.enabled}
-            onChange={(e) =>
-              setSettings((prev) => ({ ...prev, enabled: e.target.checked }))
-            }
-            disabled={disabled}
-            className="sr-only peer"
-          />
-          <div className="w-11 h-6 bg-surface-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[#95BF47]/20 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-surface-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#95BF47]"></div>
-        </label>
+        {isConnected && (
+          <span className="flex items-center gap-1.5 text-sm text-green-600">
+            <CheckCircle className="h-4 w-4" />
+            Verbonden
+          </span>
+        )}
       </div>
 
-      {settings.enabled && (
+      {isConnected ? (
+        /* Connected State */
         <>
-          {/* Instructions Info Box */}
-          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="flex gap-3">
-              <Info className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-              <div className="text-sm text-blue-800">
-                <p className="font-medium mb-2">Hoe krijg je deze gegevens?</p>
-                <ol className="list-decimal list-inside space-y-2 text-blue-700">
-                  <li>
-                    <strong>Store ID</strong>: Dit is je Shopify store subdomain.<br />
-                    <span className="text-xs">Voorbeeld: als je admin URL is{' '}
-                    <code className="bg-blue-100 px-1 rounded">
-                      https://admin.shopify.com/store/<strong>mijn-webshop</strong>
-                    </code>{' '}
-                    dan is je Store ID:{' '}
-                    <code className="bg-blue-100 px-1 rounded font-bold">mijn-webshop</code></span>
-                  </li>
-                  <li>
-                    <strong>Access Token</strong>: Maak een <em>Custom App</em> in je store:<br />
-                    <span className="text-xs">
-                      Ga naar{' '}
-                      <a
-                        href="https://admin.shopify.com/store"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="underline hover:text-blue-900"
-                      >
-                        Settings &rarr; Apps and sales channels &rarr; Develop apps
-                        <ExternalLink className="inline h-3 w-3 ml-1" />
-                      </a>
-                    </span>
-                  </li>
-                  <li>
-                    <span className="text-xs">Maak een nieuwe custom app met scopes:{' '}
-                    <code className="bg-blue-100 px-1 rounded">read_orders</code> en{' '}
-                    <code className="bg-blue-100 px-1 rounded">read_customers</code></span>
-                  </li>
-                  <li>
-                    <span className="text-xs">Installeer de app en kopieer de <strong>Admin API access token</strong> (begint met{' '}
-                    <code className="bg-blue-100 px-1 rounded">shpat_</code>)</span>
-                  </li>
-                </ol>
-                <div className="mt-3 p-2 bg-amber-100 border border-amber-300 rounded text-amber-800 text-xs">
-                  <strong>Let op:</strong> Je hebt de <em>Admin API access token</em> nodig van een custom app in je store,
-                  niet de Partner API token. De Partner API is alleen voor Partner Dashboard data.
-                </div>
+          <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+            <div className="flex items-start gap-3">
+              <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium text-green-800">
+                  Verbonden met: {settings.storeId}.myshopify.com
+                </p>
+                <p className="text-sm text-green-700 mt-1">
+                  Je Shopify store is succesvol gekoppeld. Orderdata wordt automatisch gesynchroniseerd.
+                </p>
+                {settings.lastSyncAt && (
+                  <p className="text-xs text-green-600 mt-2">
+                    Laatste sync: {new Date(settings.lastSyncAt).toLocaleString('nl-NL')}
+                  </p>
+                )}
               </div>
             </div>
-          </div>
-
-          {/* Store ID */}
-          <div>
-            <label className="block text-sm font-medium text-surface-700 mb-1.5">
-              Store ID *
-            </label>
-            <Input
-              value={settings.storeId || ''}
-              onChange={(e) =>
-                setSettings((prev) => ({
-                  ...prev,
-                  storeId: e.target.value.trim().toLowerCase(),
-                }))
-              }
-              placeholder="mijn-webshop"
-              disabled={disabled}
-            />
-            <p className="mt-1 text-xs text-surface-500">
-              Je store subdomain, bijv. <code className="bg-surface-100 px-1 rounded">mijn-webshop</code> van{' '}
-              <code className="bg-surface-100 px-1 rounded">mijn-webshop.myshopify.com</code>
-            </p>
-          </div>
-
-          {/* Access Token */}
-          <div>
-            <label className="block text-sm font-medium text-surface-700 mb-1.5">
-              Access Token *
-            </label>
-            <div className="relative">
-              <Input
-                type={showToken ? 'text' : 'password'}
-                value={settings.accessToken || ''}
-                onChange={(e) =>
-                  setSettings((prev) => ({ ...prev, accessToken: e.target.value }))
-                }
-                placeholder="shpat_xxxxxxxxxxxxxxxxxxxxxxxx"
-                disabled={disabled}
-              />
-              <button
-                type="button"
-                onClick={() => setShowToken(!showToken)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-surface-400 hover:text-surface-600 text-sm"
-              >
-                {showToken ? 'Verberg' : 'Toon'}
-              </button>
-            </div>
-            <p className="mt-1 text-xs text-surface-500">
-              Admin API access token - begint met <code className="bg-surface-100 px-1 rounded">shpat_</code>
-            </p>
-          </div>
-
-          {/* Test Connection */}
-          <div className="flex items-center gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={testConnection}
-              disabled={disabled || testing || !settings.storeId || !settings.accessToken}
-            >
-              {testing ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4 mr-2" />
-              )}
-              Test Verbinding
-            </Button>
-            {testResult && (
-              <span
-                className={`text-sm flex items-center gap-1 ${
-                  testResult.success ? 'text-green-600' : 'text-red-600'
-                }`}
-              >
-                {testResult.success ? (
-                  <CheckCircle className="h-4 w-4" />
-                ) : (
-                  <AlertTriangle className="h-4 w-4" />
-                )}
-                {testResult.message}
-              </span>
-            )}
           </div>
 
           {/* Sync Settings */}
@@ -462,53 +368,112 @@ export function ShopifySetup({
             )}
           </div>
 
-          {/* Last Sync Info */}
-          {settings.lastSyncAt && (
-            <div className="text-xs text-surface-500">
-              Laatste sync: {new Date(settings.lastSyncAt).toLocaleString('nl-NL')}
+          {/* Action Buttons */}
+          <div className="flex gap-3 pt-4 border-t border-surface-100">
+            <Button
+              type="button"
+              onClick={handleSave}
+              disabled={disabled || saving}
+              className="bg-[#95BF47] hover:bg-[#95BF47]/90"
+            >
+              {saving ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4 mr-2" />
+              )}
+              Instellingen Opslaan
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={disconnectShopify}
+              disabled={disabled || disconnecting}
+              className="text-red-600 border-red-200 hover:bg-red-50"
+            >
+              {disconnecting ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Unlink className="h-4 w-4 mr-2" />
+              )}
+              Verbinding Verbreken
+            </Button>
+          </div>
+        </>
+      ) : (
+        /* Not Connected State */
+        <>
+          {/* Instructions */}
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex gap-3">
+              <Info className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-blue-800">
+                <p className="font-medium mb-2">Hoe werkt het?</p>
+                <ol className="list-decimal list-inside space-y-1 text-blue-700">
+                  <li>Vul je Shopify store domein in (bijv. <code className="bg-blue-100 px-1 rounded">mijn-webshop</code>)</li>
+                  <li>Klik op &quot;Verbinden met Shopify&quot;</li>
+                  <li>Autoriseer de app in je Shopify admin</li>
+                  <li>Je wordt automatisch teruggeleid</li>
+                </ol>
+              </div>
             </div>
-          )}
+          </div>
 
-          {/* Validation Messages */}
-          {settings.enabled && !settings.storeId && (
-            <div className="flex items-center gap-2 text-amber-600 text-sm">
-              <AlertTriangle className="h-4 w-4" />
-              Vul een Store ID in
+          {/* Store Domain Input */}
+          <div>
+            <label className="block text-sm font-medium text-surface-700 mb-1.5">
+              Shopify Store Domein
+            </label>
+            <div className="flex gap-2">
+              <div className="flex-1 relative">
+                <Input
+                  value={shopDomain}
+                  onChange={(e) => setShopDomain(e.target.value.trim().toLowerCase())}
+                  placeholder="mijn-webshop"
+                  disabled={disabled || connecting}
+                  className="pr-32"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-surface-400 text-sm">
+                  .myshopify.com
+                </span>
+              </div>
             </div>
-          )}
+            <p className="mt-1 text-xs text-surface-500">
+              Je vindt dit in je Shopify admin URL: admin.shopify.com/store/<strong>mijn-webshop</strong>
+            </p>
+          </div>
 
-          {settings.enabled && !settings.accessToken && (
-            <div className="flex items-center gap-2 text-amber-600 text-sm">
-              <AlertTriangle className="h-4 w-4" />
-              Vul een Access Token in
-            </div>
-          )}
+          {/* Connect Button */}
+          <div className="pt-4 border-t border-surface-100">
+            <Button
+              type="button"
+              onClick={startOAuthFlow}
+              disabled={disabled || connecting || !shopDomain.trim()}
+              className="bg-[#95BF47] hover:bg-[#95BF47]/90"
+            >
+              {connecting ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Link2 className="h-4 w-4 mr-2" />
+              )}
+              Verbinden met Shopify
+            </Button>
+          </div>
 
-          {isValid && testResult?.success && (
-            <div className="flex items-center gap-2 text-green-600 text-sm">
-              <CheckCircle className="h-4 w-4" />
-              Shopify verbinding actief
-            </div>
-          )}
+          {/* Help link */}
+          <p className="text-xs text-surface-500">
+            Problemen?{' '}
+            <a
+              href="https://help.shopify.com/en/manual/apps"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[#95BF47] hover:underline"
+            >
+              Bekijk de Shopify documentatie
+              <ExternalLink className="inline h-3 w-3 ml-1" />
+            </a>
+          </p>
         </>
       )}
-
-      {/* Save Button */}
-      <div className="pt-4 border-t border-surface-100">
-        <Button
-          type="button"
-          onClick={handleSave}
-          disabled={disabled || saving || (settings.enabled && !isValid)}
-          className="bg-[#95BF47] hover:bg-[#95BF47]/90"
-        >
-          {saving ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-          ) : (
-            <Save className="h-4 w-4 mr-2" />
-          )}
-          {settings.enabled ? 'Shopify Opslaan' : 'Shopify Uitschakelen'}
-        </Button>
-      </div>
     </div>
   )
 }
