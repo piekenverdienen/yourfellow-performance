@@ -1,4 +1,5 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run build",
   "devCommand": "npm run dev",
   "installCommand": "npm install",
@@ -7,7 +8,13 @@
   "env": {
     "NEXT_PUBLIC_SUPABASE_URL": "@supabase-url",
     "NEXT_PUBLIC_SUPABASE_ANON_KEY": "@supabase-anon-key",
-    "ANTHROPIC_API_KEY": "@anthropic-api-key"
+    "SUPABASE_SERVICE_KEY": "@supabase-service-key",
+    "ANTHROPIC_API_KEY": "@anthropic-api-key",
+    "GA4_CREDENTIALS": "@ga4-credentials",
+    "CLICKUP_TOKEN": "@clickup-token",
+    "TAVILY_API_KEY": "@tavily-api-key",
+    "RESEND_API_KEY": "@resend-api-key",
+    "NEXT_PUBLIC_APP_URL": "https://hq.yourfellow.nl"
   },
   "crons": [
     {
