@@ -35,11 +35,13 @@ CREATE TABLE IF NOT EXISTS public.invites (
   accepted_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
   revoked_at TIMESTAMPTZ,
   revoked_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-
-  -- Prevent duplicate pending invites for same email/client
-  UNIQUE(email, client_id, status) WHERE status = 'pending'
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Partial unique index to prevent duplicate pending invites for same email/client
+CREATE UNIQUE INDEX IF NOT EXISTS idx_invites_unique_pending
+  ON public.invites(email, client_id)
+  WHERE status = 'pending';
 
 -- ===========================================
 -- 2. INDEXES
