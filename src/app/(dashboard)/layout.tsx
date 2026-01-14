@@ -18,6 +18,7 @@ export default function DashboardLayout({
     email: user.email,
     avatar_url: user.avatar_url,
     xp: user.xp,
+    role: user.role,
   } : undefined
 
   return (

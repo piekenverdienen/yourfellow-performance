@@ -115,7 +115,7 @@ export function Header({ user }: HeaderProps) {
                   {user?.name || 'User'}
                 </p>
                 <p className="text-xs text-surface-500">
-                  {user?.email || 'user@yourfellow.nl'}
+                  {user?.email || 'Laden...'}
                 </p>
               </div>
               <ChevronDown className="h-4 w-4 text-surface-400" />
@@ -130,7 +130,7 @@ export function Header({ user }: HeaderProps) {
                 <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-lg border border-surface-200 z-20 overflow-hidden">
                   <div className="px-4 py-3 border-b border-surface-100">
                     <p className="font-medium text-surface-900">{user?.name || 'User'}</p>
-                    <p className="text-sm text-surface-500">{user?.email || 'user@yourfellow.nl'}</p>
+                    <p className="text-sm text-surface-500">{user?.email || 'Laden...'}</p>
                   </div>
                   <div className="py-2">
                     <a 
