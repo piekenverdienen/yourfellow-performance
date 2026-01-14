@@ -361,17 +361,13 @@ async function createAlertsFromAnomalies(
 
 export async function GET(request: NextRequest) {
   try {
-    // Skip auth in development for easy testing
-    const isDev = process.env.NODE_ENV === 'development'
+    // SECURITY: Always require CRON_SECRET - no development bypass
+    const authHeader = request.headers.get('authorization')
+    const cronSecret = process.env.CRON_SECRET
 
-    if (!isDev) {
-      const authHeader = request.headers.get('authorization')
-      const cronSecret = process.env.CRON_SECRET
-
-      if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-        console.error('Unauthorized cron request')
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-      }
+    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+      console.error('[GA4 Cron] Unauthorized request - missing or invalid CRON_SECRET')
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     console.log('[GA4 Cron] Starting GA4 monitoring job...')

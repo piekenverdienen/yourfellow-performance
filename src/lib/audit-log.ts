@@ -24,6 +24,9 @@ export type AuditAction =
   | 'data.delete'
   | 'api.rate_limited'
   | 'security.suspicious_activity'
+  | 'membership.requested'
+  | 'membership.approved'
+  | 'membership.rejected'
 
 export interface AuditLogEntry {
   action: AuditAction

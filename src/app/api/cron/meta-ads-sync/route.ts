@@ -129,19 +129,13 @@ async function createAlertsFromFatigueSignals(
 
 export async function GET(request: NextRequest) {
   try {
-    // Skip auth in development for easy testing
-    const isDev = process.env.NODE_ENV === 'development'
+    // SECURITY: Always require CRON_SECRET - no development bypass
+    const authHeader = request.headers.get('authorization')
+    const cronSecret = process.env.CRON_SECRET
 
-    if (!isDev) {
-      // Verify cron secret (Vercel sends this header)
-      // SECURITY: Always require CRON_SECRET in production
-      const authHeader = request.headers.get('authorization')
-      const cronSecret = process.env.CRON_SECRET
-
-      if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-        console.error('Unauthorized cron request - missing or invalid CRON_SECRET')
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-      }
+    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+      console.error('[Meta Ads Cron] Unauthorized request - missing or invalid CRON_SECRET')
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     console.log('[Cron] Starting Meta Ads sync job...')
