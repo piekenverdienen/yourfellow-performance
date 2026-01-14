@@ -117,6 +117,7 @@ export function FilterToolbar({
   }
 
   const entityLabel = {
+    account: 'accounts',
     campaign: 'campaigns',
     adset: 'ad sets',
     ad: 'ads',

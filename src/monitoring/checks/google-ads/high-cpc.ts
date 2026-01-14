@@ -79,7 +79,7 @@ export class HighCpcCheck extends BaseGoogleAdsCheck {
         return this.okResult({ message: 'Geen keyword data voor CPC analyse' });
       }
 
-      const keywordData = this.processResults(response.results as KeywordCpcRow[]);
+      const keywordData = this.processResults(response.results as unknown as KeywordCpcRow[]);
 
       if (keywordData.length === 0) {
         return this.okResult({ message: 'Geen keywords met voldoende data' });

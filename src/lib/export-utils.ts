@@ -8,8 +8,14 @@ interface ExportOptions {
   entityType?: MetaEntityType
 }
 
+interface ColumnDefinition {
+  key: string
+  label: string
+  format?: string
+}
+
 // Column definitions for export
-const columns = [
+const columns: ColumnDefinition[] = [
   { key: 'entity_name', label: 'Naam' },
   { key: 'status', label: 'Status' },
   { key: 'impressions', label: 'Impressies', format: 'number' },
@@ -26,7 +32,7 @@ const columns = [
   { key: 'roas', label: 'ROAS', format: 'decimal' },
   { key: 'has_fatigue', label: 'Fatigue', format: 'boolean' },
   { key: 'fatigue_severity', label: 'Fatigue Ernst' },
-] as const
+]
 
 function formatValue(
   value: unknown,

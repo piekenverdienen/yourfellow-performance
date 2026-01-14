@@ -87,7 +87,7 @@ export class LowQualityScoreCheck extends BaseGoogleAdsCheck {
         return this.okResult({ message: 'Alle keywords hebben acceptabele kwaliteitsscores' });
       }
 
-      const lowQsKeywords = this.processResults(response.results as KeywordQualityRow[]);
+      const lowQsKeywords = this.processResults(response.results as unknown as KeywordQualityRow[]);
 
       // Filter to keywords with meaningful traffic (>100 impressions)
       const significantLowQs = lowQsKeywords.filter(kw => kw.impressions >= 100);

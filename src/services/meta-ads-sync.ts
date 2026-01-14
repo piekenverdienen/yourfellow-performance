@@ -61,7 +61,7 @@ export class MetaAdsSyncService {
         this.supabase = await createClient()
       }
     }
-    return this.supabase
+    return this.supabase!
   }
 
   /**

@@ -48,7 +48,7 @@ export class DisapprovedAdsCheck extends BaseGoogleAdsCheck {
       }
 
       // Process the results
-      const disapprovedAds = this.processResults(response.results as DisapprovedAdRow[]);
+      const disapprovedAds = this.processResults(response.results as unknown as DisapprovedAdRow[]);
       const count = disapprovedAds.length;
 
       // Collect unique policy topics

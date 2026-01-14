@@ -23,6 +23,7 @@ import type {
   MetaPerformanceTargets,
   MetaClientContext as MetaClientContextType,
   MetaAdsSettings,
+  MetaInsightDaily,
 } from '@/types/meta-ads'
 import type { AIContext, ContextSummary } from '@/lib/context'
 
@@ -84,13 +85,13 @@ interface EnhancedPerformanceData {
     avg_roas: number
   }
   topPerformers: {
-    byROAS: MetaPerformanceRow[]
-    byCPA: MetaPerformanceRow[]
-    bySpend: MetaPerformanceRow[]
+    byROAS: MetaInsightDaily[]
+    byCPA: MetaInsightDaily[]
+    bySpend: MetaInsightDaily[]
   }
   bottomPerformers: {
-    byROAS: MetaPerformanceRow[]
-    byCPA: MetaPerformanceRow[]
+    byROAS: MetaInsightDaily[]
+    byCPA: MetaInsightDaily[]
   }
   fatigueSignals: MetaFatigueSignal[]
   scalingRecommendations: ScalingRecommendation[]
@@ -574,12 +575,12 @@ export class MetaAIInsightsService {
         total_impressions: kpis.total_impressions,
         total_clicks: kpis.total_clicks,
         total_conversions: kpis.total_conversions,
-        total_revenue: kpis.total_revenue || kpis.total_conversions * 50, // Estimate if not available
+        total_revenue: kpis.total_conversions * 50, // Estimate based on conversions
         avg_ctr: kpis.avg_ctr,
         avg_cpc: kpis.avg_cpc,
         avg_cpa: avgCPA,
         avg_roas: kpis.avg_roas,
-        avg_frequency: kpis.avg_frequency || 0,
+        avg_frequency: 0, // Not available in KPI summary
       },
       previousPeriodKpis: previousPeriodKpis ? {
         total_spend: previousPeriodKpis.total_spend,

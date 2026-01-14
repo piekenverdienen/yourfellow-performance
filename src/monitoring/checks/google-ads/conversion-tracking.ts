@@ -136,7 +136,7 @@ export class ConversionTrackingCheck extends BaseGoogleAdsCheck {
         clicks: number;
       }>();
 
-      for (const row of conversionResponse.results as ConversionRow[]) {
+      for (const row of conversionResponse.results as unknown as ConversionRow[]) {
         const campaignId = row.campaign?.id || 'unknown';
         const existing = campaignMap.get(campaignId) || {
           name: row.campaign?.name || 'Unknown',

@@ -101,7 +101,7 @@ export class AudienceIssuesCheck extends BaseGoogleAdsCheck {
       // Build campaign map
       const campaignMap = new Map<string, CampaignAudienceStatus>();
 
-      for (const row of campaignsResponse.results as AudienceRow[]) {
+      for (const row of campaignsResponse.results as unknown as AudienceRow[]) {
         const campaignId = row.campaign?.id || 'unknown';
         const existing = campaignMap.get(campaignId);
 
@@ -126,7 +126,7 @@ export class AudienceIssuesCheck extends BaseGoogleAdsCheck {
         const audienceResponse = await client.query(AudienceIssuesCheck.AUDIENCES_QUERY);
 
         // Mark campaigns that have audiences
-        for (const row of audienceResponse.results as AudienceRow[]) {
+        for (const row of audienceResponse.results as unknown as AudienceRow[]) {
           const campaignId = row.campaign?.id || 'unknown';
           const campaign = campaignMap.get(campaignId);
 
@@ -145,7 +145,7 @@ export class AudienceIssuesCheck extends BaseGoogleAdsCheck {
       // Analyze for issues
       const issues: CampaignAudienceStatus[] = [];
 
-      for (const campaign of campaignMap.values()) {
+      for (const campaign of Array.from(campaignMap.values())) {
         const campaignIssues: string[] = [];
 
         // Check for Display/PMax campaigns without audiences

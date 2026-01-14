@@ -49,7 +49,7 @@ export class NoDeliveryCheck extends BaseGoogleAdsCheck {
 
       // Filter for campaigns with no delivery that are old enough
       const noDeliveryCampaigns = this.processResults(
-        response.results as CampaignMetricsRow[],
+        response.results as unknown as CampaignMetricsRow[],
         noDeliveryThresholdHours
       );
 
