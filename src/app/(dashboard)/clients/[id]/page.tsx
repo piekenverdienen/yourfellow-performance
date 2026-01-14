@@ -23,6 +23,11 @@ import {
   Eye,
   Brain,
   CheckSquare,
+  Mail,
+  Copy,
+  Check,
+  Clock,
+  Send,
 } from 'lucide-react'
 import { useUser } from '@/hooks/use-user'
 import { useClientStore } from '@/stores/client-store'
@@ -41,9 +46,22 @@ interface ClientMember {
   id: string
   user_id: string
   role: ClientMemberRole
+  approval_status?: string
   created_at: string
   updated_at: string
   user: User
+}
+
+interface Invite {
+  id: string
+  email: string
+  role: string
+  status: string
+  token: string
+  message: string | null
+  expires_at: string
+  created_at: string
+  inviter?: { email: string; full_name: string | null }
 }
 
 interface ClientWithRole extends Client {
@@ -75,6 +93,13 @@ export default function ClientDetailPage() {
   const [newMemberEmail, setNewMemberEmail] = useState('')
   const [newMemberRole, setNewMemberRole] = useState<ClientMemberRole>('viewer')
   const [addingMember, setAddingMember] = useState(false)
+  const [inviteMode, setInviteMode] = useState<'existing' | 'invite'>('invite')
+  const [inviteMessage, setInviteMessage] = useState('')
+
+  // Invite state
+  const [invites, setInvites] = useState<Invite[]>([])
+  const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null)
+  const [createdInviteUrl, setCreatedInviteUrl] = useState<string | null>(null)
 
   // Delete client state
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -87,6 +112,7 @@ export default function ClientDetailPage() {
   useEffect(() => {
     fetchClientData()
     fetchMembers()
+    fetchInvites()
   }, [id])
 
   useEffect(() => {
@@ -131,6 +157,19 @@ export default function ClientDetailPage() {
     }
   }
 
+  const fetchInvites = async () => {
+    try {
+      const res = await fetch(`/api/invites?client_id=${id}`)
+      const data = await res.json()
+
+      if (res.ok) {
+        setInvites(data.invites || [])
+      }
+    } catch (error) {
+      console.error('Error fetching invites:', error)
+    }
+  }
+
   const saveClientSettings = async () => {
     if (!editedName.trim()) return
 
@@ -165,24 +204,49 @@ export default function ClientDetailPage() {
     if (!newMemberEmail.trim()) return
 
     setAddingMember(true)
-    try {
-      const res = await fetch(`/api/clients/${id}/memberships`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: newMemberEmail,
-          role: newMemberRole,
-        }),
-      })
-      const data = await res.json()
+    setCreatedInviteUrl(null)
 
-      if (res.ok) {
-        setMembers((prev) => [data.membership, ...prev])
-        setShowAddMember(false)
-        setNewMemberEmail('')
-        setNewMemberRole('viewer')
+    try {
+      if (inviteMode === 'invite') {
+        // Create invite
+        const res = await fetch('/api/invites', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: newMemberEmail,
+            client_id: id,
+            role: newMemberRole,
+            message: inviteMessage || undefined,
+          }),
+        })
+        const data = await res.json()
+
+        if (res.ok) {
+          setInvites((prev) => [data.invite, ...prev])
+          setCreatedInviteUrl(data.invite_url)
+          // Don't close modal yet - show the invite URL
+        } else {
+          alert(data.error || 'Er ging iets mis')
+        }
       } else {
-        alert(data.error || 'Er ging iets mis')
+        // Add existing user directly
+        const res = await fetch(`/api/clients/${id}/memberships`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: newMemberEmail,
+            role: newMemberRole,
+          }),
+        })
+        const data = await res.json()
+
+        if (res.ok) {
+          setMembers((prev) => [data.membership, ...prev])
+          setShowAddMember(false)
+          resetAddMemberForm()
+        } else {
+          alert(data.error || 'Er ging iets mis')
+        }
       }
     } catch (error) {
       console.error('Error adding member:', error)
@@ -190,6 +254,41 @@ export default function ClientDetailPage() {
     } finally {
       setAddingMember(false)
     }
+  }
+
+  const resetAddMemberForm = () => {
+    setNewMemberEmail('')
+    setNewMemberRole('viewer')
+    setInviteMessage('')
+    setInviteMode('invite')
+    setCreatedInviteUrl(null)
+  }
+
+  const revokeInvite = async (token: string) => {
+    if (!confirm('Weet je zeker dat je deze uitnodiging wilt intrekken?')) return
+
+    try {
+      const res = await fetch(`/api/invites/${token}`, {
+        method: 'DELETE',
+      })
+
+      if (res.ok) {
+        setInvites((prev) => prev.filter((i) => i.token !== token))
+      } else {
+        const data = await res.json()
+        alert(data.error || 'Er ging iets mis')
+      }
+    } catch (error) {
+      console.error('Error revoking invite:', error)
+      alert('Er ging iets mis')
+    }
+  }
+
+  const copyInviteLink = async (token: string) => {
+    const url = `${window.location.origin}/invite/${token}`
+    await navigator.clipboard.writeText(url)
+    setCopiedInviteId(token)
+    setTimeout(() => setCopiedInviteId(null), 2000)
   }
 
   const updateMemberRole = async (userId: string, newRole: ClientMemberRole) => {
@@ -439,24 +538,78 @@ export default function ClientDetailPage() {
             <div className="flex justify-end">
               <Button onClick={() => setShowAddMember(true)}>
                 <UserPlus className="h-4 w-4 mr-2" />
-                Teamlid toevoegen
+                Teamlid uitnodigen
               </Button>
             </div>
+          )}
+
+          {/* Pending Invites */}
+          {invites.filter(i => i.status === 'pending').length > 0 && (
+            <Card className="border-amber-200 bg-amber-50/50">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-amber-600" />
+                  Openstaande uitnodigingen ({invites.filter(i => i.status === 'pending').length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="divide-y divide-amber-100">
+                  {invites.filter(i => i.status === 'pending').map((invite) => (
+                    <div key={invite.id} className="flex items-center justify-between py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
+                          <Mail className="h-4 w-4 text-amber-600" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-surface-900">{invite.email}</p>
+                          <p className="text-sm text-surface-500">
+                            Uitgenodigd als {invite.role === 'owner' ? 'Eigenaar' : invite.role === 'admin' ? 'Beheerder' : invite.role === 'editor' ? 'Bewerker' : 'Kijker'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => copyInviteLink(invite.token)}
+                          title="Kopieer link"
+                        >
+                          {copiedInviteId === invite.token ? (
+                            <Check className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <Copy className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                          onClick={() => revokeInvite(invite.token)}
+                          title="Intrekken"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           )}
 
           {/* Members List */}
           <Card>
             <CardHeader>
-              <CardTitle>Teamleden</CardTitle>
+              <CardTitle>Teamleden ({members.filter(m => m.approval_status === 'approved').length})</CardTitle>
             </CardHeader>
             <CardContent>
-              {members.length === 0 ? (
+              {members.filter(m => m.approval_status === 'approved').length === 0 ? (
                 <p className="text-center text-surface-500 py-8">
                   Nog geen teamleden toegevoegd
                 </p>
               ) : (
                 <div className="divide-y divide-surface-100">
-                  {members.map((member) => (
+                  {members.filter(m => m.approval_status === 'approved').map((member) => (
                     <div
                       key={member.id}
                       className="flex items-center justify-between py-3"
@@ -524,69 +677,175 @@ export default function ClientDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Add Member Modal */}
+          {/* Add Member / Invite Modal */}
           {showAddMember && (
             <div className="fixed inset-0 z-50 flex items-center justify-center">
               <div
                 className="fixed inset-0 bg-black/50"
-                onClick={() => setShowAddMember(false)}
+                onClick={() => {
+                  setShowAddMember(false)
+                  resetAddMemberForm()
+                }}
               />
               <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md p-6 m-4">
-                <h2 className="text-xl font-bold text-surface-900 mb-4">
-                  Teamlid toevoegen
-                </h2>
+                {createdInviteUrl ? (
+                  // Show invite URL after creation
+                  <>
+                    <div className="text-center mb-4">
+                      <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-green-100 flex items-center justify-center">
+                        <Check className="h-6 w-6 text-green-600" />
+                      </div>
+                      <h2 className="text-xl font-bold text-surface-900">
+                        Uitnodiging verstuurd!
+                      </h2>
+                      <p className="text-surface-600 mt-1">
+                        Deel deze link met <strong>{newMemberEmail}</strong>
+                      </p>
+                    </div>
 
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-surface-700 mb-1.5">
-                      Email adres *
-                    </label>
-                    <Input
-                      type="email"
-                      value={newMemberEmail}
-                      onChange={(e) => setNewMemberEmail(e.target.value)}
-                      placeholder="teamlid@bedrijf.nl"
-                      autoFocus
-                    />
-                  </div>
+                    <div className="bg-surface-50 p-3 rounded-lg mb-4">
+                      <p className="text-sm text-surface-600 break-all font-mono">
+                        {createdInviteUrl}
+                      </p>
+                    </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-surface-700 mb-1.5">
-                      Rol
-                    </label>
-                    <Select
-                      value={newMemberRole}
-                      onChange={(e) =>
-                        setNewMemberRole(e.target.value as ClientMemberRole)
-                      }
-                      options={roleOptions.filter(
-                        (o) => o.value !== 'owner' || currentUser?.role === 'admin'
+                    <div className="flex gap-3">
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={async () => {
+                          await navigator.clipboard.writeText(createdInviteUrl)
+                          alert('Link gekopieerd!')
+                        }}
+                      >
+                        <Copy className="h-4 w-4 mr-2" />
+                        Kopieer link
+                      </Button>
+                      <Button
+                        className="flex-1"
+                        onClick={() => {
+                          setShowAddMember(false)
+                          resetAddMemberForm()
+                        }}
+                      >
+                        Sluiten
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  // Show invite form
+                  <>
+                    <h2 className="text-xl font-bold text-surface-900 mb-4">
+                      Teamlid uitnodigen
+                    </h2>
+
+                    {/* Mode Toggle */}
+                    <div className="flex gap-2 mb-4 p-1 bg-surface-100 rounded-lg">
+                      <button
+                        onClick={() => setInviteMode('invite')}
+                        className={`flex-1 py-2 px-3 text-sm font-medium rounded-md transition-colors ${
+                          inviteMode === 'invite'
+                            ? 'bg-white text-surface-900 shadow-sm'
+                            : 'text-surface-600 hover:text-surface-900'
+                        }`}
+                      >
+                        <Send className="h-4 w-4 inline-block mr-1.5" />
+                        Uitnodigen
+                      </button>
+                      <button
+                        onClick={() => setInviteMode('existing')}
+                        className={`flex-1 py-2 px-3 text-sm font-medium rounded-md transition-colors ${
+                          inviteMode === 'existing'
+                            ? 'bg-white text-surface-900 shadow-sm'
+                            : 'text-surface-600 hover:text-surface-900'
+                        }`}
+                      >
+                        <UserPlus className="h-4 w-4 inline-block mr-1.5" />
+                        Bestaande gebruiker
+                      </button>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-surface-700 mb-1.5">
+                          Email adres *
+                        </label>
+                        <Input
+                          type="email"
+                          value={newMemberEmail}
+                          onChange={(e) => setNewMemberEmail(e.target.value)}
+                          placeholder={inviteMode === 'invite' ? 'nieuwe.collega@bedrijf.nl' : 'bestaande.gebruiker@bedrijf.nl'}
+                          autoFocus
+                        />
+                        {inviteMode === 'invite' && (
+                          <p className="text-xs text-surface-500 mt-1">
+                            Deze persoon krijgt een link om een account aan te maken
+                          </p>
+                        )}
+                        {inviteMode === 'existing' && (
+                          <p className="text-xs text-surface-500 mt-1">
+                            Deze persoon moet al een account hebben
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-surface-700 mb-1.5">
+                          Rol
+                        </label>
+                        <Select
+                          value={newMemberRole}
+                          onChange={(e) =>
+                            setNewMemberRole(e.target.value as ClientMemberRole)
+                          }
+                          options={roleOptions.filter(
+                            (o) => o.value !== 'owner' || currentUser?.role === 'admin'
+                          )}
+                        />
+                      </div>
+
+                      {inviteMode === 'invite' && (
+                        <div>
+                          <label className="block text-sm font-medium text-surface-700 mb-1.5">
+                            Persoonlijk bericht (optioneel)
+                          </label>
+                          <Input
+                            value={inviteMessage}
+                            onChange={(e) => setInviteMessage(e.target.value)}
+                            placeholder="Welkom bij het team!"
+                          />
+                        </div>
                       )}
-                    />
-                  </div>
-                </div>
+                    </div>
 
-                <div className="flex gap-3 mt-6">
-                  <Button
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => setShowAddMember(false)}
-                  >
-                    Annuleren
-                  </Button>
-                  <Button
-                    className="flex-1"
-                    onClick={addMember}
-                    disabled={!newMemberEmail.trim() || addingMember}
-                  >
-                    {addingMember ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <UserPlus className="h-4 w-4 mr-2" />
-                    )}
-                    Toevoegen
-                  </Button>
-                </div>
+                    <div className="flex gap-3 mt-6">
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => {
+                          setShowAddMember(false)
+                          resetAddMemberForm()
+                        }}
+                      >
+                        Annuleren
+                      </Button>
+                      <Button
+                        className="flex-1"
+                        onClick={addMember}
+                        disabled={!newMemberEmail.trim() || addingMember}
+                      >
+                        {addingMember ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : inviteMode === 'invite' ? (
+                          <Send className="h-4 w-4 mr-2" />
+                        ) : (
+                          <UserPlus className="h-4 w-4 mr-2" />
+                        )}
+                        {inviteMode === 'invite' ? 'Uitnodigen' : 'Toevoegen'}
+                      </Button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}
