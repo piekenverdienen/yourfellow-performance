@@ -22,6 +22,7 @@ const CHANNEL_LABELS: Record<AlertChannel, string> = {
   website: 'Website',
   tracking: 'Tracking',
   seo: 'SEO',
+  shopify: 'Shopify',
 }
 
 const CHANNEL_COLORS: Record<AlertChannel, string> = {
@@ -30,6 +31,7 @@ const CHANNEL_COLORS: Record<AlertChannel, string> = {
   website: 'bg-purple-100 text-purple-800 border-purple-200',
   tracking: 'bg-orange-100 text-orange-800 border-orange-200',
   seo: 'bg-green-100 text-green-800 border-green-200',
+  shopify: 'bg-emerald-100 text-emerald-800 border-emerald-200',
 }
 
 export function CriticalIssues({ clientId }: CriticalIssuesProps) {
