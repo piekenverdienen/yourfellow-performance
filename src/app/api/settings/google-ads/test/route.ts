@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { GoogleAdsClient } from '@/monitoring/google-ads/client'
-import { Logger } from '@/monitoring/utils/logger'
+import { createLogger } from '@/monitoring/utils/logger'
 
 // POST - Test Google Ads connection
 export async function POST(request: NextRequest) {
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create client and test connection
-    const logger = new Logger({ prefix: 'GoogleAdsTest', level: 'info' })
+    const logger = createLogger('info')
 
     const client = new GoogleAdsClient({
       credentials: {

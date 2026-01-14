@@ -122,6 +122,7 @@ export async function GET(request: NextRequest) {
     // Verify connection with the customer
     const adsClient = new GoogleAdsClient({
       credentials: {
+        type: 'oauth',
         developerToken: GOOGLE_ADS_DEVELOPER_TOKEN,
         clientId: GOOGLE_ADS_CLIENT_ID,
         clientSecret: GOOGLE_ADS_CLIENT_SECRET,
