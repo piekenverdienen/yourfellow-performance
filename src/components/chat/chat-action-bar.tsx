@@ -343,7 +343,7 @@ export function ChatActionBar({
           <Button
             type="button"
             onClick={onCancel}
-            variant="destructive"
+            variant="danger"
             className="shrink-0 h-[44px]"
           >
             <Square className="h-4 w-4 mr-1.5 fill-current" />
