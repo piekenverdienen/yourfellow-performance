@@ -92,7 +92,7 @@ export class LimitedByBudgetCheck extends BaseGoogleAdsCheck {
         budgetLostIS: number;
       }>();
 
-      for (const row of response.results as CampaignBudgetRow[]) {
+      for (const row of response.results as unknown as CampaignBudgetRow[]) {
         const campaignId = row.campaign?.id || 'unknown';
         const existing = campaignMap.get(campaignId);
 

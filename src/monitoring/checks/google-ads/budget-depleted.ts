@@ -67,7 +67,7 @@ export class BudgetDepletedCheck extends BaseGoogleAdsCheck {
       const currentHour = new Date().getHours();
       const isEarlyInDay = currentHour < 18;
 
-      const depletedCampaigns = this.processResults(response.results as BudgetRow[]);
+      const depletedCampaigns = this.processResults(response.results as unknown as BudgetRow[]);
 
       if (depletedCampaigns.length === 0) {
         logger.debug('No campaigns with depleted budgets');

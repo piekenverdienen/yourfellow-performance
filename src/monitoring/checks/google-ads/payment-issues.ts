@@ -75,7 +75,7 @@ export class PaymentIssuesCheck extends BaseGoogleAdsCheck {
       const accountResponse = await client.query(PaymentIssuesCheck.ACCOUNT_QUERY);
 
       if (accountResponse.results.length > 0) {
-        const account = accountResponse.results[0] as AccountRow;
+        const account = accountResponse.results[0] as unknown as AccountRow;
         const accountStatus = account.customer?.status;
 
         if (accountStatus === 'SUSPENDED') {
@@ -110,7 +110,7 @@ export class PaymentIssuesCheck extends BaseGoogleAdsCheck {
             severity: 'high',
           });
         } else {
-          for (const row of billingResponse.results as BillingSetupRow[]) {
+          for (const row of billingResponse.results as unknown as BillingSetupRow[]) {
             const billingStatus = row.billingSetup?.status;
 
             if (billingStatus === 'PENDING') {

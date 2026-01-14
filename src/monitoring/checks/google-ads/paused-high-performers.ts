@@ -99,7 +99,7 @@ export class PausedHighPerformersCheck extends BaseGoogleAdsCheck {
           let totalEnabledConversions = 0;
           let totalEnabledCost = 0;
 
-          for (const row of enabledResponse.results as CampaignPerformanceRow[]) {
+          for (const row of enabledResponse.results as unknown as CampaignPerformanceRow[]) {
             totalEnabledConversions += parseFloat(row.metrics?.conversions || '0');
             totalEnabledCost += parseInt(row.metrics?.costMicros || '0', 10) / 1_000_000;
           }
@@ -113,7 +113,7 @@ export class PausedHighPerformersCheck extends BaseGoogleAdsCheck {
       }
 
       // Process paused campaigns
-      const pausedCampaigns = this.processResults(pausedResponse.results as CampaignPerformanceRow[]);
+      const pausedCampaigns = this.processResults(pausedResponse.results as unknown as CampaignPerformanceRow[]);
 
       // Filter for high performers (campaigns with good metrics)
       const highPerformers = pausedCampaigns.filter(campaign => {

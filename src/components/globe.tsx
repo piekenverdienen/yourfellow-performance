@@ -72,7 +72,9 @@ export function Globe({ className }: GlobeProps) {
       const width = containerRef.current.offsetWidth
       const height = containerRef.current.offsetHeight
 
-      globe = GlobeGL.default()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const GlobeConstructor = GlobeGL.default as any
+      globe = GlobeConstructor()
         .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-dark.jpg')
         .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
         .backgroundColor('rgba(0,0,0,0)')

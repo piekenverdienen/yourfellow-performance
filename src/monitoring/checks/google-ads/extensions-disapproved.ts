@@ -71,7 +71,7 @@ export class ExtensionsDisapprovedCheck extends BaseGoogleAdsCheck {
         return this.okResult({ message: 'Alle extensies en assets zijn goedgekeurd' });
       }
 
-      const disapprovedExtensions = this.processResults(response.results as ExtensionRow[]);
+      const disapprovedExtensions = this.processResults(response.results as unknown as ExtensionRow[]);
 
       if (disapprovedExtensions.length === 0) {
         return this.okResult({ message: 'Alle extensies en assets zijn goedgekeurd' });

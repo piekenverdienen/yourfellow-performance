@@ -113,7 +113,7 @@ export class MetaFatigueDetector {
         this.supabase = await createClient()
       }
     }
-    return this.supabase
+    return this.supabase!
   }
 
   /**
@@ -131,12 +131,13 @@ export class MetaFatigueDetector {
       .eq('id', clientId)
       .single()
 
-    const metaSettings = data?.settings?.meta as MetaAdsSettings | undefined
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const metaSettings = data?.settings?.meta as any | undefined
 
     // Return client targets with fallbacks to defaults
     return {
       targets: metaSettings?.targets || {},
-      alertThresholds: metaSettings?.alertThresholds || {},
+      alertThresholds: metaSettings?.alertThresholds || metaSettings?.thresholds || {},
     }
   }
 

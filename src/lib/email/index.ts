@@ -1,7 +1,14 @@
 import { Resend } from 'resend'
 
-// Initialize Resend client
-const resend = new Resend(process.env.RESEND_API_KEY)
+// Lazy initialize Resend client to avoid build-time errors
+let resend: Resend | null = null
+
+function getResendClient(): Resend | null {
+  if (!resend && process.env.RESEND_API_KEY) {
+    resend = new Resend(process.env.RESEND_API_KEY)
+  }
+  return resend
+}
 
 // Default from address - must be verified domain in Resend
 const DEFAULT_FROM = process.env.EMAIL_FROM || 'workflows@yourfellow.com'
@@ -28,7 +35,8 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
   const { to, subject, html, text, from, replyTo } = options
 
   // Check if API key is configured
-  if (!process.env.RESEND_API_KEY) {
+  const client = getResendClient()
+  if (!client) {
     console.warn('[Email] RESEND_API_KEY not configured - email not sent')
     return {
       success: false,
@@ -37,7 +45,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
   }
 
   try {
-    const result = await resend.emails.send({
+    const result = await client.emails.send({
       from: from || DEFAULT_FROM,
       to: Array.isArray(to) ? to : [to],
       subject,

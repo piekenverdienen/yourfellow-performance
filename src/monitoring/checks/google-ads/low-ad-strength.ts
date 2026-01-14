@@ -101,7 +101,7 @@ export class LowAdStrengthCheck extends BaseGoogleAdsCheck {
         cost: number;
       }>();
 
-      for (const row of response.results as RsaAdRow[]) {
+      for (const row of response.results as unknown as RsaAdRow[]) {
         const adId = row.adGroupAd?.ad?.id || 'unknown';
         const existing = adMap.get(adId);
 
