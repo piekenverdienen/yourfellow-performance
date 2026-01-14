@@ -35,6 +35,8 @@ import {
   Facebook,
   AlertTriangle,
   BrainCircuit,
+  Shield,
+  UserCheck,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useUser } from '@/hooks/use-user'
@@ -166,11 +168,19 @@ const bottomNavigation: NavItem[] = [
   { name: 'Instellingen', href: '/settings', icon: Settings, color: 'text-slate-600 bg-slate-100' },
 ]
 
+// Admin-only navigation items
+const adminNavigation: NavItem[] = [
+  { name: 'Toegangsverzoeken', href: '/admin/memberships', icon: UserCheck, color: 'text-amber-600 bg-amber-100' },
+]
+
 export function Sidebar() {
   const pathname = usePathname()
   const [expandedItems, setExpandedItems] = useState<string[]>([])
   const { user } = useUser()
   const [streak, setStreak] = useState<{ currentStreak: number; isActive: boolean }>({ currentStreak: 0, isActive: false })
+  const [pendingMembershipsCount, setPendingMembershipsCount] = useState(0)
+
+  const isOrgAdmin = user?.role === 'admin'
 
   // Fetch streak data
   useEffect(() => {
@@ -189,6 +199,26 @@ export function Sidebar() {
       fetchStreak()
     }
   }, [user])
+
+  // Fetch pending memberships count for admins
+  useEffect(() => {
+    async function fetchPendingCount() {
+      if (!isOrgAdmin) return
+      try {
+        const res = await fetch('/api/admin/memberships')
+        if (res.ok) {
+          const data = await res.json()
+          setPendingMembershipsCount(data.count || 0)
+        }
+      } catch {
+        // Endpoint might not exist yet
+      }
+    }
+    fetchPendingCount()
+    // Refresh every 60 seconds
+    const interval = setInterval(fetchPendingCount, 60000)
+    return () => clearInterval(interval)
+  }, [isOrgAdmin])
 
   const levelInfo = user ? calculateLevel(user.xp || 0) : null
 
@@ -323,6 +353,53 @@ export function Sidebar() {
             )
           })}
         </nav>
+
+        {/* Admin Section - Only visible for org admins */}
+        {isOrgAdmin && (
+          <div className="border-t border-surface-200 px-3 py-4 space-y-1">
+            <div className="flex items-center gap-2 px-3 pb-2">
+              <Shield className="h-4 w-4 text-amber-600" />
+              <span className="text-xs font-semibold text-surface-400 uppercase tracking-wider">Admin</span>
+            </div>
+            {adminNavigation.map((item) => {
+              const Icon = item.icon
+              const isItemActive = isActive(item.href)
+              const [iconText, iconBg] = (item.color || 'text-surface-500 bg-surface-100').split(' ')
+              const showBadge = item.href === '/admin/memberships' && pendingMembershipsCount > 0
+
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className={cn(
+                    'flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150',
+                    isItemActive
+                      ? 'bg-surface-100 text-surface-900 shadow-sm'
+                      : 'text-surface-600 hover:bg-surface-50 hover:text-surface-900'
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      'flex items-center justify-center w-8 h-8 rounded-lg transition-colors',
+                      isItemActive ? iconBg : 'bg-surface-100',
+                    )}>
+                      <Icon className={cn(
+                        'h-[18px] w-[18px]',
+                        isItemActive ? iconText : 'text-surface-500'
+                      )} />
+                    </div>
+                    {item.name}
+                  </div>
+                  {showBadge && (
+                    <span className="flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-bold bg-amber-500 text-white rounded-full">
+                      {pendingMembershipsCount}
+                    </span>
+                  )}
+                </Link>
+              )
+            })}
+          </div>
+        )}
 
         {/* Bottom Navigation */}
         <div className="border-t border-surface-200 px-3 py-4 space-y-1">
