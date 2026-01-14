@@ -1,9 +1,11 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
 import { useUser } from '@/hooks/use-user'
 import { useRouter } from 'next/navigation'
 import {
@@ -18,6 +20,11 @@ import {
   XCircle,
   AlertTriangle,
   RefreshCw,
+  UserPlus,
+  Send,
+  Copy,
+  Check,
+  Mail,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -46,6 +53,12 @@ interface PendingMembership {
   } | null
 }
 
+interface Client {
+  id: string
+  name: string
+  slug: string
+}
+
 export default function AdminMembershipsPage() {
   const { user, loading: userLoading } = useUser()
   const router = useRouter()
@@ -55,7 +68,29 @@ export default function AdminMembershipsPage() {
   const [processingId, setProcessingId] = useState<string | null>(null)
   const [actionResult, setActionResult] = useState<{ id: string; success: boolean; message: string } | null>(null)
 
+  // Invite form state
+  const [clients, setClients] = useState<Client[]>([])
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteRole, setInviteRole] = useState('viewer')
+  const [inviteMessage, setInviteMessage] = useState('')
+  const [selectedClients, setSelectedClients] = useState<string[]>([])
+  const [isInviting, setIsInviting] = useState(false)
+  const [inviteResults, setInviteResults] = useState<{ email: string; results: { client: string; success: boolean; url?: string; error?: string }[] } | null>(null)
+  const [copiedUrl, setCopiedUrl] = useState<string | null>(null)
+
   const isOrgAdmin = user?.role === 'admin'
+
+  const fetchClients = useCallback(async () => {
+    try {
+      const response = await fetch('/api/clients')
+      if (response.ok) {
+        const data = await response.json()
+        setClients(data.clients || [])
+      }
+    } catch (err) {
+      console.error('Error fetching clients:', err)
+    }
+  }, [])
 
   const fetchPendingMemberships = useCallback(async () => {
     try {
@@ -86,8 +121,9 @@ export default function AdminMembershipsPage() {
         return
       }
       fetchPendingMemberships()
+      fetchClients()
     }
-  }, [userLoading, isOrgAdmin, router, fetchPendingMemberships])
+  }, [userLoading, isOrgAdmin, router, fetchPendingMemberships, fetchClients])
 
   const handleAction = async (membershipId: string, action: 'approve' | 'reject', reason?: string) => {
     setProcessingId(membershipId)
@@ -116,7 +152,6 @@ export default function AdminMembershipsPage() {
         message: action === 'approve' ? 'Toegang goedgekeurd' : 'Toegang afgewezen',
       })
 
-      // Remove from list after short delay
       setTimeout(() => {
         setPendingMemberships(prev => prev.filter(m => m.id !== membershipId))
         setActionResult(null)
@@ -132,6 +167,86 @@ export default function AdminMembershipsPage() {
     }
   }
 
+  const handleInvite = async () => {
+    if (!inviteEmail.trim() || selectedClients.length === 0) return
+
+    setIsInviting(true)
+    setInviteResults(null)
+
+    const results: { client: string; success: boolean; url?: string; error?: string }[] = []
+
+    for (const clientId of selectedClients) {
+      const client = clients.find(c => c.id === clientId)
+      try {
+        const response = await fetch('/api/invites', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: inviteEmail,
+            client_id: clientId,
+            role: inviteRole,
+            message: inviteMessage || undefined,
+          }),
+        })
+
+        const data = await response.json()
+
+        if (response.ok) {
+          results.push({
+            client: client?.name || clientId,
+            success: true,
+            url: data.invite_url,
+          })
+        } else {
+          results.push({
+            client: client?.name || clientId,
+            success: false,
+            error: data.error,
+          })
+        }
+      } catch (err) {
+        results.push({
+          client: client?.name || clientId,
+          success: false,
+          error: 'Netwerk fout',
+        })
+      }
+    }
+
+    setInviteResults({ email: inviteEmail, results })
+    setIsInviting(false)
+  }
+
+  const resetInviteForm = () => {
+    setInviteEmail('')
+    setInviteRole('viewer')
+    setInviteMessage('')
+    setSelectedClients([])
+    setInviteResults(null)
+  }
+
+  const toggleClient = (clientId: string) => {
+    setSelectedClients(prev =>
+      prev.includes(clientId)
+        ? prev.filter(id => id !== clientId)
+        : [...prev, clientId]
+    )
+  }
+
+  const selectAllClients = () => {
+    if (selectedClients.length === clients.length) {
+      setSelectedClients([])
+    } else {
+      setSelectedClients(clients.map(c => c.id))
+    }
+  }
+
+  const copyToClipboard = async (url: string) => {
+    await navigator.clipboard.writeText(url)
+    setCopiedUrl(url)
+    setTimeout(() => setCopiedUrl(null), 2000)
+  }
+
   const getRoleBadge = (role: string) => {
     const roleConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' | 'error' }> = {
       owner: { label: 'Eigenaar', variant: 'error' },
@@ -141,17 +256,6 @@ export default function AdminMembershipsPage() {
     }
     const config = roleConfig[role] || { label: role, variant: 'outline' }
     return <Badge variant={config.variant}>{config.label}</Badge>
-  }
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('nl-NL', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
   }
 
   const getTimeAgo = (dateString: string) => {
@@ -166,6 +270,13 @@ export default function AdminMembershipsPage() {
     if (diffDays === 1) return 'Gisteren'
     return `${diffDays} dagen geleden`
   }
+
+  const roleOptions = [
+    { value: 'viewer', label: 'Kijker - Alleen bekijken' },
+    { value: 'editor', label: 'Bewerker - Kan content maken' },
+    { value: 'admin', label: 'Beheerder - Volledige toegang' },
+    { value: 'owner', label: 'Eigenaar - Volledige toegang + verwijderen' },
+  ]
 
   if (userLoading || isLoading) {
     return (
@@ -188,13 +299,180 @@ export default function AdminMembershipsPage() {
             <Shield className="h-6 w-6 text-amber-600" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-surface-900">Toegangsverzoeken</h1>
+            <h1 className="text-2xl font-bold text-surface-900">Gebruikersbeheer</h1>
             <p className="text-surface-600">
-              Beheer verzoeken voor toegang tot klantdata
+              Nodig gebruikers uit en beheer toegangsverzoeken
             </p>
           </div>
         </div>
       </div>
+
+      {/* Invite Section */}
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <UserPlus className="h-5 w-5" />
+            Gebruiker uitnodigen
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {inviteResults ? (
+            // Show results
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-surface-900">
+                <Mail className="h-5 w-5" />
+                <span>Uitnodigingen voor <strong>{inviteResults.email}</strong></span>
+              </div>
+
+              <div className="space-y-2">
+                {inviteResults.results.map((result, idx) => (
+                  <div
+                    key={idx}
+                    className={cn(
+                      'p-3 rounded-lg flex items-center justify-between',
+                      result.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      {result.success ? (
+                        <CheckCircle className="h-4 w-4 text-green-600" />
+                      ) : (
+                        <XCircle className="h-4 w-4 text-red-600" />
+                      )}
+                      <span className={result.success ? 'text-green-800' : 'text-red-800'}>
+                        {result.client}
+                      </span>
+                      {result.error && (
+                        <span className="text-sm text-red-600">- {result.error}</span>
+                      )}
+                    </div>
+                    {result.url && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => copyToClipboard(result.url!)}
+                      >
+                        {copiedUrl === result.url ? (
+                          <Check className="h-4 w-4 text-green-600" />
+                        ) : (
+                          <Copy className="h-4 w-4" />
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <Button variant="outline" onClick={resetInviteForm}>
+                  Nieuwe uitnodiging
+                </Button>
+                {inviteResults.results.some(r => r.success && r.url) && (
+                  <Button
+                    onClick={async () => {
+                      const urls = inviteResults.results
+                        .filter(r => r.success && r.url)
+                        .map(r => `${r.client}: ${r.url}`)
+                        .join('\n')
+                      await navigator.clipboard.writeText(urls)
+                      alert('Alle links gekopieerd!')
+                    }}
+                  >
+                    <Copy className="h-4 w-4 mr-2" />
+                    Alle links kopiëren
+                  </Button>
+                )}
+              </div>
+            </div>
+          ) : (
+            // Show form
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-surface-700 mb-1.5">
+                    Email adres *
+                  </label>
+                  <Input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    placeholder="nieuwe.collega@bedrijf.nl"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-surface-700 mb-1.5">
+                    Rol
+                  </label>
+                  <Select
+                    value={inviteRole}
+                    onChange={(e) => setInviteRole(e.target.value)}
+                    options={roleOptions}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-surface-700 mb-1.5">
+                  Persoonlijk bericht (optioneel)
+                </label>
+                <Input
+                  value={inviteMessage}
+                  onChange={(e) => setInviteMessage(e.target.value)}
+                  placeholder="Welkom bij het team!"
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-surface-700">
+                    Toegang tot klanten * ({selectedClients.length} geselecteerd)
+                  </label>
+                  <Button variant="ghost" size="sm" onClick={selectAllClients}>
+                    {selectedClients.length === clients.length ? 'Deselecteer alle' : 'Selecteer alle'}
+                  </Button>
+                </div>
+                <div className="border border-surface-200 rounded-lg max-h-48 overflow-y-auto">
+                  {clients.length === 0 ? (
+                    <p className="p-4 text-center text-surface-500">Geen klanten gevonden</p>
+                  ) : (
+                    <div className="divide-y divide-surface-100">
+                      {clients.map((client) => (
+                        <label
+                          key={client.id}
+                          className="flex items-center gap-3 p-3 hover:bg-surface-50 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedClients.includes(client.id)}
+                            onChange={() => toggleClient(client.id)}
+                            className="h-4 w-4 rounded border-surface-300 text-primary focus:ring-primary"
+                          />
+                          <Building2 className="h-4 w-4 text-surface-400" />
+                          <span className="text-surface-900">{client.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <Button
+                  onClick={handleInvite}
+                  disabled={!inviteEmail.trim() || selectedClients.length === 0 || isInviting}
+                >
+                  {isInviting ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4 mr-2" />
+                  )}
+                  Uitnodigen voor {selectedClients.length} klant{selectedClients.length !== 1 ? 'en' : ''}
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Security Notice */}
       <Card className="mb-6 border-amber-200 bg-amber-50">
@@ -202,10 +480,10 @@ export default function AdminMembershipsPage() {
           <div className="flex items-start gap-3">
             <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
             <div>
-              <p className="font-medium text-amber-800">Beveiligingscontrole vereist</p>
+              <p className="font-medium text-amber-800">Beveiligingscontrole</p>
               <p className="text-sm text-amber-700 mt-1">
-                Nieuwe teamleden krijgen pas toegang tot klantdata na jouw goedkeuring.
-                Controleer of de aanvrager daadwerkelijk toegang nodig heeft voordat je goedkeurt.
+                Gebruikers die via deze pagina worden uitgenodigd krijgen automatisch toegang.
+                Controleer het emailadres voordat je uitnodigt.
               </p>
             </div>
           </div>
@@ -233,16 +511,23 @@ export default function AdminMembershipsPage() {
         </Card>
       )}
 
-      {/* Pending Memberships List */}
+      {/* Pending Memberships Section */}
+      <div className="mb-4">
+        <h2 className="text-lg font-semibold text-surface-900 flex items-center gap-2">
+          <Clock className="h-5 w-5 text-amber-600" />
+          Openstaande toegangsverzoeken
+        </h2>
+      </div>
+
       {pendingMemberships.length === 0 ? (
         <Card>
-          <CardContent className="py-12 text-center">
-            <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-surface-900 mb-2">
+          <CardContent className="py-8 text-center">
+            <CheckCircle className="h-10 w-10 text-green-500 mx-auto mb-3" />
+            <h3 className="text-base font-medium text-surface-900 mb-1">
               Geen openstaande verzoeken
             </h3>
-            <p className="text-surface-600">
-              Alle toegangsverzoeken zijn afgehandeld. Nieuwe verzoeken verschijnen hier.
+            <p className="text-sm text-surface-600">
+              Alle toegangsverzoeken zijn afgehandeld.
             </p>
           </CardContent>
         </Card>
@@ -272,7 +557,6 @@ export default function AdminMembershipsPage() {
                 )}
               >
                 <CardContent className="p-5">
-                  {/* Result message */}
                   {result && (
                     <div
                       className={cn(
@@ -280,20 +564,14 @@ export default function AdminMembershipsPage() {
                         result.success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                       )}
                     >
-                      {result.success ? (
-                        <CheckCircle className="h-4 w-4" />
-                      ) : (
-                        <XCircle className="h-4 w-4" />
-                      )}
+                      {result.success ? <CheckCircle className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
                       <span className="text-sm font-medium">{result.message}</span>
                     </div>
                   )}
 
                   <div className="flex items-start justify-between gap-4">
-                    {/* Left: User & Client Info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-3">
-                        {/* User Avatar */}
                         <div className="w-10 h-10 rounded-full bg-surface-200 flex items-center justify-center">
                           {membership.user.avatar_url ? (
                             <img
@@ -343,15 +621,13 @@ export default function AdminMembershipsPage() {
                           <div className="flex items-center gap-1">
                             <User className="h-3 w-3" />
                             <span>
-                              Aangevraagd door{' '}
-                              {membership.requester.full_name || membership.requester.email}
+                              Aangevraagd door {membership.requester.full_name || membership.requester.email}
                             </span>
                           </div>
                         )}
                       </div>
                     </div>
 
-                    {/* Right: Action Buttons */}
                     <div className="flex flex-col gap-2">
                       <Button
                         onClick={() => handleAction(membership.id, 'approve')}
@@ -390,31 +666,6 @@ export default function AdminMembershipsPage() {
           })}
         </div>
       )}
-
-      {/* Info Card */}
-      <Card className="mt-8 bg-surface-50 border-surface-200">
-        <CardContent className="p-4">
-          <h4 className="font-medium text-surface-900 mb-2">Over dit systeem</h4>
-          <ul className="text-sm text-surface-600 space-y-1.5">
-            <li className="flex items-start gap-2">
-              <span className="text-primary">•</span>
-              Nieuwe teamleden worden automatisch op &quot;pending&quot; gezet totdat een org admin goedkeurt.
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-primary">•</span>
-              Gebruikers met pending status hebben geen toegang tot klantdata.
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-primary">•</span>
-              Als jij (org admin) iemand toevoegt, wordt deze automatisch goedgekeurd.
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-primary">•</span>
-              Alle acties worden gelogd in de audit trail.
-            </li>
-          </ul>
-        </CardContent>
-      </Card>
     </div>
   )
 }
