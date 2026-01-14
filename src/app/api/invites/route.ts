@@ -103,22 +103,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Ongeldige rol' }, { status: 400 })
     }
 
-    // Check if user has admin access to this client
-    const { data: roleData } = await supabase
-      .rpc('get_client_role', { check_client_id: client_id, check_user_id: user.id })
-
-    if (!roleData || !['admin', 'owner'].includes(roleData)) {
-      return NextResponse.json({ error: 'Geen toegang om mensen uit te nodigen voor deze client' }, { status: 403 })
-    }
-
-    // Check if user is org admin (for owner role)
+    // Check if user is org admin
     const { data: profile } = await supabase
       .from('profiles')
       .select('role, email')
       .eq('id', user.id)
       .single()
 
-    if (inviteRole === 'owner' && profile?.role !== 'admin') {
+    const isOrgAdmin = profile?.role === 'admin'
+
+    // If not org admin, check client-level access
+    if (!isOrgAdmin) {
+      const { data: roleData } = await supabase
+        .rpc('get_client_role', { check_client_id: client_id, check_user_id: user.id })
+
+      if (!roleData || !['admin', 'owner'].includes(roleData)) {
+        return NextResponse.json({ error: 'Geen toegang om mensen uit te nodigen voor deze client' }, { status: 403 })
+      }
+    }
+
+    // Only org admins can invite owners
+    if (inviteRole === 'owner' && !isOrgAdmin) {
       return NextResponse.json({ error: 'Alleen org admins kunnen owners uitnodigen' }, { status: 403 })
     }
 
