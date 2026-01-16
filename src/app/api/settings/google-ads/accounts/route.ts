@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
       WHERE customer_client.status = 'ENABLED'
     `)
 
-    const accounts = response.results.map((row: {
+    interface CustomerClientRow {
       customerClient: {
         id: string
         descriptiveName: string
@@ -78,7 +78,9 @@ export async function POST(request: NextRequest) {
         currencyCode: string
         timeZone: string
       }
-    }) => ({
+    }
+
+    const accounts = (response.results as unknown as CustomerClientRow[]).map((row) => ({
       id: row.customerClient.id,
       name: row.customerClient.descriptiveName,
       isManager: row.customerClient.manager,
