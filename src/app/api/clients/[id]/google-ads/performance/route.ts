@@ -512,7 +512,7 @@ export async function GET(
 
       // Build breakdown items
       const allKeys = new Set([...Array.from(currentByDimension.keys()), ...Array.from(previousByDimension.keys())]);
-      breakdown = [];
+      const breakdownItems: BreakdownItem[] = [];
 
       allKeys.forEach((key) => {
         const current = currentByDimension.get(key);
@@ -527,7 +527,7 @@ export async function GET(
         const conversionChange = calculateChange(currentMetrics.conversions, previousMetrics.conversions);
         const costChange = calculateChange(currentMetrics.cost, previousMetrics.cost);
 
-        breakdown.push({
+        breakdownItems.push({
           id: key,
           name: current?.name || previous?.name || key,
           current: currentMetrics,
@@ -542,13 +542,10 @@ export async function GET(
         });
       });
 
-      // Filter out items with 0 data in both periods
-      breakdown = breakdown.filter(
-        item => item.current.conversions > 0 || item.previous.conversions > 0 || item.current.cost > 0
-      );
-
-      // Sort by absolute impact
-      breakdown.sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact));
+      // Filter out items with 0 data in both periods and sort by absolute impact
+      breakdown = breakdownItems
+        .filter(item => item.current.conversions > 0 || item.previous.conversions > 0 || item.current.cost > 0)
+        .sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact));
 
       // Top 5 winners and losers
       winners = breakdown
