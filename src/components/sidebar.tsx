@@ -4,10 +4,10 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { Logo } from '@/components/logo'
+import { MarketingToolIcon, type MarketingTool } from '@/components/marketing-tool-icon'
 import {
   LayoutDashboard,
   MessageSquare,
-  Megaphone,
   Share2,
   Search,
   MousePointerClick,
@@ -27,12 +27,10 @@ import {
   Trophy,
   Flame,
   Zap,
-  Bot,
   TrendingUp,
   SearchCheck,
   SlidersHorizontal,
   Layers,
-  Facebook,
   AlertTriangle,
   BrainCircuit,
   Shield,
@@ -48,6 +46,7 @@ interface NavItem {
   href: string
   icon: React.ElementType
   color?: string
+  marketingTool?: MarketingTool
   children?: { name: string; href: string; icon: React.ElementType }[]
 }
 
@@ -97,8 +96,9 @@ const navigation: NavItem[] = [
   {
     name: 'Google Ads',
     href: '/google-ads',
-    icon: Megaphone,
-    color: 'text-red-600 bg-red-100',
+    icon: LayoutDashboard,
+    marketingTool: 'google-ads',
+    color: 'text-red-600 bg-white',
     children: [
       { name: 'Overview', href: '/google-ads', icon: LayoutDashboard },
       { name: 'Dashboard', href: '/google-ads/dashboard', icon: BarChart3 },
@@ -113,8 +113,9 @@ const navigation: NavItem[] = [
   {
     name: 'Meta Ads',
     href: '/meta-ads',
-    icon: Facebook,
-    color: 'text-[#1877F2] bg-blue-100',
+    icon: LayoutDashboard,
+    marketingTool: 'meta',
+    color: 'text-[#0081FB] bg-white',
     children: [
       { name: 'Dashboard', href: '/meta-ads', icon: LayoutDashboard },
       { name: 'Performance', href: '/meta-ads/performance', icon: BarChart3 },
@@ -280,10 +281,14 @@ export function Sidebar() {
                           'flex items-center justify-center w-8 h-8 rounded-lg transition-colors',
                           isItemActive ? iconBg : 'bg-surface-100',
                         )}>
-                          <Icon className={cn(
-                            'h-[18px] w-[18px]',
-                            isItemActive ? iconText : 'text-surface-500'
-                          )} />
+                          {item.marketingTool ? (
+                            <MarketingToolIcon tool={item.marketingTool} size="md" />
+                          ) : (
+                            <Icon className={cn(
+                              'h-[18px] w-[18px]',
+                              isItemActive ? iconText : 'text-surface-500'
+                            )} />
+                          )}
                         </div>
                         {item.name}
                       </div>
@@ -346,10 +351,14 @@ export function Sidebar() {
                       'flex items-center justify-center w-8 h-8 rounded-lg transition-colors',
                       isItemActive ? iconBg : 'bg-surface-100',
                     )}>
-                      <Icon className={cn(
-                        'h-[18px] w-[18px]',
-                        isItemActive ? iconText : 'text-surface-500'
-                      )} />
+                      {item.marketingTool ? (
+                        <MarketingToolIcon tool={item.marketingTool} size="md" />
+                      ) : (
+                        <Icon className={cn(
+                          'h-[18px] w-[18px]',
+                          isItemActive ? iconText : 'text-surface-500'
+                        )} />
+                      )}
                     </div>
                     {item.name}
                   </Link>

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { MarketingToolIcon } from '@/components/marketing-tool-icon'
 import {
   Save,
   Loader2,
@@ -11,7 +12,6 @@ import {
   Info,
   ExternalLink,
   RefreshCw,
-  Facebook,
   Target,
   TrendingUp,
   Building2,
@@ -201,7 +201,7 @@ export function MetaAdsSetup({
       {/* Enable/Disable Toggle */}
       <div className="flex items-center justify-between p-4 bg-surface-50 rounded-lg">
         <div className="flex items-center gap-3">
-          <Facebook className="h-5 w-5 text-[#1877F2]" />
+          <MarketingToolIcon tool="meta" size="lg" />
           <div>
             <p className="font-medium text-surface-900">Meta Ads Integratie</p>
             <p className="text-sm text-surface-500">

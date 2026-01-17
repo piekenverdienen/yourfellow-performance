@@ -3,10 +3,10 @@
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { MarketingToolIcon } from '@/components/marketing-tool-icon'
 import {
   Save,
   Loader2,
-  BarChart3,
   AlertTriangle,
   CheckCircle,
   Info,
@@ -96,7 +96,7 @@ export function GA4MonitoringSetup({
       {/* Enable/Disable Toggle */}
       <div className="flex items-center justify-between p-4 bg-surface-50 rounded-lg">
         <div className="flex items-center gap-3">
-          <BarChart3 className="h-5 w-5 text-primary" />
+          <MarketingToolIcon tool="ga4" size="lg" />
           <div>
             <p className="font-medium text-surface-900">GA4 Anomaly Monitoring</p>
             <p className="text-sm text-surface-500">
