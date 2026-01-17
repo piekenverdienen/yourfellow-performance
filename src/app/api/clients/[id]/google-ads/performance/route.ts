@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { GoogleAdsClient } from '@/monitoring/google-ads';
 import { createLogger } from '@/monitoring/utils/logger';
 
-const logger = createLogger('google-ads-performance');
+const logger = createLogger('info');
 
 // Comparison modes
 type ComparisonMode = 'today_vs_yesterday' | 'last_7_vs_previous_7' | 'mtd_vs_previous_month';
