@@ -222,7 +222,7 @@ export async function GET(request: NextRequest) {
  */
 async function getAccessibleCustomers(accessToken: string): Promise<string[]> {
   const response = await fetch(
-    'https://googleads.googleapis.com/v17/customers:listAccessibleCustomers',
+    'https://googleads.googleapis.com/v22/customers:listAccessibleCustomers',
     {
       method: 'GET',
       headers: {

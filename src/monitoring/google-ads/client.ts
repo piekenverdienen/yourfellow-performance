@@ -9,7 +9,7 @@ import type {
   GoogleAdsOAuthCredentials,
 } from './types';
 
-const GOOGLE_ADS_API_VERSION = 'v17';
+const GOOGLE_ADS_API_VERSION = 'v22';
 const GOOGLE_ADS_API_BASE = `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}`;
 const OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_ADS_SCOPE = 'https://www.googleapis.com/auth/adwords';
