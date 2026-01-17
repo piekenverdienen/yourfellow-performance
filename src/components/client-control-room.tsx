@@ -21,6 +21,7 @@ import {
   MousePointerClick,
   Loader2,
   AlertCircle,
+  BarChart3,
   Euro,
   Target,
   ShoppingCart,
