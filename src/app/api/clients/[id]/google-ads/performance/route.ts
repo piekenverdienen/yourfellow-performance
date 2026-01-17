@@ -31,6 +31,27 @@ interface BreakdownItem {
   impact: number; // Absolute conversion change for sorting
 }
 
+interface PerformanceTotals {
+  current: PerformanceMetrics & { cpa: number; roas: number; ctr: number; cvr: number };
+  previous: PerformanceMetrics & { cpa: number; roas: number; ctr: number; cvr: number };
+  change: {
+    spend: number;
+    spendPercent: number;
+    conversions: number;
+    conversionsPercent: number;
+    conversionsValue: number;
+    conversionsValuePercent: number;
+    cpa: number;
+    cpaPercent: number;
+    roas: number;
+    roasPercent: number;
+    ctr: number;
+    ctrPercent: number;
+    cvr: number;
+    cvrPercent: number;
+  };
+}
+
 interface PerformanceResponse {
   success: boolean;
   data?: {
@@ -39,26 +60,7 @@ interface PerformanceResponse {
       current: { start: string; end: string; label: string };
       previous: { start: string; end: string; label: string };
     };
-    totals: {
-      current: PerformanceMetrics & { cpa: number; roas: number; ctr: number; cvr: number };
-      previous: PerformanceMetrics & { cpa: number; roas: number; ctr: number; cvr: number };
-      change: {
-        spend: number;
-        spendPercent: number;
-        conversions: number;
-        conversionsPercent: number;
-        conversionsValue: number;
-        conversionsValuePercent: number;
-        cpa: number;
-        cpaPercent: number;
-        roas: number;
-        roasPercent: number;
-        ctr: number;
-        ctrPercent: number;
-        cvr: number;
-        cvrPercent: number;
-      };
-    };
+    totals: PerformanceTotals;
     autoHighlight: string | null;
     breakdown?: BreakdownItem[];
     winners?: BreakdownItem[];
@@ -223,7 +225,7 @@ function calculateChange(current: number, previous: number): { absolute: number;
 }
 
 function generateAutoHighlight(
-  totals: PerformanceResponse['data']['totals'],
+  totals: PerformanceTotals,
   breakdown?: BreakdownItem[]
 ): string | null {
   const { change } = totals;
