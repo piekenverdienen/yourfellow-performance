@@ -119,6 +119,7 @@ export class PerformanceDropCheck extends BaseGoogleAdsCheck {
               'Analyseer of er marktveranderingen zijn',
             ],
             severity: 'critical',
+            details: {},
           },
           {
             currentPeriod: currentMetrics,
@@ -148,6 +149,7 @@ export class PerformanceDropCheck extends BaseGoogleAdsCheck {
               'Vergelijk met seizoenspatronen',
             ],
             severity: 'critical',
+            details: {},
           },
           {
             currentPeriod: currentMetrics,
@@ -175,6 +177,7 @@ export class PerformanceDropCheck extends BaseGoogleAdsCheck {
               'Monitor de trend de komende dagen',
             ],
             severity: 'high',
+            details: {},
           },
           {
             currentPeriod: currentMetrics,
