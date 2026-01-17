@@ -21,17 +21,14 @@ import {
   MousePointerClick,
   Loader2,
   AlertCircle,
-  BarChart3,
-  Megaphone,
-  Share2,
   Euro,
   Target,
   ShoppingCart,
   Calculator,
-  ShoppingBag,
   UserPlus
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { MarketingToolIcon } from '@/components/marketing-tool-icon'
 
 interface GA4DataPoint {
   date: string
@@ -1083,29 +1080,29 @@ export function ClientControlRoom({ clientId, clientName }: ClientControlRoomPro
     {
       id: 'ga4' as const,
       label: 'Google Analytics',
-      icon: <BarChart3 className="h-4 w-4" />,
-      iconBg: 'bg-[#F9AB00]',
+      icon: <MarketingToolIcon tool="ga4" size="sm" />,
+      iconBg: 'bg-white',
       enabled: ga4Data?.enabled,
     },
     {
       id: 'meta' as const,
       label: 'Meta Ads',
-      icon: <Share2 className="h-4 w-4" />,
-      iconBg: 'bg-gradient-to-tr from-[#833AB4] via-[#FD1D1D] to-[#FCAF45]',
+      icon: <MarketingToolIcon tool="meta" size="sm" />,
+      iconBg: 'bg-white',
       enabled: metaData?.enabled,
     },
     {
       id: 'shopify' as const,
       label: 'Shopify',
-      icon: <ShoppingBag className="h-4 w-4" />,
-      iconBg: 'bg-[#95BF47]',
+      icon: <MarketingToolIcon tool="shopify" size="sm" />,
+      iconBg: 'bg-white',
       enabled: shopifyData?.enabled,
     },
     {
       id: 'google-ads' as const,
       label: 'Google Ads',
-      icon: <Megaphone className="h-4 w-4" />,
-      iconBg: 'bg-[#4285F4]',
+      icon: <MarketingToolIcon tool="google-ads" size="sm" />,
+      iconBg: 'bg-white',
       enabled: googleAdsData?.enabled,
     },
   ]
