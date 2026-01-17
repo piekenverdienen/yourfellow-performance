@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { MarketingToolIcon } from '@/components/marketing-tool-icon'
 import {
   Save,
   Loader2,
@@ -11,7 +12,6 @@ import {
   Info,
   ExternalLink,
   RefreshCw,
-  ShoppingBag,
 } from 'lucide-react'
 import type { ShopifySettings } from '@/types'
 
@@ -140,7 +140,7 @@ export function ShopifySetup({
       {/* Enable/Disable Toggle */}
       <div className="flex items-center justify-between p-4 bg-surface-50 rounded-lg">
         <div className="flex items-center gap-3">
-          <ShoppingBag className="h-5 w-5 text-[#95BF47]" />
+          <MarketingToolIcon tool="shopify" size="lg" />
           <div>
             <p className="font-medium text-surface-900">Shopify Integratie</p>
             <p className="text-sm text-surface-500">

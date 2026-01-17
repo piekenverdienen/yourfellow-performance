@@ -3,10 +3,10 @@
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { MarketingToolIcon } from '@/components/marketing-tool-icon'
 import {
   Save,
   Loader2,
-  Search,
   AlertTriangle,
   CheckCircle,
   Info,
@@ -112,7 +112,7 @@ export function SearchConsoleSetup({
       {/* Enable/Disable Toggle */}
       <div className="flex items-center justify-between p-4 bg-surface-50 rounded-lg">
         <div className="flex items-center gap-3">
-          <Search className="h-5 w-5 text-orange-500" />
+          <MarketingToolIcon tool="search-console" size="lg" />
           <div>
             <p className="font-medium text-surface-900">Search Console Koppeling</p>
             <p className="text-sm text-surface-500">

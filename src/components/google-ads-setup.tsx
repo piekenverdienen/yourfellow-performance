@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { MarketingToolIcon } from '@/components/marketing-tool-icon'
 import {
   Loader2,
   ExternalLink,
@@ -10,7 +11,6 @@ import {
   AlertCircle,
   Save,
   Settings,
-  Megaphone,
 } from 'lucide-react'
 
 interface GoogleAdsSettings {
@@ -120,14 +120,13 @@ export function GoogleAdsSetup({
       {/* Status Display */}
       <div className="flex items-center justify-between p-4 bg-surface-50 rounded-lg">
         <div className="flex items-center gap-3">
-          <div className="flex-shrink-0">
-            {isConfigured ? (
-              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                <CheckCircle className="h-5 w-5 text-green-600" />
-              </div>
-            ) : (
-              <div className="w-10 h-10 bg-surface-100 rounded-full flex items-center justify-center">
-                <Megaphone className="h-5 w-5 text-surface-400" />
+          <div className="flex-shrink-0 relative">
+            <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center border border-surface-200">
+              <MarketingToolIcon tool="google-ads" size="lg" />
+            </div>
+            {isConfigured && (
+              <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center border-2 border-white">
+                <CheckCircle className="h-2.5 w-2.5 text-white" />
               </div>
             )}
           </div>
