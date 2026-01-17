@@ -438,6 +438,60 @@ export interface AlertSummary {
   }
 }
 
+// Insight Types (Sprint 3 - AI Insights Engine)
+export type InsightScope = 'account' | 'campaign' | 'ad_group' | 'asset_group'
+export type InsightType = 'performance' | 'budget' | 'bidding' | 'structure' | 'creative'
+export type InsightImpact = 'low' | 'medium' | 'high'
+export type InsightConfidence = 'low' | 'medium' | 'high'
+export type InsightStatus = 'new' | 'picked_up' | 'ignored' | 'resolved'
+
+export interface Insight {
+  id: string
+  client_id: string
+
+  // Scope
+  scope: InsightScope
+  scope_id: string | null
+  scope_name: string | null
+
+  // Identification
+  rule_id: string
+  type: InsightType
+
+  // Impact & Confidence
+  impact: InsightImpact
+  confidence: InsightConfidence
+
+  // Content
+  summary: string
+  explanation: string
+  recommendation: string
+
+  // Status
+  status: InsightStatus
+  picked_up_at: string | null
+  picked_up_by: string | null
+  resolved_at: string | null
+  resolved_by: string | null
+
+  // Data
+  data_snapshot: Record<string, unknown>
+  fingerprint: string
+
+  // Timestamps
+  detected_at: string
+  expires_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface InsightSummary {
+  total: number
+  by_type: Record<InsightType, number>
+  by_impact: Record<InsightImpact, number>
+  new_count: number
+}
+
 // Google Ads Check Types
 export interface GoogleAdsCheckResult {
   status: 'ok' | 'warning' | 'error'
