@@ -284,30 +284,39 @@ export class GoogleAdsClient {
 
         this.logger.debug('Raw API response', {
           responseLength: text.length,
-          responsePreview: text.substring(0, 500),
+          responsePreview: text.substring(0, 1000),
         });
 
-        // Try parsing as JSON array first (v22 format)
+        // Try parsing as JSON array first (v22 searchStream format)
         try {
           const jsonData = JSON.parse(text);
+
+          this.logger.debug('Parsed JSON structure', {
+            isArray: Array.isArray(jsonData),
+            topLevelKeys: Array.isArray(jsonData) ? 'array' : Object.keys(jsonData).join(', '),
+            firstItemKeys: Array.isArray(jsonData) && jsonData[0] ? Object.keys(jsonData[0]).join(', ') : 'n/a',
+          });
+
           if (Array.isArray(jsonData)) {
-            // Response is a JSON array of batches
+            // Response is a JSON array of batches (searchStream format)
             for (const batch of jsonData) {
-              if (batch.results) {
+              if (batch.results && Array.isArray(batch.results)) {
                 results.push(...batch.results);
               }
             }
-          } else if (jsonData.results) {
-            // Single response object
+          } else if (jsonData.results && Array.isArray(jsonData.results)) {
+            // Single response object with results array
             results.push(...jsonData.results);
           }
-        } catch {
+        } catch (parseError) {
+          this.logger.debug('JSON parse failed, trying NDJSON', { error: (parseError as Error).message });
+
           // Fallback: Parse as NDJSON (newline-delimited JSON)
           const lines = text.split('\n').filter(line => line.trim());
           for (const line of lines) {
             try {
               const parsed = JSON.parse(line);
-              if (parsed.results) {
+              if (parsed.results && Array.isArray(parsed.results)) {
                 results.push(...parsed.results);
               }
             } catch {
@@ -316,7 +325,10 @@ export class GoogleAdsClient {
           }
         }
 
-        this.logger.debug('Parsed results', { resultCount: results.length });
+        this.logger.debug('Parsed results', {
+          resultCount: results.length,
+          firstResult: results.length > 0 ? JSON.stringify(results[0]).substring(0, 200) : 'none',
+        });
 
         return {
           results: results as GaqlResponse['results'],
