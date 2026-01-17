@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error('Failed to save settings:', error)
       return NextResponse.json(
-        { error: 'Failed to save settings' },
+        { error: `Database error: ${error.message || error.code || 'Unknown error'}` },
         { status: 500 }
       )
     }
@@ -135,8 +135,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Failed to save Google Ads settings:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json(
-      { error: 'Failed to save settings' },
+      { error: `Server error: ${errorMessage}` },
       { status: 500 }
     )
   }
