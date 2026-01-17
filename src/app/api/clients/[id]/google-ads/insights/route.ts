@@ -298,13 +298,13 @@ export async function POST(
     }
 
     // Calculate previous period for campaigns (full - current)
-    for (const [id, campaign] of campaignsCurrent) {
+    campaignsCurrent.forEach((campaign, id) => {
       const fullData = campaignsPrevious.get(id);
       if (fullData) {
         campaign.previousConversions = fullData.conversions - campaign.conversions;
         campaign.previousCost = fullData.cost - campaign.cost;
       }
-    }
+    });
 
     // Build insight data
     const insightData: InsightData = {
