@@ -5,7 +5,7 @@ import { InsightEngine } from '@/monitoring/insights/insight-engine';
 import { createLogger } from '@/monitoring/utils/logger';
 import type { InsightData, CampaignData } from '@/monitoring/insights/insight-engine';
 
-const logger = createLogger('google-ads-insights');
+const logger = createLogger('info');
 
 interface MetricsRow {
   metrics: {

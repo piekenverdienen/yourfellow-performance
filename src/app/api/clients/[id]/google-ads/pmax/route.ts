@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { GoogleAdsClient } from '@/monitoring/google-ads';
 import { createLogger } from '@/monitoring/utils/logger';
 
-const logger = createLogger('google-ads-pmax');
+const logger = createLogger('info');
 
 interface AssetGroupPerformance {
   id: string;
