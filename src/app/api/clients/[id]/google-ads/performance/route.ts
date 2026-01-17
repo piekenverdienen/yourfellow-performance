@@ -511,15 +511,15 @@ export async function GET(
       }
 
       // Build breakdown items
-      const allKeys = new Set([...currentByDimension.keys(), ...previousByDimension.keys()]);
+      const allKeys = new Set([...Array.from(currentByDimension.keys()), ...Array.from(previousByDimension.keys())]);
       breakdown = [];
 
-      for (const key of allKeys) {
+      allKeys.forEach((key) => {
         const current = currentByDimension.get(key);
         const previous = previousByDimension.get(key);
 
         // Skip items with no data in either period
-        if (!current && !previous) continue;
+        if (!current && !previous) return;
 
         const currentMetrics = current?.metrics || { cost: 0, conversions: 0, conversionsValue: 0, clicks: 0, impressions: 0 };
         const previousMetrics = previous?.metrics || { cost: 0, conversions: 0, conversionsValue: 0, clicks: 0, impressions: 0 };
@@ -540,7 +540,7 @@ export async function GET(
           },
           impact: conversionChange.absolute, // For sorting by absolute impact
         });
-      }
+      });
 
       // Filter out items with 0 data in both periods
       breakdown = breakdown.filter(
