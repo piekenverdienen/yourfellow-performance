@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createLogger } from '@/monitoring/utils/logger';
 
-const logger = createLogger('insights-api');
+const logger = createLogger('info');
 
 // GET: Fetch a single insight
 export async function GET(
