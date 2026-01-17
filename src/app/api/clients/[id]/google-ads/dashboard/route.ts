@@ -117,9 +117,9 @@ function createKPI(
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ clientId: string }> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { clientId } = await params;
+  const { id: clientId } = await params;
 
   try {
     const supabase = createClient(
