@@ -13,6 +13,7 @@ import { LowAdStrengthCheck } from './low-ad-strength';
 import { ExtensionsDisapprovedCheck } from './extensions-disapproved';
 import { AudienceIssuesCheck } from './audience-issues';
 import { PausedHighPerformersCheck } from './paused-high-performers';
+import { PerformanceDropCheck } from './performance-drop';
 
 // Export base class and types
 export { BaseGoogleAdsCheck } from './base-check';
@@ -31,6 +32,7 @@ export { LowAdStrengthCheck } from './low-ad-strength';
 export { ExtensionsDisapprovedCheck } from './extensions-disapproved';
 export { AudienceIssuesCheck } from './audience-issues';
 export { PausedHighPerformersCheck } from './paused-high-performers';
+export { PerformanceDropCheck } from './performance-drop';
 
 /**
  * Registry of all available Google Ads checks
@@ -55,6 +57,7 @@ export const GOOGLE_ADS_CHECKS: GoogleAdsCheck[] = [
   new ConversionTrackingCheck(),
 
   // Performance Issues - Wasting budget or underperforming
+  new PerformanceDropCheck(),
   new LowQualityScoreCheck(),
   new HighCpcCheck(),
   new PausedHighPerformersCheck(),
@@ -97,6 +100,7 @@ export function getChecksByCategory(): Record<string, GoogleAdsCheck[]> {
       new ConversionTrackingCheck(),
     ],
     performance: [
+      new PerformanceDropCheck(),
       new LowQualityScoreCheck(),
       new HighCpcCheck(),
       new PausedHighPerformersCheck(),
