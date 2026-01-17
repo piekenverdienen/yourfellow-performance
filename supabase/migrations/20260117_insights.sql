@@ -78,7 +78,7 @@ CREATE POLICY "Users can view insights for their clients" ON insights
       SELECT client_id FROM client_memberships WHERE user_id = auth.uid()
     )
     OR
-    EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin')
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
   );
 
 -- Users can update status of insights for clients they have editor access to
@@ -91,7 +91,7 @@ CREATE POLICY "Users can update insights for their clients" ON insights
       AND role IN ('owner', 'admin', 'editor')
     )
     OR
-    EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin')
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
   );
 
 -- Comments for documentation
