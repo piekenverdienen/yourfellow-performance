@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     const logger = createLogger('info')
 
     // For MCC testing: use the provided customerId (which might be the MCC itself)
-    const testCustomerId = customerId.replace(/-/g, '')
+    const testCustomerId = customerId.trim().replace(/-/g, '')
 
     const client = new GoogleAdsClient({
       credentials: {
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
         developerToken,
         serviceAccountEmail,
         privateKey,
-        loginCustomerId: loginCustomerId?.replace(/-/g, '') || undefined,
+        loginCustomerId: loginCustomerId?.trim().replace(/-/g, '') || undefined,
       },
       customerId: testCustomerId,
       logger,

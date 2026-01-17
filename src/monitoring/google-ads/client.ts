@@ -48,7 +48,7 @@ export class GoogleAdsClient {
 
   constructor(options: GoogleAdsClientOptions) {
     this.credentials = options.credentials;
-    this.customerId = options.customerId.replace(/-/g, ''); // Remove dashes
+    this.customerId = options.customerId.trim().replace(/-/g, ''); // Remove spaces and dashes
     this.logger = options.logger;
     this.retryAttempts = options.retryAttempts ?? 2;
     this.retryDelayMs = options.retryDelayMs ?? 1000;
@@ -246,7 +246,7 @@ export class GoogleAdsClient {
   async query(gaql: string): Promise<GaqlResponse> {
     const accessToken = await this.getAccessToken();
 
-    const loginCustomerId = this.credentials.loginCustomerId?.replace(/-/g, '');
+    const loginCustomerId = this.credentials.loginCustomerId?.trim().replace(/-/g, '');
     const url = `${GOOGLE_ADS_API_BASE}/customers/${this.customerId}/googleAds:searchStream`;
 
     let lastError: Error | undefined;
