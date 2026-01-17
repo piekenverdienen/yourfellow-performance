@@ -1,6 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Logger } from '../utils/logger';
-import type { InsightScope, InsightType, InsightImpact, InsightConfidence, Insight } from '@/types';
+import type { InsightScope, InsightType, InsightImpact, InsightConfidence, InsightEffort, InsightUrgency, Insight } from '@/types';
 
 export interface InsightRule {
   id: string;
@@ -55,6 +55,9 @@ export interface InsightResult {
   type: InsightType;
   impact: InsightImpact;
   confidence: InsightConfidence;
+  // Prioritization fields for media buyer workflow
+  effort: InsightEffort;       // How much work to fix: low (quick), medium (some work), high (significant)
+  urgency: InsightUrgency;     // Time-sensitivity: low (stable), medium (trending), high (accelerating)
   summary: string;
   explanation: string;
   recommendation: string;
@@ -76,6 +79,28 @@ export interface InsightCreationResult {
 }
 
 /**
+ * Weight mappings for priority score calculation
+ * Higher number = more important/urgent/difficult
+ */
+const IMPACT_WEIGHTS: Record<InsightImpact, number> = {
+  low: 1,
+  medium: 2,
+  high: 3,
+};
+
+const URGENCY_WEIGHTS: Record<InsightUrgency, number> = {
+  low: 1,
+  medium: 2,
+  high: 3,
+};
+
+const EFFORT_WEIGHTS: Record<InsightEffort, number> = {
+  low: 1,
+  medium: 2,
+  high: 3,
+};
+
+/**
  * Rule-based Insights Engine
  *
  * This engine evaluates deterministic rules against account/campaign data
@@ -86,6 +111,11 @@ export interface InsightCreationResult {
  * - Each insight has a clear action
  * - Confidence is based on data quality, not AI certainty
  * - Insights auto-resolve when conditions are no longer met
+ *
+ * Priority scoring (Phase 2):
+ * - priority_score = (impact_weight * urgency_weight) / effort_weight
+ * - Range: 0.33 (low/low/high) to 9.0 (high/high/low)
+ * - Media buyers should work on highest priority_score first
  */
 export class InsightEngine {
   private supabase: SupabaseClient;
@@ -96,6 +126,32 @@ export class InsightEngine {
     this.supabase = createClient(config.supabaseUrl, config.supabaseServiceKey);
     this.logger = config.logger;
     this.registerDefaultRules();
+  }
+
+  /**
+   * Calculate priority score from impact, urgency, and effort
+   *
+   * Formula: (impact * urgency) / effort
+   *
+   * This gives us a range from 0.33 to 9.0:
+   * - 9.0: high impact, high urgency, low effort (do this NOW)
+   * - 0.33: low impact, low urgency, high effort (maybe never)
+   *
+   * @example
+   * - high impact + high urgency + low effort = 9.0 (critical quick win)
+   * - high impact + low urgency + high effort = 1.0 (important but can wait)
+   * - low impact + low urgency + low effort = 1.0 (small quick win)
+   */
+  private calculatePriorityScore(
+    impact: InsightImpact,
+    urgency: InsightUrgency,
+    effort: InsightEffort
+  ): number {
+    const impactWeight = IMPACT_WEIGHTS[impact];
+    const urgencyWeight = URGENCY_WEIGHTS[urgency];
+    const effortWeight = EFFORT_WEIGHTS[effort];
+
+    return (impactWeight * urgencyWeight) / effortWeight;
   }
 
   /**
@@ -121,6 +177,8 @@ export class InsightEngine {
             type: 'budget',
             impact: 'high',
             confidence: 'high',
+            effort: 'low',       // Budget increase is a quick change
+            urgency: 'high',     // CPA trending wrong direction
             summary: `CPA +${cpaChange.toFixed(0)}% terwijl budget beperkt`,
             explanation: `De CPA is gestegen met ${cpaChange.toFixed(0)}% t.o.v. de vorige periode. ` +
               `Tegelijkertijd wordt ${data.account.impressionShareLostBudget.toFixed(0)}% van de impressies gemist door budgetbeperkingen. ` +
@@ -152,6 +210,8 @@ export class InsightEngine {
             type: 'bidding',
             impact: data.account.impressionShareLostRank > 50 ? 'high' : 'medium',
             confidence: 'high',
+            effort: 'medium',    // Requires bid adjustments or QS work
+            urgency: 'medium',   // Ongoing issue but not immediately critical
             summary: `${data.account.impressionShareLostRank.toFixed(0)}% impressies verloren aan ranking`,
             explanation: `Je verliest ${data.account.impressionShareLostRank.toFixed(0)}% van je potentiële impressies ` +
               `omdat je advertenties te laag ranken. Dit kan komen door te lage biedingen of een lage Ad Rank.`,
@@ -187,6 +247,8 @@ export class InsightEngine {
             type: 'performance',
             impact: conversionChange <= -40 ? 'high' : 'medium',
             confidence: 'medium',
+            effort: 'high',      // Requires investigation and potentially multiple changes
+            urgency: 'high',     // Conversion drop is actively losing revenue
             summary: `Conversies ${conversionChange.toFixed(0)}% bij stabiele uitgaven`,
             explanation: `Conversies zijn gedaald met ${Math.abs(conversionChange).toFixed(0)}% ` +
               `terwijl de uitgaven vrijwel gelijk zijn gebleven (${costChange > 0 ? '+' : ''}${costChange.toFixed(0)}%). ` +
@@ -236,6 +298,8 @@ export class InsightEngine {
             type: 'performance',
             impact: 'high',
             confidence: 'high',
+            effort: 'medium',    // Requires campaign-level analysis and adjustments
+            urgency: 'high',     // High-spend campaigns losing ROAS = significant revenue impact
             summary: `${worstCampaign.name}: conversies ${convChange.toFixed(0)}%`,
             explanation: `Campagne "${worstCampaign.name}" heeft een significante conversiedaling van ${Math.abs(convChange).toFixed(0)}% ` +
               `en is goed voor een groot deel van je uitgaven. Dit heeft directe impact op je totale performance.`,
@@ -281,6 +345,8 @@ export class InsightEngine {
             type: 'budget',
             impact: 'high',
             confidence: 'high',
+            effort: 'low',       // Just need to increase budget - quick win
+            urgency: 'medium',   // Missing out on conversions but not losing money
             summary: `${topCandidate.name} presteert goed maar is budget-beperkt`,
             explanation: `Campagne "${topCandidate.name}" heeft een CPA van ${data.currency} ${campaignCpa.toFixed(2)}, ` +
               `wat ${((1 - (campaignCpa / data.account.cpa)) * 100).toFixed(0)}% beter is dan je account gemiddelde. ` +
@@ -324,6 +390,8 @@ export class InsightEngine {
             type: 'performance',
             impact: totalWaste > 200 ? 'high' : 'medium',
             confidence: 'high',
+            effort: 'low',       // Pausing campaigns is a quick action
+            urgency: 'high',     // Actively wasting money every day
             summary: `${zeroConversionCampaigns.length} campagnes zonder conversies (${data.currency} ${totalWaste.toFixed(0)} uitgegeven)`,
             explanation: `Er zijn ${zeroConversionCampaigns.length} actieve campagne(s) die samen ${data.currency} ${totalWaste.toFixed(0)} hebben uitgegeven ` +
               `zonder enige conversie te genereren. Dit budget kan mogelijk beter worden ingezet.`,
@@ -399,6 +467,13 @@ export class InsightEngine {
           continue;
         }
 
+        // Calculate priority score for sorting/prioritization
+        const priorityScore = this.calculatePriorityScore(
+          insight.impact,
+          insight.urgency,
+          insight.effort
+        );
+
         // Insert new insight
         const { error } = await this.supabase.from('insights').insert({
           client_id: clientId,
@@ -409,6 +484,9 @@ export class InsightEngine {
           type: insight.type,
           impact: insight.impact,
           confidence: insight.confidence,
+          effort: insight.effort,
+          urgency: insight.urgency,
+          priority_score: priorityScore,
           summary: insight.summary,
           explanation: insight.explanation,
           recommendation: insight.recommendation,
@@ -478,13 +556,18 @@ export class InsightEngine {
       type?: InsightType;
       impact?: InsightImpact;
       limit?: number;
+      orderBy?: 'priority_score' | 'impact' | 'detected_at';
     } = {}
   ): Promise<Insight[]> {
     let query = this.supabase
       .from('insights')
       .select('*')
-      .eq('client_id', clientId)
-      .order('impact', { ascending: false })
+      .eq('client_id', clientId);
+
+    // Default to ordering by priority_score (highest first)
+    const orderField = options.orderBy || 'priority_score';
+    query = query
+      .order(orderField, { ascending: false })
       .order('detected_at', { ascending: false });
 
     if (options.status && options.status.length > 0) {

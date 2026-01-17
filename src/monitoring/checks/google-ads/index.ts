@@ -14,6 +14,12 @@ import { ExtensionsDisapprovedCheck } from './extensions-disapproved';
 import { AudienceIssuesCheck } from './audience-issues';
 import { PausedHighPerformersCheck } from './paused-high-performers';
 import { PerformanceDropCheck } from './performance-drop';
+// Phase 1: Performance Alerts
+import { CpaIncreaseCheck } from './cpa-increase';
+import { RoasDecreaseCheck } from './roas-decrease';
+import { SpendWithoutValueCheck } from './spend-without-value';
+// Phase 3: Search Hygiene
+import { SearchTermWasteCheck } from './search-term-waste';
 
 // Export base class and types
 export { BaseGoogleAdsCheck } from './base-check';
@@ -33,6 +39,12 @@ export { ExtensionsDisapprovedCheck } from './extensions-disapproved';
 export { AudienceIssuesCheck } from './audience-issues';
 export { PausedHighPerformersCheck } from './paused-high-performers';
 export { PerformanceDropCheck } from './performance-drop';
+// Phase 1: Performance Alerts
+export { CpaIncreaseCheck } from './cpa-increase';
+export { RoasDecreaseCheck } from './roas-decrease';
+export { SpendWithoutValueCheck } from './spend-without-value';
+// Phase 3: Search Hygiene
+export { SearchTermWasteCheck } from './search-term-waste';
 
 /**
  * Registry of all available Google Ads checks
@@ -61,6 +73,14 @@ export const GOOGLE_ADS_CHECKS: GoogleAdsCheck[] = [
   new LowQualityScoreCheck(),
   new HighCpcCheck(),
   new PausedHighPerformersCheck(),
+
+  // Performance Alerts (Phase 1) - KPI-based detection
+  new CpaIncreaseCheck(),
+  new RoasDecreaseCheck(),
+  new SpendWithoutValueCheck(),
+
+  // Search Hygiene (Phase 3) - Budget waste prevention
+  new SearchTermWasteCheck(),
 
   // Optimization Opportunities - Room for improvement
   new LowAdStrengthCheck(),
@@ -104,6 +124,14 @@ export function getChecksByCategory(): Record<string, GoogleAdsCheck[]> {
       new LowQualityScoreCheck(),
       new HighCpcCheck(),
       new PausedHighPerformersCheck(),
+      // Phase 1: Performance Alerts
+      new CpaIncreaseCheck(),
+      new RoasDecreaseCheck(),
+      new SpendWithoutValueCheck(),
+    ],
+    hygiene: [
+      // Phase 3: Search Hygiene
+      new SearchTermWasteCheck(),
     ],
     optimization: [
       new LowAdStrengthCheck(),

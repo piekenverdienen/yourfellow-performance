@@ -444,6 +444,8 @@ export type InsightType = 'performance' | 'budget' | 'bidding' | 'structure' | '
 export type InsightImpact = 'low' | 'medium' | 'high'
 export type InsightConfidence = 'low' | 'medium' | 'high'
 export type InsightStatus = 'new' | 'picked_up' | 'ignored' | 'resolved'
+export type InsightEffort = 'low' | 'medium' | 'high'
+export type InsightUrgency = 'low' | 'medium' | 'high'
 
 export interface Insight {
   id: string
@@ -461,6 +463,11 @@ export interface Insight {
   // Impact & Confidence
   impact: InsightImpact
   confidence: InsightConfidence
+
+  // Prioritization (Phase 2)
+  effort: InsightEffort
+  urgency: InsightUrgency
+  priority_score: number
 
   // Content
   summary: string
