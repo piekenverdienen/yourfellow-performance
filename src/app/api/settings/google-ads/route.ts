@@ -1,5 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
+
+// Get service role client for database operations (bypasses RLS)
+function getServiceSupabase() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error('Missing Supabase service role credentials')
+  }
+
+  return createServiceClient(supabaseUrl, serviceRoleKey)
+}
 
 // GET - Load Google Ads settings
 export async function GET() {
@@ -22,8 +35,11 @@ export async function GET() {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 
+    // Use service role client to bypass RLS
+    const serviceClient = getServiceSupabase()
+
     // Get settings from app_settings table
-    const { data: settings } = await supabase
+    const { data: settings } = await serviceClient
       .from('app_settings')
       .select('value')
       .eq('key', 'google_ads_credentials')
@@ -87,8 +103,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Use service role client to bypass RLS
+    const serviceClient = getServiceSupabase()
+
     // Store in app_settings table
-    const { error } = await supabase
+    const { error } = await serviceClient
       .from('app_settings')
       .upsert({
         key: 'google_ads_credentials',
