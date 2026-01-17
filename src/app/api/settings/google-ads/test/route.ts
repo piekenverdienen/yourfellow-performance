@@ -59,13 +59,24 @@ export async function POST(request: NextRequest) {
       logger,
     })
 
-    // Try to get customer info
-    const customerInfo = await client.getCustomerInfo()
+    // Try to get customer info - wrap in try/catch to get detailed error
+    let customerInfo
+    try {
+      customerInfo = await client.getCustomerInfo()
+    } catch (apiError) {
+      const errorMsg = (apiError as Error).message
+      console.error('Google Ads API error:', apiError)
+      return NextResponse.json({
+        success: false,
+        error: `API Error: ${errorMsg}`,
+        details: String(apiError),
+      })
+    }
 
     if (!customerInfo) {
       return NextResponse.json({
         success: false,
-        error: 'Kon geen account informatie ophalen. Controleer de credentials.',
+        error: 'Kon geen account informatie ophalen. De API gaf geen data terug. Check of het service account email is toegevoegd in Google Ads met leesrechten.',
       })
     }
 
