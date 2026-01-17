@@ -278,22 +278,45 @@ export class GoogleAdsClient {
           );
         }
 
-        // Parse streaming response (NDJSON)
+        // Parse streaming response (can be NDJSON or JSON array)
         const text = await response.text();
         const results: unknown[] = [];
 
-        // Split by newlines and parse each JSON object
-        const lines = text.split('\n').filter(line => line.trim());
-        for (const line of lines) {
-          try {
-            const parsed = JSON.parse(line);
-            if (parsed.results) {
-              results.push(...parsed.results);
+        this.logger.debug('Raw API response', {
+          responseLength: text.length,
+          responsePreview: text.substring(0, 500),
+        });
+
+        // Try parsing as JSON array first (v22 format)
+        try {
+          const jsonData = JSON.parse(text);
+          if (Array.isArray(jsonData)) {
+            // Response is a JSON array of batches
+            for (const batch of jsonData) {
+              if (batch.results) {
+                results.push(...batch.results);
+              }
             }
-          } catch {
-            // Skip invalid lines
+          } else if (jsonData.results) {
+            // Single response object
+            results.push(...jsonData.results);
+          }
+        } catch {
+          // Fallback: Parse as NDJSON (newline-delimited JSON)
+          const lines = text.split('\n').filter(line => line.trim());
+          for (const line of lines) {
+            try {
+              const parsed = JSON.parse(line);
+              if (parsed.results) {
+                results.push(...parsed.results);
+              }
+            } catch {
+              // Skip invalid lines
+            }
           }
         }
+
+        this.logger.debug('Parsed results', { resultCount: results.length });
 
         return {
           results: results as GaqlResponse['results'],
