@@ -64,12 +64,25 @@ export async function POST(request: NextRequest) {
     try {
       customerInfo = await client.getCustomerInfo()
     } catch (apiError) {
-      const errorMsg = (apiError as Error).message
+      const err = apiError as Error & { details?: unknown; statusCode?: number }
       console.error('Google Ads API error:', apiError)
+
+      // Try to parse the error details for more info
+      let errorDetails = ''
+      if (err.details) {
+        try {
+          const parsed = typeof err.details === 'string' ? JSON.parse(err.details) : err.details
+          errorDetails = JSON.stringify(parsed, null, 2)
+        } catch {
+          errorDetails = String(err.details)
+        }
+      }
+
       return NextResponse.json({
         success: false,
-        error: `API Error: ${errorMsg}`,
-        details: String(apiError),
+        error: `API Error: ${err.message}`,
+        statusCode: err.statusCode,
+        details: errorDetails || String(apiError),
       })
     }
 
