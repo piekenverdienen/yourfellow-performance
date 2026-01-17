@@ -41,8 +41,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create client and test connection
-    const logger = createLogger('info')
+    // Create client and test connection (debug level for troubleshooting)
+    const logger = createLogger('debug')
 
     // For MCC testing: use the provided customerId (which might be the MCC itself)
     const testCustomerId = customerId.trim().replace(/-/g, '')
@@ -89,7 +89,16 @@ export async function POST(request: NextRequest) {
     if (!customerInfo) {
       return NextResponse.json({
         success: false,
-        error: 'Kon geen account informatie ophalen. De API gaf geen data terug. Check of het service account email is toegevoegd in Google Ads met leesrechten.',
+        error: 'Kon geen account informatie ophalen. De API gaf geen data terug.',
+        troubleshooting: [
+          '1. Controleer of de Customer ID correct is (zonder streepjes)',
+          '2. Voor MCC accounts: vul Login Customer ID in met je MCC ID',
+          '3. Controleer of het service account email is toegevoegd als gebruiker in Google Ads',
+          '4. Het service account heeft minimaal "Alleen lezen" rechten nodig',
+          '5. Ga naar Google Ads > Tools > Toegang en beveiliging > voeg het service account email toe',
+        ],
+        testedCustomerId: testCustomerId,
+        loginCustomerIdUsed: loginCustomerId?.trim().replace(/-/g, '') || 'niet ingesteld',
       })
     }
 

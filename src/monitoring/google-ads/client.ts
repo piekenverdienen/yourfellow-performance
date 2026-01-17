@@ -278,22 +278,57 @@ export class GoogleAdsClient {
           );
         }
 
-        // Parse streaming response (NDJSON)
+        // Parse streaming response (can be NDJSON or JSON array)
         const text = await response.text();
         const results: unknown[] = [];
 
-        // Split by newlines and parse each JSON object
-        const lines = text.split('\n').filter(line => line.trim());
-        for (const line of lines) {
-          try {
-            const parsed = JSON.parse(line);
-            if (parsed.results) {
-              results.push(...parsed.results);
+        this.logger.debug('Raw API response', {
+          responseLength: text.length,
+          responsePreview: text.substring(0, 1000),
+        });
+
+        // Try parsing as JSON array first (v22 searchStream format)
+        try {
+          const jsonData = JSON.parse(text);
+
+          this.logger.debug('Parsed JSON structure', {
+            isArray: Array.isArray(jsonData),
+            topLevelKeys: Array.isArray(jsonData) ? 'array' : Object.keys(jsonData).join(', '),
+            firstItemKeys: Array.isArray(jsonData) && jsonData[0] ? Object.keys(jsonData[0]).join(', ') : 'n/a',
+          });
+
+          if (Array.isArray(jsonData)) {
+            // Response is a JSON array of batches (searchStream format)
+            for (const batch of jsonData) {
+              if (batch.results && Array.isArray(batch.results)) {
+                results.push(...batch.results);
+              }
             }
-          } catch {
-            // Skip invalid lines
+          } else if (jsonData.results && Array.isArray(jsonData.results)) {
+            // Single response object with results array
+            results.push(...jsonData.results);
+          }
+        } catch (parseError) {
+          this.logger.debug('JSON parse failed, trying NDJSON', { error: (parseError as Error).message });
+
+          // Fallback: Parse as NDJSON (newline-delimited JSON)
+          const lines = text.split('\n').filter(line => line.trim());
+          for (const line of lines) {
+            try {
+              const parsed = JSON.parse(line);
+              if (parsed.results && Array.isArray(parsed.results)) {
+                results.push(...parsed.results);
+              }
+            } catch {
+              // Skip invalid lines
+            }
           }
         }
+
+        this.logger.debug('Parsed results', {
+          resultCount: results.length,
+          firstResult: results.length > 0 ? JSON.stringify(results[0]).substring(0, 200) : 'none',
+        });
 
         return {
           results: results as GaqlResponse['results'],
