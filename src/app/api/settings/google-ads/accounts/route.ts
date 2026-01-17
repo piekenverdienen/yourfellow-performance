@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     }
 
     const logger = createLogger('info')
-    const mccId = loginCustomerId.replace(/-/g, '')
+    const mccId = loginCustomerId.trim().replace(/-/g, '')
 
     // Create client for MCC account
     const client = new GoogleAdsClient({
