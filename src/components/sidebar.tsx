@@ -100,6 +100,11 @@ const navigation: NavItem[] = [
     icon: Megaphone,
     color: 'text-red-600 bg-red-100',
     children: [
+      { name: 'Overview', href: '/google-ads', icon: LayoutDashboard },
+      { name: 'Dashboard', href: '/google-ads/dashboard', icon: BarChart3 },
+      { name: 'PMax Analysis', href: '/google-ads/pmax', icon: Layers },
+      { name: 'AI Insights', href: '/google-ads/insights', icon: BrainCircuit },
+      { name: '_section_Tools', href: '', icon: Settings },
       { name: 'Ad Teksten', href: '/google-ads/copy', icon: Type },
       { name: 'Feed Management', href: '/google-ads/feed', icon: Database },
       { name: 'Afbeeldingen', href: '/google-ads/images', icon: Image },
