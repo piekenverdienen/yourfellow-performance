@@ -43,9 +43,9 @@ interface CampaignRow {
 // GET: Fetch insights for a client
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ clientId: string }> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { clientId } = await params;
+  const { id: clientId } = await params;
   const searchParams = request.nextUrl.searchParams;
   const status = searchParams.get('status')?.split(',') || ['new', 'picked_up'];
   const type = searchParams.get('type') || undefined;
@@ -113,9 +113,9 @@ export async function GET(
 // POST: Generate new insights
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ clientId: string }> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { clientId } = await params;
+  const { id: clientId } = await params;
 
   try {
     const supabase = createClient(

@@ -265,9 +265,9 @@ function generateAutoHighlight(
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ clientId: string }> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { clientId } = await params;
+  const { id: clientId } = await params;
   const searchParams = request.nextUrl.searchParams;
   const mode = (searchParams.get('mode') || 'last_7_vs_previous_7') as ComparisonMode;
   const dimensionParam = searchParams.get('breakdown') as BreakdownDimension | null;
