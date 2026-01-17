@@ -29,8 +29,8 @@ const tools = [
     href: '/google-ads/feed',
     icon: Database,
     color: 'bg-purple-500',
-    badge: 'Nieuw',
-    badgeVariant: 'success' as const,
+    badge: 'Binnenkort',
+    badgeVariant: 'warning' as const,
   },
   {
     name: 'Image Generator',
@@ -38,8 +38,8 @@ const tools = [
     href: '/google-ads/images',
     icon: Image,
     color: 'bg-orange-500',
-    badge: null,
-    badgeVariant: null,
+    badge: 'Binnenkort',
+    badgeVariant: 'warning' as const,
   },
 ]
 
