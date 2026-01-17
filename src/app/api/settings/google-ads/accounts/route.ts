@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { GoogleAdsClient } from '@/monitoring/google-ads/client'
 import { createLogger } from '@/monitoring/utils/logger'
 
-// POST - Test Google Ads connection
+// POST - List accessible Google Ads accounts
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
@@ -29,67 +29,83 @@ export async function POST(request: NextRequest) {
       developerToken,
       serviceAccountEmail,
       privateKey,
-      customerId,
       loginCustomerId,
     } = body
 
-    // Validate required fields - customerId is the account to test (can be MCC or sub-account)
-    if (!developerToken || !serviceAccountEmail || !privateKey || !customerId) {
+    // Validate required fields
+    if (!developerToken || !serviceAccountEmail || !privateKey || !loginCustomerId) {
       return NextResponse.json(
         { error: 'Vul alle verplichte velden in' },
         { status: 400 }
       )
     }
 
-    // Create client and test connection
     const logger = createLogger('info')
+    const mccId = loginCustomerId.replace(/-/g, '')
 
-    // For MCC testing: use the provided customerId (which might be the MCC itself)
-    const testCustomerId = customerId.replace(/-/g, '')
-
+    // Create client for MCC account
     const client = new GoogleAdsClient({
       credentials: {
         type: 'service_account',
         developerToken,
         serviceAccountEmail,
         privateKey,
-        loginCustomerId: loginCustomerId?.replace(/-/g, '') || undefined,
+        loginCustomerId: mccId,
       },
-      customerId: testCustomerId,
+      customerId: mccId,
       logger,
     })
 
-    // Try to get customer info
-    const customerInfo = await client.getCustomerInfo()
+    // Query to list all accessible customer accounts under the MCC
+    const response = await client.query(`
+      SELECT
+        customer_client.id,
+        customer_client.descriptive_name,
+        customer_client.manager,
+        customer_client.status,
+        customer_client.currency_code,
+        customer_client.time_zone
+      FROM customer_client
+      WHERE customer_client.status = 'ENABLED'
+    `)
 
-    if (!customerInfo) {
-      return NextResponse.json({
-        success: false,
-        error: 'Kon geen account informatie ophalen. Controleer de credentials.',
-      })
+    interface CustomerClientRow {
+      customerClient: {
+        id: string
+        descriptiveName: string
+        manager: boolean
+        status: string
+        currencyCode: string
+        timeZone: string
+      }
     }
+
+    const accounts = (response.results as unknown as CustomerClientRow[]).map((row) => ({
+      id: row.customerClient.id,
+      name: row.customerClient.descriptiveName,
+      isManager: row.customerClient.manager,
+      status: row.customerClient.status,
+      currency: row.customerClient.currencyCode,
+      timezone: row.customerClient.timeZone,
+    }))
 
     return NextResponse.json({
       success: true,
-      customerId: customerInfo.customerId,
-      customerName: customerInfo.descriptiveName,
-      currencyCode: customerInfo.currencyCode,
-      timeZone: customerInfo.timeZone,
+      mccId,
+      accounts,
+      count: accounts.length,
     })
   } catch (error) {
-    console.error('Google Ads connection test failed:', error)
+    console.error('Failed to list Google Ads accounts:', error)
 
-    // Parse error message for common issues
     let errorMessage = (error as Error).message
 
     if (errorMessage.includes('401')) {
       errorMessage = 'Authenticatie mislukt. Controleer de service account credentials.'
     } else if (errorMessage.includes('403')) {
-      errorMessage = 'Toegang geweigerd. Controleer of het service account toegang heeft tot dit Google Ads account.'
+      errorMessage = 'Toegang geweigerd. Zorg dat het service account email is toegevoegd als gebruiker in Google Ads.'
     } else if (errorMessage.includes('404')) {
-      errorMessage = 'Account niet gevonden. Controleer de Customer ID.'
-    } else if (errorMessage.includes('developer-token')) {
-      errorMessage = 'Ongeldige Developer Token. Vraag een token aan via Google Ads API Center.'
+      errorMessage = 'MCC account niet gevonden. Controleer de MCC Account ID.'
     }
 
     return NextResponse.json({

@@ -79,10 +79,10 @@ export async function POST(request: NextRequest) {
       loginCustomerId,
     } = body
 
-    // Validate required fields
-    if (!developerToken || !serviceAccountEmail || !privateKey || !customerId) {
+    // Validate required fields - for MCC setup, loginCustomerId is required, customerId is optional
+    if (!developerToken || !serviceAccountEmail || !privateKey || !loginCustomerId) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Vul alle verplichte velden in (Developer Token, Service Account, Private Key, MCC Account ID)' },
         { status: 400 }
       )
     }
@@ -97,8 +97,8 @@ export async function POST(request: NextRequest) {
           developerToken,
           serviceAccountEmail,
           privateKey,
-          customerId,
-          loginCustomerId: loginCustomerId || null,
+          customerId: customerId || null, // Optional for MCC setup
+          loginCustomerId, // Required - the MCC account ID
         },
         updated_at: new Date().toISOString(),
       }, {

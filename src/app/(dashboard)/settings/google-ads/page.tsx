@@ -19,6 +19,7 @@ import {
   Save,
   ExternalLink,
   Info,
+  Users,
 } from 'lucide-react'
 
 interface ConnectionStatus {
@@ -28,12 +29,24 @@ interface ConnectionStatus {
   error?: string
 }
 
+interface AccessibleAccount {
+  id: string
+  name: string
+  isManager: boolean
+  status: string
+  currency: string
+  timezone: string
+}
+
 export default function GoogleAdsSettingsPage() {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<ConnectionStatus | null>(null)
   const [saved, setSaved] = useState(false)
+  const [loadingAccounts, setLoadingAccounts] = useState(false)
+  const [accessibleAccounts, setAccessibleAccounts] = useState<AccessibleAccount[] | null>(null)
+  const [accountsError, setAccountsError] = useState<string | null>(null)
 
   // Form state
   const [developerToken, setDeveloperToken] = useState('')
@@ -93,6 +106,11 @@ export default function GoogleAdsSettingsPage() {
     setTesting(true)
     setTestResult(null)
 
+    // Use customerId if provided, otherwise use loginCustomerId (MCC) for testing
+    const testCustomerId = customerId?.trim()
+      ? customerId.replace(/-/g, '')
+      : loginCustomerId.replace(/-/g, '')
+
     try {
       const res = await fetch('/api/settings/google-ads/test', {
         method: 'POST',
@@ -101,7 +119,7 @@ export default function GoogleAdsSettingsPage() {
           developerToken,
           serviceAccountEmail,
           privateKey,
-          customerId: customerId.replace(/-/g, ''),
+          customerId: testCustomerId,
           loginCustomerId: loginCustomerId?.replace(/-/g, '') || undefined,
         }),
       })
@@ -143,8 +161,9 @@ export default function GoogleAdsSettingsPage() {
           developerToken,
           serviceAccountEmail,
           privateKey,
-          customerId: customerId.replace(/-/g, ''),
-          loginCustomerId: loginCustomerId?.replace(/-/g, '') || undefined,
+          // For MCC setup: loginCustomerId is required, customerId is optional
+          customerId: customerId?.trim() ? customerId.replace(/-/g, '') : null,
+          loginCustomerId: loginCustomerId.replace(/-/g, ''),
         }),
       })
 
@@ -159,6 +178,38 @@ export default function GoogleAdsSettingsPage() {
       alert((err as Error).message)
     } finally {
       setSaving(false)
+    }
+  }
+
+  // List accessible accounts
+  const handleListAccounts = async () => {
+    setLoadingAccounts(true)
+    setAccessibleAccounts(null)
+    setAccountsError(null)
+
+    try {
+      const res = await fetch('/api/settings/google-ads/accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          developerToken,
+          serviceAccountEmail,
+          privateKey,
+          loginCustomerId: loginCustomerId.replace(/-/g, ''),
+        }),
+      })
+
+      const data = await res.json()
+
+      if (res.ok && data.success) {
+        setAccessibleAccounts(data.accounts)
+      } else {
+        setAccountsError(data.error || 'Kon accounts niet ophalen')
+      }
+    } catch (err) {
+      setAccountsError((err as Error).message)
+    } finally {
+      setLoadingAccounts(false)
     }
   }
 
@@ -185,8 +236,8 @@ export default function GoogleAdsSettingsPage() {
           <div className="flex gap-3">
             <Info className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
             <div className="text-sm text-blue-800">
-              <p className="font-medium mb-1">Wat heb je nodig?</p>
-              <ul className="list-disc list-inside space-y-1 text-blue-700">
+              <p className="font-medium mb-2">Setup voor MCC (Agency)</p>
+              <ol className="list-decimal list-inside space-y-2 text-blue-700">
                 <li>
                   <strong>Developer Token</strong> - Aanvragen via{' '}
                   <a
@@ -200,7 +251,7 @@ export default function GoogleAdsSettingsPage() {
                   </a>
                 </li>
                 <li>
-                  <strong>Service Account</strong> - Aanmaken via{' '}
+                  <strong>Service Account aanmaken</strong> in{' '}
                   <a
                     href="https://console.cloud.google.com/iam-admin/serviceaccounts"
                     target="_blank"
@@ -210,11 +261,19 @@ export default function GoogleAdsSettingsPage() {
                     Google Cloud Console
                     <ExternalLink className="inline h-3 w-3 ml-1" />
                   </a>
+                  {' '}en download de JSON key
                 </li>
                 <li>
-                  <strong>Toegang</strong> - Voeg het service account email toe als gebruiker in Google Ads
+                  <strong className="text-blue-900">BELANGRIJK:</strong> Voeg het service account email toe in Google Ads:
+                  <ul className="list-disc list-inside ml-4 mt-1 text-blue-600">
+                    <li>Ga naar je MCC account in Google Ads</li>
+                    <li>Tools & Settings → Access and security</li>
+                    <li>Klik + om gebruiker toe te voegen</li>
+                    <li>Vul het service account email in (bijv. naam@project.iam.gserviceaccount.com)</li>
+                    <li>Geef <strong>Read-only</strong> of <strong>Standard</strong> toegang</li>
+                  </ul>
                 </li>
-              </ul>
+              </ol>
             </div>
           </div>
         </CardContent>
@@ -303,28 +362,11 @@ export default function GoogleAdsSettingsPage() {
             </p>
           </div>
 
-          {/* Customer ID */}
-          <div className="space-y-2">
-            <Label htmlFor="customerId" className="flex items-center gap-2">
-              <Hash className="h-4 w-4 text-surface-500" />
-              Customer ID
-            </Label>
-            <Input
-              id="customerId"
-              placeholder="123-456-7890"
-              value={customerId}
-              onChange={(e) => setCustomerId(e.target.value)}
-            />
-            <p className="text-xs text-surface-500">
-              Het Google Ads account ID dat je wilt monitoren (rechtsboven in Google Ads)
-            </p>
-          </div>
-
-          {/* Login Customer ID (optional) */}
+          {/* MCC / Manager Account ID */}
           <div className="space-y-2">
             <Label htmlFor="loginCustomerId" className="flex items-center gap-2">
               <Hash className="h-4 w-4 text-surface-500" />
-              Manager Account ID (optioneel)
+              MCC Account ID (Manager Account)
             </Label>
             <Input
               id="loginCustomerId"
@@ -333,7 +375,24 @@ export default function GoogleAdsSettingsPage() {
               onChange={(e) => setLoginCustomerId(e.target.value)}
             />
             <p className="text-xs text-surface-500">
-              Alleen nodig als je via een MCC (Manager Account) toegang hebt
+              Je MCC (Manager Account) ID - dit geeft toegang tot alle gekoppelde klantaccounts
+            </p>
+          </div>
+
+          {/* Customer ID (optional for testing) */}
+          <div className="space-y-2">
+            <Label htmlFor="customerId" className="flex items-center gap-2">
+              <Hash className="h-4 w-4 text-surface-500" />
+              Test Customer ID (optioneel)
+            </Label>
+            <Input
+              id="customerId"
+              placeholder="123-456-7890"
+              value={customerId}
+              onChange={(e) => setCustomerId(e.target.value)}
+            />
+            <p className="text-xs text-surface-500">
+              Optioneel: een klantaccount ID om de verbinding te testen. Laat leeg om het MCC account te gebruiken.
             </p>
           </div>
 
@@ -372,11 +431,11 @@ export default function GoogleAdsSettingsPage() {
           )}
 
           {/* Actions */}
-          <div className="flex gap-3 pt-4 border-t">
+          <div className="flex flex-wrap gap-3 pt-4 border-t">
             <Button
               variant="outline"
               onClick={handleTest}
-              disabled={testing || !developerToken || !serviceAccountEmail || !privateKey || !customerId}
+              disabled={testing || !developerToken || !serviceAccountEmail || !privateKey || !loginCustomerId}
             >
               {testing ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -386,8 +445,20 @@ export default function GoogleAdsSettingsPage() {
               Test Verbinding
             </Button>
             <Button
+              variant="outline"
+              onClick={handleListAccounts}
+              disabled={loadingAccounts || !developerToken || !serviceAccountEmail || !privateKey || !loginCustomerId}
+            >
+              {loadingAccounts ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Users className="h-4 w-4 mr-2" />
+              )}
+              Bekijk Accounts
+            </Button>
+            <Button
               onClick={handleSave}
-              disabled={saving || !developerToken || !serviceAccountEmail || !privateKey || !customerId}
+              disabled={saving || !developerToken || !serviceAccountEmail || !privateKey || !loginCustomerId}
             >
               {saving ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -399,6 +470,62 @@ export default function GoogleAdsSettingsPage() {
               {saved ? 'Opgeslagen!' : 'Opslaan'}
             </Button>
           </div>
+
+          {/* Accounts Error */}
+          {accountsError && (
+            <div className="p-4 rounded-lg bg-red-50 border border-red-200">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-red-900">Kon accounts niet ophalen</p>
+                  <p className="text-sm text-red-700">{accountsError}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Accessible Accounts List */}
+          {accessibleAccounts && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="font-medium text-surface-900">
+                  Toegankelijke Accounts ({accessibleAccounts.length})
+                </h3>
+                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+                  Verbinding OK
+                </Badge>
+              </div>
+              <div className="border rounded-lg divide-y max-h-64 overflow-y-auto">
+                {accessibleAccounts.map((account) => (
+                  <div key={account.id} className="p-3 flex items-center justify-between hover:bg-surface-50">
+                    <div>
+                      <p className="font-medium text-surface-900">
+                        {account.name || 'Naamloos account'}
+                        {account.isManager && (
+                          <Badge variant="secondary" className="ml-2 text-xs">MCC</Badge>
+                        )}
+                      </p>
+                      <p className="text-sm text-surface-500">
+                        ID: {account.id} • {account.currency} • {account.timezone}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setCustomerId(account.id)}
+                    >
+                      Selecteer
+                    </Button>
+                  </div>
+                ))}
+                {accessibleAccounts.length === 0 && (
+                  <div className="p-4 text-center text-surface-500">
+                    Geen klantaccounts gevonden onder dit MCC account.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
