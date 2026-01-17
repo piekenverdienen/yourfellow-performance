@@ -349,42 +349,36 @@ export class GoogleAdsClient {
    * Get customer info
    */
   async getCustomerInfo(): Promise<GoogleAdsCustomerInfo | null> {
-    try {
-      const response = await this.query(`
-        SELECT
-          customer.id,
-          customer.descriptive_name,
-          customer.currency_code,
-          customer.time_zone
-        FROM customer
-        LIMIT 1
-      `);
+    // Don't catch errors here - let them propagate for better debugging
+    const response = await this.query(`
+      SELECT
+        customer.id,
+        customer.descriptive_name,
+        customer.currency_code,
+        customer.time_zone
+      FROM customer
+      LIMIT 1
+    `);
 
-      if (response.results.length === 0) {
-        return null;
-      }
-
-      const row = response.results[0] as {
-        customer: {
-          id: string;
-          descriptiveName: string;
-          currencyCode: string;
-          timeZone: string;
-        };
-      };
-
-      return {
-        customerId: row.customer.id,
-        descriptiveName: row.customer.descriptiveName,
-        currencyCode: row.customer.currencyCode,
-        timeZone: row.customer.timeZone,
-      };
-    } catch (error) {
-      this.logger.error('Failed to get customer info', {
-        error: (error as Error).message,
-      });
+    if (response.results.length === 0) {
       return null;
     }
+
+    const row = response.results[0] as {
+      customer: {
+        id: string;
+        descriptiveName: string;
+        currencyCode: string;
+        timeZone: string;
+      };
+    };
+
+    return {
+      customerId: row.customer.id,
+      descriptiveName: row.customer.descriptiveName,
+      currencyCode: row.customer.currencyCode,
+      timeZone: row.customer.timeZone,
+    };
   }
 
   private sleep(ms: number): Promise<void> {
